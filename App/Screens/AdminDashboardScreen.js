@@ -370,6 +370,7 @@ const AdminDashboardScreen = () => {
     { id: 8, title: 'Manage Products', gradient: gradientPairs[7], screen: 'Main', icon: 'bottle-tonic' },
     { id: 9, title: 'Product Offers', gradient: gradientPairs[8], screen: 'OfferViewScreen', icon: 'tag' },
     { id: 14, title: 'Daily Milk Accounts', gradient: gradientPairs[19], screen: 'DailyMilk_AccountsManage', icon: 'tag' },
+    { id: 14, title: 'Daily Milk Active Bookings', gradient: gradientPairs[1], screen: 'DailyMilkActiveBookingScreen', icon: 'tag' },
   ];
 
   const deliveryOrdersCards = [

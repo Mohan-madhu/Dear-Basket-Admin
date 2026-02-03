@@ -1,4 +1,5 @@
 import React from "react";
+import { Config } from "../../config";
 import { View, Text, Pressable, ScrollView, Alert, TouchableOpacity } from "react-native";
 import { useDispatch } from "react-redux";
 import { Image } from 'expo-image';
@@ -138,7 +139,7 @@ const AnimatedStars = ({ rating }) => {
                         {/* Product Image Container */}
                         <View className="relative justify-center mr-6">
                             <Image
-                                source={{ uri: item.imageurl.replace("~", "https://dev.dine360.ca/backend") }}
+                                source={{ uri: item.imageurl.replace("~", Config.BASE_URL) }}
                                 style={{ width: 100, height: 100, borderRadius: 8 }}
                                 contentFit="fill"
                                 transition={300}

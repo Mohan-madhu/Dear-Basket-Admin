@@ -1,10 +1,8 @@
-var BASE_URL = "https://dev.dine360.ca/backend/API/DearBasket";
-BASE_URL = "https://dev.dine360.ca/backend/API/DearBasket";
- BASE_URL = "https://dev.dine360.ca/backend/API/DearBasket";
+import { Config } from "../../config";
+
+var BASE_URL = Config.API_URL;
  //BASE_URL = "http://192.168.73.97/API/DearBasket";
 //BASE_URL = "http://192.168.1.4rrrr/API/DearBasket";
-// BASE_URL = "https://dev.dine360.ca/backend/API/DearBasket"
-// API/ConstructionDelivery";
 
 const headers = {
   Accept: "application/json",
@@ -41,7 +39,7 @@ const apiRequest = async (endpoint, method = "GET", body = null) => {
   }
 
   try {
-    //console.log("Endpoint : ",`${BASE_URL}/${endpoint}`, options)
+    console.log("Endpoint : ",`${BASE_URL}/${endpoint}`, options)
     return await fetchWithTimeout(`${BASE_URL}/${endpoint}`, options, 15000);
 
   } catch (error) {

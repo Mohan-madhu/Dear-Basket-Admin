@@ -1,6 +1,7 @@
 // DailyMilkBookingScreen.js
 
 import React, { useState, useEffect, useRef } from "react";
+import { getImageUrl } from "../../config";
 import {
     View,
     Text,
@@ -421,7 +422,7 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
                                             <View className="mb-4">
                                                 <Image
                                                     source={{
-                                                        uri: "https://dev.dine360.ca/backend/" + prod.image.slice(2),
+                                                        uri: getImageUrl(prod.image),
                                                     }}
                                                     className="w-[140px] h-[140px] rounded-2xl"
                                                     resizeMode="cover"

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getImageUrl } from '../../config';
 import { View, Text, TouchableOpacity, Image, Linking, Alert, Modal, TextInput } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { createLogger } from '../../App_Utils/Utils/logger';
@@ -160,7 +161,7 @@ const OrderCard = ({ order, onOrderUpdate }) => {
     if (!imagePath) return null;
     if (imagePath.startsWith("file://")) return imagePath;
     if (imagePath.startsWith("http")) return imagePath;
-    return "https://dev.dine360.ca/backend/" + imagePath.replace(/^\/+/, "").replace("~/", "");
+    return getImageUrl(imagePath);
   };
 
   const parseOrderData = () => {

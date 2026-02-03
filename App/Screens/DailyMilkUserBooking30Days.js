@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { getImageUrl } from "../../config";
 import {
     View,
     Text,
@@ -14,6 +15,7 @@ import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 
 import "react-native-get-random-values";
 import { v4 as uuidv4 } from "uuid";
+import { useNavigation } from "@react-navigation/native";
 
 // ──────────────────────────────────────────────────────────
 // HELPERS
@@ -44,7 +46,7 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
     const [month, setMonth] = useState("");
     const [day, setDay] = useState("");
     const [year, setYear] = useState("");
-
+    const navigation = useNavigation()
     // ──────────────────────────────────────────────────────────
     // T+2 CALCULATION LOGIC
     // ──────────────────────────────────────────────────────────
@@ -203,9 +205,10 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
 
             await API.POST("DailyMilkBooking", bookingdata);
 
-            setupd((prev) => prev + 1);
+            //setupd((prev) => prev + 1);
             Alert.alert("Success", `Booking confirmed for ${dateString}!`);
-            CheckAlreadyRegistered();
+              navigation.navigate("Main");
+            //CheckAlreadyRegistered();
         } catch (err) {
             console.error("Submission error:", err);
             Alert.alert("Failed", "Could not complete booking.");
@@ -241,7 +244,7 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
                     {currentProduct && (
                         <View className="w-[200px] rounded-3xl bg-white p-6 items-center shadow-2xl border border-gray-100 mx-2">
                             <Image
-                                source={{ uri: "https://dev.dine360.ca/backend/" + currentProduct.image.slice(2) }}
+                                source={{ uri: getImageUrl(currentProduct.image) }}
                                 className="w-[140px] h-[140px] rounded-xl"
                                 resizeMode="contain"
                             />

@@ -1,4 +1,5 @@
 import React from "react";
+import { getImageUrl } from "../../config";
 import {
   View,
   Text,
@@ -41,7 +42,7 @@ const FavoritesScreen = () => {
     if (!imagePath) return null;
     if (imagePath.startsWith("file://")) return imagePath;
     if (imagePath.startsWith("http")) return imagePath;
-    return "https://dev.dine360.ca/backend/" + imagePath.replace(/^\/+/, "").replace("~/", "");
+    return getImageUrl(imagePath);
   };
 
   const getDisplayImage = (item) => {

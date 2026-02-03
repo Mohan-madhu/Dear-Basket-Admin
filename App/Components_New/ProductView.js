@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { getImageUrl } from '../../config';
 import { View, Text, ScrollView, TouchableOpacity, FlatList, Modal, Dimensions, Alert, StyleSheet, Button, Pressable } from 'react-native';
 import ProductVariantCard from './ProductVariantCard';
 import { Image } from "expo-image";
@@ -515,7 +516,7 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
                             >
                                 <Image
                                     cachePolicy="memory-disk"
-                                    source={{ uri: "https://dev.dine360.ca/backend/" + selectedVariant?.images[selectedImageIndex]?.slice(2) }}
+                                    source={{ uri: getImageUrl(selectedVariant?.images[selectedImageIndex]) }}
 
                                     style={{ width: "100%", aspectRatio: 1 }}
                                     contentFit='contain'
@@ -581,7 +582,7 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
                                     <Image
                                         cachePolicy="memory-disk"
 
-                                        source={{ uri: "https://dev.dine360.ca/backend/" + img?.slice(2) }}
+                                        source={{ uri: getImageUrl(img) }}
 
 
 
@@ -615,7 +616,7 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
                                         >
                                             <Image
                                                 cachePolicy="memory-disk"
-                                                source={{ uri: "https://dev.dine360.ca/backend/" + img?.slice(2) }}
+                                                source={{ uri: getImageUrl(img) }}
                                                 style={{ width: "100%", height: "100%" }}
                                                 contentFit="cover"
                                             />
@@ -922,7 +923,7 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
                             <Text className="text-white text-2xl">×</Text>
                         </TouchableOpacity>
                         <ZoomableImage
-                            source={{ uri: "https://dev.dine360.ca/backend/" + selectedVariant?.images[selectedImageIndex]?.slice(2) }}
+                            source={{ uri: getImageUrl(selectedVariant?.images[selectedImageIndex]) }}
                             style={{ width: width - 40, height: width - 40 }}
                         />
                         <Text className="text-white mt-2">
@@ -972,7 +973,7 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
                                     {imageUri ? (
                                         <Image
                                             cachePolicy="memory-disk"
-                                            source={{ uri: "https://dev.dine360.ca/backend/" + imageUri?.slice(2) }}
+                                            source={{ uri: getImageUrl(imageUri) }}
 
 
                                             style={{

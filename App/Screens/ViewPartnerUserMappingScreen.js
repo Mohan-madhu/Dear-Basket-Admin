@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { Config } from "../../config";
 import {
   View,
   Text,
@@ -97,7 +98,7 @@ const ViewPartnerUserMappingScreen = () => {
 
     const profileurl =
       profile.startsWith("~/") || profile.startsWith("/")
-        ? "https://dev.dine360.ca/backend" + profile.slice(1)
+        ? Config.BASE_URL + profile.slice(1)
         : profile;
 
     return (

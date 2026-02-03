@@ -1,5 +1,6 @@
 import { useNavigation } from "@react-navigation/native";
 import React from "react";
+import { getImageUrl } from "../../config";
 import {
   View,
   Text,
@@ -58,7 +59,7 @@ const ProductCard = ({ product }) => {
     if (!product?.image) return null;
     if (product?.image.startsWith("file://")) return product?.image;
     if (product?.image.startsWith("http")) return product?.image;
-    return "https://dev.dine360.ca/backend/" + product?.image.replace(/^\/+/, "").slice(2);
+    return getImageUrl(product?.image);
   };
 
 

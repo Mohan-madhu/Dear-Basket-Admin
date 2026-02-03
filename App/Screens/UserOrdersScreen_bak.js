@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getImageUrl } from '../../config';
 import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { API } from '../../App_Utils/Services/APIService';
@@ -98,7 +99,7 @@ const MyOrdersScreen = () => {
         if (!imagePath) return null;
         if (imagePath.startsWith("file://")) return imagePath;
         if (imagePath.startsWith("http")) return imagePath;
-        return "https://dev.dine360.ca/backend/" + imagePath.replace(/^\/+/, "").replace("~/", "");
+        return getImageUrl(imagePath);
     };
 
     if (loading) {
@@ -167,7 +168,7 @@ const OrderCard = ({ order }) => {
         if (!imagePath) return null;
         if (imagePath.startsWith("file://")) return imagePath;
         if (imagePath.startsWith("http")) return imagePath;
-        return "https://dev.dine360.ca/backend/" + imagePath.replace(/^\/+/, "").replace("~/", "");
+        return getImageUrl(imagePath);
     };
 
     const parseOrderData = () => {

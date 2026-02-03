@@ -1,5 +1,6 @@
 // ProductDetail.js
 import React, { useEffect, useState } from "react";
+import { getImageUrl } from "../../config";
 import {
   ScrollView,
   View,
@@ -142,8 +143,8 @@ export default function ProductDetail({ product, onUpdate, onDelete }) {
     if (!imageUri) return null;
     if (imageUri.startsWith("file://")) return imageUri;
     if (imageUri.startsWith("http")) return imageUri;
-    //console.log("https://dev.dine360.ca/backend/" + imageUri.replace(/^\/+/, "").slice(2));
-    return "https://dev.dine360.ca/backend/" + imageUri.replace(/^\/+/, "").slice(2);
+    //console.log(getImageUrl(imageUri));
+    return getImageUrl(imageUri);
   };
   console.log(getImageURI());
 
@@ -182,8 +183,8 @@ export default function ProductDetail({ product, onUpdate, onDelete }) {
       if (!imageUri) return null;
       if (imageUri.startsWith("file://")) return imageUri;
       if (imageUri.startsWith("http")) return imageUri;
-      //console.log("https://dev.dine360.ca/backend/" + imageUri.replace(/^\/+/, "").slice(2));
-      return "https://dev.dine360.ca/backend/" + imageUri.replace(/^\/+/, "").slice(2);
+      //console.log(getImageUrl(imageUri));
+      return getImageUrl(imageUri);
     };
     return (
       <TouchableOpacity

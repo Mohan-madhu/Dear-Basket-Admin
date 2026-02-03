@@ -1,5 +1,6 @@
 // ProductDetail.js
 import React, { useEffect, useState } from "react";
+import { getImageUrl } from "../../config";
 import {
   ScrollView,
   View,
@@ -200,7 +201,7 @@ export default function ProductDetail({
     if (!imageUri) return null;
     if (imageUri.startsWith("file://")) return imageUri;
     if (imageUri.startsWith("http")) return imageUri;
-    return "https://dev.dine360.ca/backend/" + imageUri.replace(/^\/+/, "").slice(2);
+    return getImageUrl(imageUri);
   };
 
   const Get = async (id) => {
@@ -300,7 +301,7 @@ export default function ProductDetail({
       if (!relatedImageUri) return null;
       if (relatedImageUri.startsWith("file://")) return relatedImageUri;
       if (relatedImageUri.startsWith("http")) return relatedImageUri;
-      return "https://dev.dine360.ca/backend/" + relatedImageUri.replace(/^\/+/, "").slice(2);
+      return getImageUrl(relatedImageUri);
     };
 
     const relatedMrp = calcMrp(item.price, item.discount);

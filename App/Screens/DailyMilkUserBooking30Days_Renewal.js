@@ -1,4 +1,5 @@
 import React, { useState, useEffect, use } from "react";
+import { getImageUrl } from "../../config";
 import {
     View,
     Text,
@@ -246,16 +247,17 @@ const DailyMilkBooking = () => {
             await API.POST("DailyMilkBooking", bookingdata);
 
 
+            navigation.navigate("Main");
 
-            Alert.alert("Success", `Booking renewed for ${dateString}!`, [
-                {
-                    text: "OK", onPress: () => {
-                        setTimeout(() => {
-                            navigation.goBack();
-                        }, 500);
-                    }
-                }
-            ]);
+            // Alert.alert("Success", `Booking renewed for ${dateString}!`, [
+            //     {
+            //         text: "OK", onPress: () => {
+            //             setTimeout(() => {
+            //                 navigation.goBack();
+            //             }, 500);
+            //         }
+            //     }
+            // ]);
         } catch (err) {
             console.error("Submission error:", err);
             Alert.alert("Failed", "Could not complete booking renewal.");
@@ -290,7 +292,7 @@ const DailyMilkBooking = () => {
                     {currentProduct && (
                         <View className="w-[220px] rounded-3xl bg-white p-6 items-center shadow-2xl border border-gray-100 mx-2">
                             <Image
-                                source={{ uri: "https://dev.dine360.ca/backend/" + currentProduct.image.slice(2) }}
+                                source={{ uri: getImageUrl(currentProduct.image) }}
                                 className="w-[140px] h-[140px] rounded-xl"
                                 resizeMode="contain"
                             />

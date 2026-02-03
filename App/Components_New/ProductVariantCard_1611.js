@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getImageUrl } from '../../config';
 import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import { Image } from "expo-image";
 import { Ionicons } from '@expo/vector-icons';
@@ -93,7 +94,7 @@ const ProductVariantCard = ({ variant, isActive, handleEditVariant }) => {
       <View className="relative mb-3">
         <Image
           cachePolicy="memory-disk"
-          source={{ uri: "https://dev.dine360.ca/backend/" + variant.images[0]?.slice(2) }}
+          source={{ uri: getImageUrl(variant.images[0]) }}
           style={{
             width: "100%",
             height: 128,

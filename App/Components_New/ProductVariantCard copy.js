@@ -1,10 +1,11 @@
 import React from 'react';
+import { getImageUrl } from '../../config';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Image } from "expo-image";
 
 const ProductVariantCard = ({ variant, isActive }) => {
   const hasDiscount = variant.discountpercentage > 0;
-console.log("https://dev.dine360.ca/backend/" + variant.images[0]?.slice(2))
+console.log(getImageUrl(variant.images[0]))
   return (
     <View className={`w-64 p-3 rounded-lg border-2 ${isActive ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>
 
@@ -12,7 +13,7 @@ console.log("https://dev.dine360.ca/backend/" + variant.images[0]?.slice(2))
 
       <Image
         cachePolicy="memory-disk"
-        source={{ uri: "https://dev.dine360.ca/backend/" + variant.images[0]?.slice(2) }}
+        source={{ uri: getImageUrl(variant.images[0]) }}
 
         style={{
           width: "100%",     // full width of parent

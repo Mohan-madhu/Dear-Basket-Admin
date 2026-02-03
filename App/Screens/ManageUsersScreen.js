@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { getImageUrl, Config } from "../../config";
 import { View, Text, TouchableOpacity, Alert, ScrollView, RefreshControl } from "react-native";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import { API } from "../../App_Utils/Services/APIService";
@@ -57,7 +58,7 @@ const UserList = ({ users, userType }) => {
 
 
     if (profile.startsWith("~/") || profile.startsWith("/")) {
-      var profileurl = "https://dev.dine360.ca/backend" + profile?.slice(1)
+      var profileurl = Config.BASE_URL + profile?.slice(1)
       console.log(profileurl)
       return (
         // <View className="w-14 h-14 rounded-full bg-gray-100 items-center justify-center border border-gray-200">

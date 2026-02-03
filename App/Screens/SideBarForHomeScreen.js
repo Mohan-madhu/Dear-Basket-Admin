@@ -21,6 +21,7 @@ import Storage from "../../App_Utils/Services/StorageService";
 import TypeListDetails from "../Components/TypeListDetails";
 import { Image } from 'expo-image';
 import { useSelector } from "react-redux";
+import { getImageUrl } from "../../config";
 //const ROLE = "ADMIN";
 export default function SidebarScreen(data) {
   const { setLoading } = useLoading();
@@ -322,7 +323,7 @@ export default function SidebarScreen(data) {
     if (!imageUri) return null;
     if (imageUri.startsWith("file://")) return imageUri;
     if (imageUri.startsWith("http")) return imageUri;
-    return "https://dev.dine360.ca/backend/" + imageUri.replace(/^\/+/, "").slice(2);
+    return getImageUrl(imageUri);
   };
 
   ;
@@ -420,7 +421,7 @@ export default function SidebarScreen(data) {
                 <Animated.View className="relative" >
                   <Animated.Image // Animate the Image directly
                     source={{
-                      uri: `https://dev.dine360.ca/backend/${item.image.slice(2)}`,
+                      uri: getImageUrl(item.image),
                     }}
                     className="w-16 h-16 rounded-full mb-1 bg-red-800"
                     style={imageAnimatedStyle}
@@ -485,7 +486,7 @@ export default function SidebarScreen(data) {
                   {/* Background View */}
                   <Animated.Image // Animate the Image directly
                     source={{
-                      uri: `https://dev.dine360.ca/backend/${item.image.slice(2)}`,
+                      uri: getImageUrl(item.image),
                     }}
                     className="w-full h-full rounded-full" // Make the image fill the container
                     style={imageAnimatedStyle}

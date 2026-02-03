@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Config } from "../../../config";
 import { View, Text, TouchableOpacity, Alert, ScrollView, Modal, Pressable } from "react-native";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import { API } from "../../App_Utils/Services/APIService";
@@ -159,7 +160,7 @@ const PartnerUserMappingScreen = () => {
 
 
     if (profile.startsWith("~/") || profile.startsWith("/")) {
-      var profileurl = "https://dev.dine360.ca/backend" + profile?.slice(1)
+      var profileurl = Config.BASE_URL + profile?.slice(1)
       //   console.log(profileurl)
       return (
 

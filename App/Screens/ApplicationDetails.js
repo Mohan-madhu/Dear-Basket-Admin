@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Config } from '../../config';
 import {
   View,
   Text,
@@ -499,7 +500,7 @@ const isBenefitsActiveToday = (data) => {
             >
               <Text className="text-gray-600 text-sm p-2 bg-gray-50">Preview:</Text>
               <Image
-                source={{ uri: "https://dev.dine360.ca/backend" + rawData?.documentpath?.slice(1) }}
+                source={{ uri: Config.BASE_URL + rawData?.documentpath?.slice(1) }}
                 style={{ width: '100%', height: 200 }}
                 resizeMode="contain"
                 onError={(error) => console.log('Image load error:', error.nativeEvent.error)}
@@ -588,7 +589,7 @@ const isBenefitsActiveToday = (data) => {
           </TouchableOpacity>
           {rawData.documentpath && (
             <Image
-              source={{ uri: "https://dev.dine360.ca/backend" + rawData?.documentpath?.slice(1) }}
+              source={{ uri: Config.BASE_URL + rawData?.documentpath?.slice(1) }}
               style={{ width: width * 0.95, height: width * 0.95 * 1.4 }}
               resizeMode="contain"
             />

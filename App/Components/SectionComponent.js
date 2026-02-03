@@ -2,6 +2,7 @@
 // Imports
 // ==========================
 import React, { useEffect, useState } from "react";
+import { getImageUrl } from "../../config";
 import {
   View,
   Text,
@@ -75,7 +76,7 @@ function MenuCard({
   const [loaded, setLoaded] = useState(false);
   const imagePath =
     item?.image && typeof item.image === "string" ? item.image.slice(2) : "";
-  var uri = { uri: "https://dev.dine360.ca/backend/" + imagePath };
+  var uri = { uri: getImageUrl(imagePath) };
   if (item.name == "Add New Category" && ROLE == "ADMIN") {
     uri = item.image;
   }
@@ -574,7 +575,7 @@ export default function MenuViewComponent({ MENU, loading }) {
     if (!imageUri) return null;
     if (imageUri.startsWith("file://")) return imageUri;
     if (imageUri.startsWith("http")) return imageUri;
-    return "https://dev.dine360.ca/backend/" + imageUri.replace(/^\/+/, "").slice(2);
+    return getImageUrl(imageUri);
   };
   // ==========================
   // Render

@@ -1,5 +1,6 @@
 // CreateProduct.js
 import React, { useState } from "react";
+import { getImageUrl } from "../../config";
 import {
   ScrollView,
   View,
@@ -70,7 +71,7 @@ export default function NewProduct() {
     if (!imageUri) return null;
     if (imageUri.startsWith("file://")) return imageUri;
     if (imageUri.startsWith("http")) return imageUri;
-    return "https://dev.dine360.ca/backend/" + imageUri.replace(/^\/+/, "").slice(2);
+    return getImageUrl(imageUri);
   };
 
   async function handleCreate() {

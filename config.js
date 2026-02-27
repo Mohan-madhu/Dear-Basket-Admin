@@ -3,12 +3,12 @@
 
 export const Config = {
   // Backend API base URL
-//   BASE_URL: "https://dev.dine360.ca/backend",
-   BASE_URL: "http://82.25.105.135:15000",
+   BASE_URL: "https://dev.dine360.ca/backend",
+   //BASE_URL: "http://82.25.105.135:15000",
   
   // API endpoint
-//   API_URL: "https://dev.dine360.ca/backend/API/DearBasket",
-  API_URL: "http://82.25.105.135:15000/API/DearBasket",
+   API_URL: "https://dev.dine360.ca/backend/API/DearBasket",
+//  API_URL: "http://82.25.105.135:15000/API/DearBasket",
 };
 
 // Helper function to build image URLs
@@ -17,7 +17,7 @@ export const getImageUrl = (imagePath) => {
   if (imagePath.startsWith("http")) return imagePath;
   
 
-  console.log("Image Path:", imagePath);
+
 
   // Remove leading slashes and handle different path formats
   const cleanPath = imagePath.replace(/^\/+/, "")  //.replace("~/", "");
@@ -27,7 +27,6 @@ export const getImageUrl = (imagePath) => {
     ? cleanPath.slice(2) 
     : cleanPath;
   
-    console.log(`${Config.BASE_URL}/${finalPath}`);
-
+ 
   return `${Config.BASE_URL}/${finalPath}`;
 };

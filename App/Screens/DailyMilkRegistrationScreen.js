@@ -713,6 +713,8 @@ const DailyMilkRegistrationScreen = () => {
   const CheckAlreadyRegistered = async () => {
     if (!USER) return;
 
+    console.log("Checking registration for user:", USER);
+
     setLoading(true, "Checking User Registration Status and Fetching Location…");
 
     try {

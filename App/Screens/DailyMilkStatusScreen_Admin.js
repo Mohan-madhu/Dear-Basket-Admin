@@ -225,9 +225,13 @@ export default function DailyMilkStatusScreen({ route, navigation }) {
 
     setLoading(true, "Fetching Booking Status");
     try {
-      var { Response } = await API.GET(
-        "DailyMilkStatus/Dates/" + DailyMilkBookingID
-      );
+
+      console.warn("Fetching booking status for ID:", DailyMilkBookingID);
+     var { Response } = await API.GET(
+            "DailyMilkStatus/Dates/" +DailyMilkBookingID
+          );
+
+      console.log("Raw Booking Status Response:", Response);
 
       setBookingStatusTable(Response);
 

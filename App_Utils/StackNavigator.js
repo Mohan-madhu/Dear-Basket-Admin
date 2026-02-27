@@ -45,9 +45,10 @@ import PregnancyApplication from "../App/Screens/PregnancyApplication";
 import PregnancyApplications from "../App/Screens/PregnancyApplications";
 import ApplicationDetails from "../App/Screens/ApplicationDetails";
 import AdminPregnancyApproval from "../App/Screens/AdminPregnancyApproval";
-import ViewPartnerOrderScreen from "../App/Screens/ViewPartnerOrderScreen";
 import DailyMilkBooking from "../App/Screens/DailyMilkUserBooking30Days_Renewal";
 import DailyMilkActiveBookings from "../App/Screens/DailyMilkActiveBookings";
+import PartnerLanding from "../App/Screens/PartnerLanding";
+import ViewPartnerOrderScreen from "../App/Screens/ViewPartnerOrderScreen";
 
 const StackNavigator = () => {
   const Stack = createNativeStackNavigator();
@@ -208,7 +209,7 @@ const StackNavigator = () => {
         options={{ title: 'Pregnancy Application Approval' }}
       />
 
-      
+
       <Stack.Screen
         name="DailyMilkBookingScreen"
         component={DailyMilkBooking}
@@ -219,6 +220,12 @@ const StackNavigator = () => {
         name="DailyMilkActiveBookingScreen"
         component={DailyMilkActiveBookings}
         options={{ title: 'Daily Milk Active Bookings' }}
+      />
+
+      <Stack.Screen
+        name="PartnerLandingScreen"
+        component={PartnerLanding}
+        options={{ title: 'Partner Orders View' }}
       />
 
 

@@ -310,27 +310,72 @@ const ViewCartScreen = () => {
         let ProductOrderid = uuidv4();
 
 
+        // if (deliveryOption === 2) {
+        //     const date = NowInIST()
+        //     console.log("Current Date (IST):", date);
+
+        //     date.setDate(date.getDate() + 1);
+        //     const mappedpartnerid = userData?.mappedpartnerid;
+        //     const orderdate = date.toISOString().split('T')[0];
+        //     const orderidnumberres = await API.POST("ProductOrder/get_orderid_partner_date", { mappedpartnerid, orderdate })
+        //     const newOrderNumber = orderidnumberres.Response[0].newordernumber;
+
+        //     const partnerLetter = mappedpartnerid.split("-")[1];
+        //     const formattedOrderNumber = String(newOrderNumber).padStart(2, "0");
+
+
+        //     const orderdatestringfororderid = date.toISOString().split('T')[0].replace(/-/g, "");
+        //     console.log("Order Date String for Order ID:", orderdatestringfororderid);
+        //     const orderId = `369DO-${partnerLetter}-${orderdatestringfororderid}-${formattedOrderNumber}`;
+        //     ProductOrderid = orderId
+        // } else {
+        //     ProductOrderid = uuidv4();
+        // }
+
+        // console.log("Generated Product Order ID:", ProductOrderid);
+
+
+        console.log("Delivery Option Selected:", deliveryOption === 1 ? "Fast Delivery" : "With Daily Milk");
         if (deliveryOption === 2) {
-            const date = NowInIST()
-            console.log("Current Date (IST):", date);
+            console.log("Daily Milk User - Generating Order ID with Partner Letter...");
+            // Get IST time correctly
+            const now = new Date();
 
-            date.setDate(date.getDate() + 1);
+            // Convert current UTC time → IST
+            const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000)); // IST is UTC+5:30
+
+
+            // Extract IST hour
+            const currentISTHour = istTime.getHours();
+
+            // If AFTER 3PM IST → use tomorrow
+            // If BEFORE 3PM IST → use today
+            const date = new Date(istTime);
+            if (currentISTHour >= 16) {
+                date.setDate(date.getDate() + 1);
+            }
+
             const mappedpartnerid = userData?.mappedpartnerid;
-            const orderdate = date.toISOString().split('T')[0];
-            const orderidnumberres = await API.POST("ProductOrder/get_orderid_partner_date", { mappedpartnerid, orderdate })
-            const newOrderNumber = orderidnumberres.Response[0].newordernumber;
+            const orderdate = date.toISOString().split("T")[0];
 
+            const orderidnumberres = await API.POST(
+                "ProductOrder/get_orderid_partner_date",
+                { mappedpartnerid, orderdate }
+            );
+
+            const newOrderNumber = orderidnumberres.Response[0].newordernumber;
             const partnerLetter = mappedpartnerid.split("-")[1];
             const formattedOrderNumber = String(newOrderNumber).padStart(2, "0");
 
-
-            const orderdatestringfororderid = date.toISOString().split('T')[0].replace(/-/g, "");
-            console.log("Order Date String for Order ID:", orderdatestringfororderid);
+            const orderdatestringfororderid = orderdate.replace(/-/g, "");
             const orderId = `369DO-${partnerLetter}-${orderdatestringfororderid}-${formattedOrderNumber}`;
-            ProductOrderid = orderId
+
+            ProductOrderid = orderId;
         } else {
             ProductOrderid = uuidv4();
         }
+
+        console.log("Final Product Order ID:", ProductOrderid);
 
         try {
             setLoading(true, "Adding up the Cart Items to an Order...");

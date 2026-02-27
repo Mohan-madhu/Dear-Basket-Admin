@@ -500,7 +500,7 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
     return (
         <>
 
-            <ScrollView className="bg-gray-50 flex-1 mb-20">
+            <ScrollView className="bg-gray-50 flex-1 ">
 
 
                 {variantsLength > 0 && (

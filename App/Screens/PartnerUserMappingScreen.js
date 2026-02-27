@@ -358,7 +358,7 @@ const PartnerUserMappingScreen = () => {
 
                       {isMappedToOther && (
                         <Text className="text-red-400">
-                          Already Mapped To -{" "}
+                          Already Mapped To ghjkl-{" "}
                           {GetUserData(userData?.mappedpartnerid)?.name}
                         </Text>
                       )}
@@ -383,7 +383,7 @@ const PartnerUserMappingScreen = () => {
             )}
           </ScrollView>
 
-          <View className="flex-row space-x-3 mt-4">
+          <View className="flex-row space-x-3 mt-4 pb-10">
             <TouchableOpacity
               className="flex-1 bg-gray-200 p-3 rounded-lg items-center justify-center m-2"
               onPress={() => setSelectedPartner(null)}

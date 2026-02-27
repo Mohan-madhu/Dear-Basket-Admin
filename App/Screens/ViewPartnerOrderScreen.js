@@ -19,6 +19,7 @@ import Animated, { FadeIn, FadeOut, Layout } from "react-native-reanimated";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { Image } from "expo-image";
 import Storage from "../../App_Utils/Services/StorageService";
+import { useNavigation } from "@react-navigation/native";
 
 const ViewPartnerOrderScreen = () => {
   const [allusers, setAllUsers] = useState([]);
@@ -28,7 +29,7 @@ const ViewPartnerOrderScreen = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const { setLoading } = useLoading();
   const hasFetchedOrdersRef = useRef(false);
-
+  const nav = useNavigation();
   const userMap = useMemo(() => {
     const map = new Map();
     allusers.forEach((user) => map.set(user.transid, user));
@@ -55,11 +56,11 @@ const ViewPartnerOrderScreen = () => {
 
   const fetchOrders = useCallback(async () => {
     if (hasFetchedOrdersRef.current) return;
-    
+
     try {
       setLoading(true, "Fetching orders...");
       hasFetchedOrdersRef.current = true;
-      
+
       const USERDATA = await Storage.getData("DATA");
       const USER = USERDATA?.transid;
       const userType = USERDATA?.usertype;
@@ -126,13 +127,14 @@ const ViewPartnerOrderScreen = () => {
   };
 
   const handlePartnerSelect = (partner) => {
-    setSelectedPartner(partner);
-    // Filter orders for selected partner
-    const filteredOrders = orders.filter(
-      (order) => order.mappedpartnerid === partner.transid
-    );
-    setPartnerOrders(filteredOrders);
-    setIsModalVisible(true);
+    // setSelectedPartner(partner);
+    // // Filter orders for selected partner
+    // const filteredOrders = orders.filter(
+    //   (order) => order.mappedpartnerid === partner.transid
+    // );
+    // setPartnerOrders(filteredOrders);
+    // setIsModalVisible(true);
+    nav.navigate("PartnerLandingScreen", { partnerid: partner.transid, partnername: partner.name });
   };
 
   const handleCloseModal = () => {
@@ -617,8 +619,8 @@ const ViewPartnerOrderScreen = () => {
                               <View className="items-end">
                                 <View
                                   className={`px-3 py-1.5 rounded-full border ${partner.status === 1
-                                      ? "bg-green-100 border-green-300"
-                                      : "bg-red-100 border-red-300"
+                                    ? "bg-green-100 border-green-300"
+                                    : "bg-red-100 border-red-300"
                                     }`}
                                 >
                                   <Text

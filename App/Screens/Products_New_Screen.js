@@ -1,5 +1,6 @@
 // Products_New_Screen.js
 import React, { useEffect, useRef, useState } from "react";
+import { getImageUrl } from "../../config";
 import {
   View,
   Text,

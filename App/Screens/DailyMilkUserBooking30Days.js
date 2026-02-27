@@ -46,6 +46,7 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
     const [month, setMonth] = useState("");
     const [day, setDay] = useState("");
     const [year, setYear] = useState("");
+    const [isConfirmButtonVisible, setisConfirmButtonVisible] = useState(true);
     const navigation = useNavigation()
     // ──────────────────────────────────────────────────────────
     // T+2 CALCULATION LOGIC
@@ -57,7 +58,7 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
     if (!isrenewal) {
         SAFE_DATE.setDate(TODAY.getDate() + 3);
     }
-    const MIN_DAY = SAFE_DATE.getDate() - 1;
+    const MIN_DAY = SAFE_DATE.getDate();
     const MIN_MONTH = SAFE_DATE.getMonth() + 1; // 1-12
     const MIN_YEAR = SAFE_DATE.getFullYear();
 
@@ -185,7 +186,7 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
             enddate.setDate(startdate.getDate() + 29);
             const BookingID = uuidv4();
 
-            setLoading(true, "Confirming Booking...");
+          //  setLoading(true, "Confirming Booking...");
 
             const bookingdata = {
                 transid: uuidv4(),
@@ -202,16 +203,21 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
                 rcu: USER,
                 renewal: isrenewal ? 1 : 0,
             };
-
+            setisConfirmButtonVisible(false);
             await API.POST("DailyMilkBooking", bookingdata);
 
+            setLoading(false);
             //setupd((prev) => prev + 1);
             Alert.alert("Success", `Booking confirmed for ${dateString}!`);
-              navigation.navigate("Main");
+            setLoading(false)
+            setisConfirmButtonVisible(false);
+            setLoading(false)
+            // navigation.navigate("Main");
             //CheckAlreadyRegistered();
         } catch (err) {
             console.error("Submission error:", err);
             Alert.alert("Failed", "Could not complete booking.");
+            setLoading(false);
         } finally {
             setLoading(false);
         }
@@ -366,12 +372,14 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
             </View>
 
             {/* ──────────────── SUBMIT ──────────────── */}
-            <TouchableOpacity
-                className="bg-blue-600 rounded-2xl py-5 items-center shadow-2xl active:bg-blue-700"
-                onPress={handleSubmit}
-            >
-                <Text className="text-white text-lg font-black uppercase tracking-widest">Confirm Booking</Text>
-            </TouchableOpacity>
+            {isConfirmButtonVisible && (
+                <TouchableOpacity
+                    className="bg-blue-600 rounded-2xl py-5 items-center shadow-2xl active:bg-blue-700"
+                    onPress={handleSubmit}
+                >
+                    <Text className="text-white text-lg font-black uppercase tracking-widest">Confirm Booking</Text>
+                </TouchableOpacity>
+            )}
         </View>
     );
 };

@@ -104,10 +104,7 @@ const PartnerUserMappingScreen = () => {
       return;
     }
 
-    const res = await API.PUT("User/partner-user-mapping", {
-      partnerid: selectedPartner.transid,
-      userids: selectedCustomers,
-    });
+
 
     Alert.alert(
       "Confirm",
@@ -116,7 +113,11 @@ const PartnerUserMappingScreen = () => {
         { text: "Cancel", style: "cancel" },
         {
           text: "Confirm",
-          onPress: () => {
+          onPress: async () => {
+            const res = await API.PUT("User/partner-user-mapping", {
+              partnerid: selectedPartner.transid,
+              userids: selectedCustomers,
+            });
             Alert.alert("Success", "Customers assigned successfully");
             setSelectedPartner(null);
             setSelectedCustomers([]);
@@ -180,9 +181,8 @@ const PartnerUserMappingScreen = () => {
     <Pressable
       disabled={disabled}
       onPress={!disabled ? onValueChange : null}
-      className={`w-6 h-6 rounded-md border-2 items-center justify-center ${
-        value ? "bg-blue-500 border-blue-500" : "border-gray-400"
-      } ${disabled ? "opacity-50" : ""}`}
+      className={`w-6 h-6 rounded-md border-2 items-center justify-center ${value ? "bg-blue-500 border-blue-500" : "border-gray-400"
+        } ${disabled ? "opacity-50" : ""}`}
     >
       {value && <Icon name="check" size={16} color="white" />}
     </Pressable>
@@ -250,11 +250,10 @@ const PartnerUserMappingScreen = () => {
                           </View>
                         </View>
                         <Text
-                          className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                            partner.status === 1
+                          className={`text-xs px-2.5 py-1 rounded-full font-medium ${partner.status === 1
                               ? "bg-green-50 text-green-700 border border-green-100"
                               : "bg-red-50 text-red-700 border border-red-100"
-                          }`}
+                            }`}
                         >
                           {partner.status === 1 ? "Active" : "Inactive"}
                         </Text>

@@ -181,9 +181,9 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
 
             const USERID = await Storage.getData("USERID");
             const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const startdate = new Date(dateString);
-            const enddate = new Date(startdate);
-            enddate.setDate(startdate.getDate() + 29);
+            const startdate = new Date(Number(year), Number(month) - 1, Number(day));
+            const enddate = new Date(Number(year), Number(month), 0);
+            const endDateString = `${enddate.getFullYear()}-${String(enddate.getMonth() + 1).padStart(2, '0')}-${String(enddate.getDate()).padStart(2, '0')}`;
             const BookingID = uuidv4();
 
           //  setLoading(true, "Confirming Booking...");
@@ -199,7 +199,7 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
                 quantity: qty,
                 deliverytype: timeSlot,
                 bookingstartdate: dateString,
-                bookingenddate: enddate.toISOString().split("T")[0],
+                bookingenddate: endDateString,
                 rcu: USER,
                 renewal: isrenewal ? 1 : 0,
             };

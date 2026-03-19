@@ -1,0 +1,545 @@
+import React, { useEffect, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Modal, ScrollView, Alert, Image } from 'react-native';
+import { useLoading } from '../../App_Utils/Contexts/LoadingContext';
+import { API } from '../../App_Utils/Services/APIService';
+import { useNavigation } from '@react-navigation/native';
+import Storage from '../../App_Utils/Services/StorageService';
+import * as DocumentPicker from 'expo-document-picker';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+
+const AddVariantCard = ({ productData, editProductData }) => {
+
+
+
+  const { setLoading } = useLoading();
+  const nav = useNavigation();
+  const [isModalVisible, setIsModalVisible] = useState(editProductData ? true : false);
+  const [imageUri, setImageUri] = useState(null);
+  const [fileInfo, setFileInfo] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [imageUrl, setImageUrl] = useState('');
+
+
+  const [formData, setFormData] = useState({
+    variantname: '',
+    sku: '',
+    weight: '',
+    dimensions: '',
+    packsize: '1',
+    baseprice: '',
+    sellingprice: '',
+    discountpercentage: '0',
+    stockquantity: '0',
+  });
+
+
+  useEffect(() => {
+    if (editProductData) {
+      setFormData({
+        variantname: editProductData?.variantname,
+        sku: editProductData?.sku,
+        weight: editProductData?.weight,
+        dimensions: editProductData?.dimensions,
+        packsize: editProductData?.packsize,
+        baseprice: editProductData?.baseprice,
+        sellingprice: editProductData?.sellingprice,
+        discountpercentage: editProductData?.discountpercentage,
+        stockquantity: editProductData?.stockquantity,
+      });
+      setImageUrl(editProductData?.imageurl);
+
+
+    } else {
+      setFormData({
+        variantname: '',
+        sku: '',
+        weight: '',
+        dimensions: '',
+        packsize: '1',
+        baseprice: '',
+        sellingprice: '',
+        discountpercentage: '0',
+        stockquantity: '0',
+      })
+    }
+  }, []);
+
+  const toggleModal = () => {
+    setIsModalVisible(!isModalVisible);
+    setErrors({});
+    if (!isModalVisible) {
+      setImageUri(null);
+      setFileInfo(null);
+      setImageUrl('');
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData?.variantname.trim()) {
+      newErrors.variantname = 'Variant name is required';
+    }
+
+    if (!formData?.baseprice) {
+      newErrors.baseprice = 'Base price is required';
+    } else if (isNaN(formData?.baseprice)) {
+      newErrors.baseprice = 'Base price must be a number';
+    }
+
+    if (!formData.sellingprice) {
+      newErrors.sellingprice = 'Selling price is required';
+    } else if (isNaN(formData.sellingprice)) {
+      newErrors.sellingprice = 'Selling price must be a number';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleInputChange = (name, value) => {
+    let updatedFormData = {
+      ...formData,
+      [name]: value,
+    };
+
+    if ((name === 'baseprice' || name === 'sellingprice')) {
+      const base = parseFloat(updatedFormData.baseprice) || 0;
+      const selling = parseFloat(updatedFormData.sellingprice) || 0;
+
+      if (base > 0 && selling > 0) {
+        const discount = ((base - selling) / base) * 100;
+        updatedFormData.discountpercentage = Math.round(discount).toString();
+      } else {
+        updatedFormData.discountpercentage = '0';
+      }
+    }
+
+    setFormData(updatedFormData);
+  };
+
+  const pickImage = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["image/*"],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (result.canceled || result.cancelled) return;
+
+      const file = {
+        uri: result.assets[0].uri,
+        name: result.assets[0].name,
+        type: result.assets[0].mimeType,
+      };
+
+      setImageUri(file.uri);
+      setFileInfo(file);
+      setImageUrl(''); // Clear URL if image is picked
+    } catch (error) {
+      Alert.alert("Error", "Failed to pick image");
+    }
+  };
+
+  const InsertNewVariant = async (variantData) => {
+    try {
+      const USER = await Storage.getData("USER");
+      toggleModal();
+      let profilePath = "";
+
+      try {
+        // Use image URL if provided
+        if (imageUrl) {
+          profilePath = imageUrl;
+        }
+        // Otherwise upload the picked image
+        else if (fileInfo) {
+          setLoading(true, "Uploading Variant Image");
+          const uploadRes = await API.UPLOAD("FileUpload", fileInfo, {
+            path: "ProductVariant",
+          });
+          profilePath = uploadRes.virtualPath;
+          setFileInfo(null);
+        }
+      } catch (uploadError) {
+        console.error("Image upload failed:", uploadError);
+        Alert.alert("Warning", "Variant image upload failed, continuing without image");
+      } finally {
+        setLoading(false);
+      }
+
+      setLoading(true, "Adding New Variant for the Product " + productData.productname);
+
+      const data = {
+        productid: productData.productid,
+        variantname: variantData?.variantname,
+        sku: variantData?.sku || "No SKU",
+        weight: variantData?.weight,
+        dimensions: variantData?.dimensions,
+        packsize: variantData?.packsize,
+        baseprice: variantData?.baseprice,
+        sellingprice: variantData?.sellingprice,
+        discountpercentage: variantData?.discountpercentage,
+        stockquantity: variantData?.stockquantity,
+        minstocklevel: variantData?.minstocklevel || 10,
+        maxorderquantity: variantData?.maxorderquantity || 100,
+        isactive: variantData?.isactive || 1,
+        variantimage: profilePath || null,
+        rcu: USER,
+      };
+
+      const { message, variant } = await API.POST("ProductVariant", data);
+
+      if (message === "Product variant created successfully.") {
+        setLoading(true, "Adding Image for the Variant " + variantData.variantname);
+
+        const dataforimage = {
+          productid: productData.productid,
+          variantid: variant.variantid,
+          imageurl: profilePath,
+          imagetype: "Main",
+          sortorder: 0,
+          isactive: 1,
+          rcu: USER,
+        };
+
+        const { message } = await API.POST("ProductImages", dataforimage);
+        console.log("Image added for variant:", message);
+
+        Alert.alert("Success", "Variant added successfully");
+
+        // Reset form
+        setFormData({
+          variantname: '',
+          sku: '',
+          weight: '',
+          dimensions: '',
+          packsize: '1',
+          baseprice: '',
+          sellingprice: '',
+          discountpercentage: '0',
+          stockquantity: '0',
+        });
+        setImageUri(null);
+        setImageUrl('');
+      } else {
+        Alert.alert("Error", message);
+      }
+    } catch (err) {
+      Alert.alert("Error", err.message || "Failed to add new variant");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = () => {
+    if (!validateForm()) return;
+    InsertNewVariant(formData);
+  };
+
+  return (
+    <View className="mb-8">
+
+
+
+      <TouchableOpacity
+        onPress={toggleModal}
+        className="flex-row items-center justify-center bg-blue-600 py-3 px-6 rounded-lg shadow-md"
+        activeOpacity={0.8}
+      >
+        <Icon name="plus" size={20} color="white" />
+        <Text className="text-white font-bold ml-2">{editProductData ? "Edit Variant" : "Add New Variant"}</Text>
+      </TouchableOpacity>
+
+      <Modal
+        visible={isModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={toggleModal}
+      >
+        <View className="flex-1 justify-center items-center bg-black bg-opacity-50 p-4">
+          <View className="bg-white w-full max-w-md rounded-xl shadow-xl">
+            <ScrollView showsVerticalScrollIndicator={false} className="max-h-[80vh] p-6">
+              <View className="flex-row justify-between items-center mb-4">
+                <Text className="text-2xl font-bold text-gray-800">Add New Variant</Text>
+                <TouchableOpacity onPress={toggleModal}>
+                  <Icon name="close" size={24} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Variant Image Section */}
+              <View className="mb-6">
+                <Text className="text-gray-600 mb-2 font-medium">Variant Image</Text>
+
+                <View className="relative bg-gray-100 rounded-lg overflow-hidden shadow-md mb-3">
+                  <Image
+                    source={
+                      imageUri
+                        ? { uri: imageUri }
+                        : imageUrl
+                          ? { uri: imageUrl }
+                          : { uri: 'https://placehold.co/400x300/png?text=Variant+Image' }
+                    }
+                    className="w-full"
+                    style={{ height: 200 }}
+                    resizeMode="contain"
+                  />
+                  <View className="absolute top-2 right-2 flex-row">
+                    <TouchableOpacity
+                      onPress={pickImage}
+                      className="bg-black bg-opacity-50 p-2 rounded-full mr-2"
+                    >
+                      <Icon name="image" size={20} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setImageUri(null)}
+                      className="bg-black bg-opacity-50 p-2 rounded-full"
+                    >
+                      <Icon name="trash-can" size={20} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View className="mt-2">
+                  <Text className="text-gray-600 mb-1">Or use image URL</Text>
+                  <View className="flex-row">
+                    <TextInput
+                      placeholder="https://example.com/image.jpg"
+                      value={imageUrl}
+                      onChangeText={setImageUrl}
+                      className="flex-1 border border-gray-300 rounded-l-lg p-3"
+                      keyboardType="url"
+                    />
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (imageUrl) {
+                          setImageUri(null);
+                          setFileInfo(null);
+                        }
+                      }}
+                      className="bg-blue-500 px-4 rounded-r-lg justify-center"
+                    >
+                      <Icon name="check" size={20} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                  <Text className="text-xs text-gray-500 mt-1">
+                    This will be used as the variant's main image
+                  </Text>
+                </View>
+              </View>
+
+              {/* Form Fields */}
+              {/* <View className="space-y-4">
+                  <View>
+                    <Text className="text-gray-600 mb-1 font-medium">Variant Name*</Text>
+                    <TextInput
+                      placeholder="e.g., Black Edition, Large Size"
+                      value={formData.variantname}
+                      onChangeText={(text) => handleInputChange('variantname', text)}
+                      className={`border ${errors.variantname ? 'border-red-500' : 'border-gray-300'} rounded-lg p-3`}
+                    />
+                    {errors?.variantname && <Text className="text-red-500 text-xs mt-1">{errors?.variantname}</Text>}
+                  </View>
+
+                  <View>
+                    <Text className="text-gray-600 mb-1 font-medium">SKU (Stock Keeping Unit)</Text>
+                    <TextInput
+                      placeholder="e.g., SKU12345"
+                      value={formData.sku}
+                      onChangeText={(text) => handleInputChange('sku', text)}
+                      className="border border-gray-300 rounded-lg p-3"
+                    />
+                  </View>
+
+                  <View className="flex-row space-x-3">
+                    <View className="flex-1 ">
+                      <Text className="text-gray-600 mb-1 font-medium">Weight (kg)</Text>
+                      <TextInput
+                        placeholder="0.25"
+                        keyboardType="numeric"
+                        value={formData.weight}
+                        onChangeText={(text) => handleInputChange('weight', text)}
+                        className="border border-gray-300 rounded-lg p-3 mr-2"
+                      />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-gray-600 mb-1 font-medium">Dimensions</Text>
+                      <TextInput
+                        placeholder="18x16x8 cm"
+                        value={formData.dimensions}
+                        onChangeText={(text) => handleInputChange('dimensions', text)}
+                        className="border border-gray-300 rounded-lg p-3"
+                      />
+                    </View>
+                  </View>
+
+                  <View className="flex-row space-x-3">
+                    <View className="flex-1">
+                      <Text className="text-gray-600 mb-1 font-medium">Base Price ($)*</Text>
+                      <TextInput
+                        placeholder="199.99"
+                        keyboardType="numeric"
+                        value={formData.baseprice}
+                        onChangeText={(text) => handleInputChange('baseprice', text)}
+                        className={`border ${errors.baseprice ? 'border-red-500' : 'border-gray-300'} rounded-lg p-3 mr-2`}
+                      />
+                      {errors.baseprice && <Text className="text-red-500 text-xs mt-1">{errors.baseprice}</Text>}
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-gray-600 mb-1 font-medium">Selling Price ($)*</Text>
+                      <TextInput
+                        placeholder="179.99"
+                        keyboardType="numeric"
+                        value={formData.sellingprice}
+                        onChangeText={(text) => handleInputChange('sellingprice', text)}
+                        className={`border ${errors.sellingprice ? 'border-red-500' : 'border-gray-300'} rounded-lg p-3`}
+                      />
+                      {errors.sellingprice && <Text className="text-red-500 text-xs mt-1">{errors.sellingprice}</Text>}
+                    </View>
+                  </View>
+
+                  <View className="flex-row space-x-3">
+                    <View className="flex-1">
+                      <Text className="text-gray-600 mb-1 font-medium">Discount (%)</Text>
+                      <TextInput
+                        placeholder="10"
+                        keyboardType="numeric"
+                        value={formData.discountpercentage}
+                        editable={false}
+                        className="border border-gray-300 bg-gray-100 rounded-lg p-3 mr-2"
+                      />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-gray-600 mb-1 font-medium">Stock Quantity</Text>
+                      <TextInput
+                        placeholder="50"
+                        keyboardType="numeric"
+                        value={formData.stockquantity}
+                        onChangeText={(text) => handleInputChange('stockquantity', text)}
+                        className="border border-gray-300 rounded-lg p-3"
+                      />
+                    </View>
+                  </View>
+                </View> */}
+
+
+              <View className="space-y-4">
+                <View>
+                  <Text className="text-gray-600 mb-1 font-medium">Variant Name*</Text>
+                  <TextInput
+                    placeholder="e.g., Black Edition, Large Size"
+                    value={formData.variantname?.toString() || ""}
+                    onChangeText={(text) => handleInputChange('variantname', text)}
+                    className={`border ${errors.variantname ? 'border-red-500' : 'border-gray-300'} rounded-lg p-3`}
+                  />
+                  {errors?.variantname && <Text className="text-red-500 text-xs mt-1">{errors?.variantname}</Text>}
+                </View>
+
+                <View>
+                  <Text className="text-gray-600 mb-1 font-medium">SKU (Stock Keeping Unit)</Text>
+                  <TextInput
+                    placeholder="e.g., SKU12345"
+                    value={formData.sku?.toString() || ""}
+                    onChangeText={(text) => handleInputChange('sku', text)}
+                    className="border border-gray-300 rounded-lg p-3"
+                  />
+                </View>
+
+                <View className="flex-row space-x-3">
+                  <View className="flex-1">
+                    <Text className="text-gray-600 mb-1 font-medium">Weight (kg)</Text>
+                    <TextInput
+                      placeholder="0.25"
+                      keyboardType="numeric"
+                      value={formData.weight?.toString() || ""}
+                      onChangeText={(text) => handleInputChange('weight', text)}
+                      className="border border-gray-300 rounded-lg p-3 mr-2"
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-gray-600 mb-1 font-medium">Dimensions</Text>
+                    <TextInput
+                      placeholder="18x16x8 cm"
+                      value={formData.dimensions?.toString() || ""}
+                      onChangeText={(text) => handleInputChange('dimensions', text)}
+                      className="border border-gray-300 rounded-lg p-3"
+                    />
+                  </View>
+                </View>
+
+                <View className="flex-row space-x-3">
+                  <View className="flex-1">
+                    <Text className="text-gray-600 mb-1 font-medium">Base Price ($)*</Text>
+                    <TextInput
+                      placeholder="199.99"
+                      keyboardType="numeric"
+                      value={formData.baseprice?.toString() || ""}
+                      onChangeText={(text) => handleInputChange('baseprice', text)}
+                      className={`border ${errors.baseprice ? 'border-red-500' : 'border-gray-300'} rounded-lg p-3 mr-2`}
+                    />
+                    {errors.baseprice && <Text className="text-red-500 text-xs mt-1">{errors.baseprice}</Text>}
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-gray-600 mb-1 font-medium">Selling Price ($)*</Text>
+                    <TextInput
+                      placeholder="179.99"
+                      keyboardType="numeric"
+                      value={formData.sellingprice?.toString() || ""}
+                      onChangeText={(text) => handleInputChange('sellingprice', text)}
+                      className={`border ${errors.sellingprice ? 'border-red-500' : 'border-gray-300'} rounded-lg p-3`}
+                    />
+                    {errors.sellingprice && <Text className="text-red-500 text-xs mt-1">{errors.sellingprice}</Text>}
+                  </View>
+                </View>
+
+                <View className="flex-row space-x-3">
+                  <View className="flex-1">
+                    <Text className="text-gray-600 mb-1 font-medium">Discount (%)</Text>
+                    <TextInput
+                      placeholder="10"
+                      keyboardType="numeric"
+                      value={formData.discountpercentage?.toString() || ""}
+                      editable={false}
+                      className="border border-gray-300 bg-gray-100 rounded-lg p-3 mr-2"
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-gray-600 mb-1 font-medium">Stock Quantity</Text>
+                    <TextInput
+                      placeholder="50"
+                      keyboardType="numeric"
+                      value={formData.stockquantity?.toString() || ""}
+                      onChangeText={(text) => handleInputChange('stockquantity', text)}
+                      className="border border-gray-300 rounded-lg p-3"
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* Action Buttons */}
+              <View className="flex-row justify-between mt-8 mb-20">
+                <TouchableOpacity
+                  onPress={toggleModal}
+                  className="flex-1 mr-2 bg-gray-200 py-3 rounded-lg items-center"
+                  activeOpacity={0.7}
+                >
+                  <Text className="text-gray-800 font-bold">Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSubmit}
+                  className="flex-1 ml-2 bg-blue-600 py-3 rounded-lg items-center"
+                  activeOpacity={0.7}
+                >
+                  <Text className="text-white font-bold">Add Variant</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+};
+
+export default AddVariantCard;

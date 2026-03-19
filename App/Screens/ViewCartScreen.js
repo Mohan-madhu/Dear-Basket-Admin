@@ -136,7 +136,7 @@ const ViewCartScreen = () => {
     const [taxpercentage, settaxpercentage] = useState(3);
     const [currentSection, setCurrentSection] = useState(1); // 1: Products, 2: Order Details, 3: Location
     const [deliveryOption, setDeliveryOption] = useState(1); // 1 for Fast Delivery, 2 for With Daily Milk
-
+    const [isPlacingOrder, setIsPlacingOrder] = useState(false);
     const cart = useSelector((state) => state.cart.cart);
     const { setLoading } = useLoading();
 
@@ -146,10 +146,10 @@ const ViewCartScreen = () => {
 
 
 
-    const [address, setAddress] = useState("");
-    const [city, setCity] = useState("");
+    const [address, setAddress] = useState("1");
+    const [city, setCity] = useState("2");
     const [state, setState] = useState("TAMILNADU");
-    const [postalcode, setPostalcode] = useState("");
+    const [postalcode, setPostalcode] = useState("606935");
     const [latitude, setLatitude] = useState(null);
     const [longitude, setLongitude] = useState(null);
 
@@ -185,6 +185,14 @@ const ViewCartScreen = () => {
     }, []);
 
 
+    // useEffect(() => {
+    //     if (total === 0) {
+    //         console.log("Cart is empty, navigating back...");
+    //         navigation.navigate("Main");
+    //     }
+    // }, [total]);
+
+
     useEffect(() => {
         getLocation();
     }, []);
@@ -218,6 +226,11 @@ const ViewCartScreen = () => {
         if (currentSection < 3) {
             setCurrentSection(currentSection + 1);
         } else {
+            if (total === 0) {
+                Toaster.errortop("Your cart is empty. Please add items to proceed.");
+                navigation.navigate("Main");
+                return;
+            }
             ProceeedToPay();
         }
     };
@@ -272,7 +285,14 @@ const ViewCartScreen = () => {
 
 
     const ProceeedToPay = async () => {
+        if (isPlacingOrder) {
+            console.log("Already placing order, ignoring duplicate click");
+            return;
+        }
+
+        setIsPlacingOrder(true);
         log("Proceeding to Payment");
+
 
         // Validate all fields before proceeding
         if (!address) {
@@ -345,15 +365,22 @@ const ViewCartScreen = () => {
             const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000)); // IST is UTC+5:30
 
 
-            // Extract IST hour
-            const currentISTHour = istTime.getHours();
 
             // If AFTER 3PM IST → use tomorrow
             // If BEFORE 3PM IST → use today
             const date = new Date(istTime);
-            if (currentISTHour >= 16) {
+
+            console.log("Current Date (IST):", date);
+            const hourString = date.toISOString().slice(11, 13);
+            const hour = parseInt(hourString);
+
+            console.log("Current IST Hour:", hourString);
+            if (hour >= 16) {
+                console.log("It's after 3PM IST, using tomorrow's date for order ID");
                 date.setDate(date.getDate() + 1);
             }
+
+
 
             const mappedpartnerid = userData?.mappedpartnerid;
             const orderdate = date.toISOString().split("T")[0];
@@ -462,6 +489,8 @@ const ViewCartScreen = () => {
             Toaster.errortop("Error creating order");
         } finally {
             setLoading(false);
+            setIsPlacingOrder(false); // ✅ IMPORTANT
+
         }
     };
 
@@ -780,10 +809,17 @@ const ViewCartScreen = () => {
 
                 <TouchableOpacity
                     onPress={handleNext}
+                    disabled={isPlacingOrder}
                     className={`flex-1 ml-4 py-3 rounded-lg ${currentSection === 3 ? 'bg-green-600' : 'bg-blue-600'}`}
                 >
                     <Text className="text-white text-center font-medium text-lg">
-                        {currentSection === 3 ? "Place Order" : "Next"}
+
+
+                        {isPlacingOrder
+                            ? "Placing Order..."
+                            : currentSection === 3
+                                ? "Place Order"
+                                : "Next"}
                     </Text>
                 </TouchableOpacity>
             </View>

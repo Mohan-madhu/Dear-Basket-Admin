@@ -10,7 +10,6 @@ import Loading from "./App_Utils/UI/Loading";
 import { Provider } from "react-redux";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { store } from "./ReduxStore";
-import { LoadCartComponent } from "./App/Components/LoadCartComponent";
 import NetInfo, { useNetInfo } from "@react-native-community/netinfo";
 import NoInternetScreen from "./App_Utils/UI/NoInternetScreen";
 import ErrorScreen from "./App_Utils/UI/ErrorScreen";
@@ -19,6 +18,7 @@ import GlobalErrorBoundary from "./App_Utils/UI/GlobalErrorBoundary";
 // ✅ NEW: Paper + dates locale
 import { Provider as PaperProvider } from "react-native-paper";
 import { en, registerTranslation } from "react-native-paper-dates";
+import { LoadCartComponent } from "./App_Utils/LoadCartComponent";
 
 // Register a locale ONCE before render
 registerTranslation("en", en);

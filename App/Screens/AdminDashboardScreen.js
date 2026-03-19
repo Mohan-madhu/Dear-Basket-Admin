@@ -256,7 +256,7 @@ const AdminDashboardScreen = () => {
       style={{
         paddingHorizontal: 20,
         paddingBottom: 16,
-        paddingTop: (Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0) + 12,
+        paddingTop: (Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0) + 0,
         borderBottomLeftRadius: 20,
         borderBottomRightRadius: 20,
         shadowColor: '#000',
@@ -377,7 +377,7 @@ const AdminDashboardScreen = () => {
     { id: 10, title: 'Fast Delivery Orders', gradient: gradientPairs[9], screen: 'MyOrdersScreen_FAST', icon: 'truck-fast' },
     { id: 11, title: 'Daily Milk Orders', gradient: gradientPairs[10], screen: 'MyOrdersScreen_DAILYMILK', icon: 'clipboard-list' },
     { id: 13, title: 'All Orders', gradient: gradientPairs[12], screen: 'MyOrdersScreen', icon: 'truck-check-outline' },
-    { id: 12, title: 'Order Analytics', gradient: gradientPairs[11], screen: 'OrderAnalyticsScreen', icon: 'chart-bar' },
+    { id: 12, title: 'Order Analytics', gradient: gradientPairs[11], screen: 'GroceryOrdersDashboard', icon: 'chart-bar' },
   ];
   const handleCardPress = (screenName) => {
     try {

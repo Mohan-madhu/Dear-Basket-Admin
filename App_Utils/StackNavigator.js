@@ -49,6 +49,7 @@ import DailyMilkBooking from "../App/Screens/DailyMilkUserBooking30Days_Renewal"
 import DailyMilkActiveBookings from "../App/Screens/DailyMilkActiveBookings";
 import PartnerLanding from "../App/Screens/PartnerLanding";
 import ViewPartnerOrderScreen from "../App/Screens/ViewPartnerOrderScreen";
+import GroceryOrdersDashboard from "../App/Screens/GroceryOrdersDashboard";
 
 const StackNavigator = () => {
   const Stack = createNativeStackNavigator();
@@ -228,6 +229,12 @@ const StackNavigator = () => {
         options={{ title: 'Partner Orders View' }}
       />
 
+
+      <Stack.Screen
+        name="GroceryOrdersDashboard"
+        component={GroceryOrdersDashboard}
+        options={{ title: 'Grocery Orders Dashboard' }}
+      />
 
     </Stack.Navigator>
   );

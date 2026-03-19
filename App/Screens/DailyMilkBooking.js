@@ -875,7 +875,9 @@ const DailyMilkBookingScreen = ({
               {/* Back Button */}
               <GhostButton title="← Back" onPress={() => setShowBookingUI(false)} />
 
-              {/* Booking UI */}
+              
+              {
+              /* Booking UI */}
               <DailyMilkBooking
                 DailyMilkRegistrationID={DailyMilkRegistrationID}
                 setupd={setupd}

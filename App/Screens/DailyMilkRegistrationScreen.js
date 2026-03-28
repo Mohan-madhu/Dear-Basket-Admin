@@ -589,6 +589,8 @@ const DailyMilkRegistrationScreen = () => {
 
 
   const [USER, setUSER] = useState(null);
+  const registrationCheckInFlightRef = useRef(false);
+  const prereqRunKeyRef = useRef(null);
   const getRole = async () => {
     const role = await Storage.getData("ROLE");
     const data = await Storage.getData("DATA");
@@ -683,13 +685,25 @@ const DailyMilkRegistrationScreen = () => {
 
 
   useEffect(() => {
+    if (!USER) return;
+
+    const runKey = `${USER}-${upd}`;
+    if (prereqRunKeyRef.current === runKey) return;
+    prereqRunKeyRef.current = runKey;
+
+    let isCancelled = false;
+
     async function prereq() {
       await CheckAlreadyRegistered();
-      if (!latitude && !longitude) {
+      if (!isCancelled && !latitude && !longitude) {
         await fetchLocation();
       }
     }
     prereq();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [USER, upd]);
 
 
@@ -712,6 +726,8 @@ const DailyMilkRegistrationScreen = () => {
 
   const CheckAlreadyRegistered = async () => {
     if (!USER) return;
+    if (registrationCheckInFlightRef.current) return;
+    registrationCheckInFlightRef.current = true;
 
     console.log("Checking registration for user:", USER);
 
@@ -760,6 +776,7 @@ const DailyMilkRegistrationScreen = () => {
       console.error("Error in CheckAlreadyRegistered:", error);
       setLoading(false);
     } finally {
+      registrationCheckInFlightRef.current = false;
       setLoading(false);
     }
   };

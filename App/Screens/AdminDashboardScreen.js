@@ -364,6 +364,7 @@ const AdminDashboardScreen = () => {
 
   const milkManagementCards = [
     { id: 5, title: 'Milk Approval', gradient: gradientPairs[4], screen: 'DailyMilkRegistrationApprovalScreen', icon: 'check-decagram' },
+    { id: 5, title: 'Daily Milk Status Dashboard', gradient: gradientPairs[17], screen: 'DailyMilk_Dashboard_Admin', icon: 'check-decagram' },
     { id: 15, title: 'Pregnancy Applications', gradient: gradientPairs[20], screen: 'AdminPregnancyApproval', icon: 'baby-face-outline' },
     { id: 6, title: 'Manage Daily Milk Users', gradient: gradientPairs[5], screen: 'ManageDailyMilkRegistrationScreen', icon: 'clipboard-text' },
     { id: 7, title: 'View Milk Users', gradient: gradientPairs[6], screen: 'ViewDailyMilkRegisteredUsersScreen', icon: 'account-multiple' },

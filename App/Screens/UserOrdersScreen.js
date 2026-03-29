@@ -16,15 +16,15 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { createLogger } from '../../App_Utils/Utils/logger';
 import Storage from '../../App_Utils/Services/StorageService';
 import OrderCard from '../Components_New/OrdersCard';
-import Animated, { FadeIn, SlideInRight } from 'react-native-reanimated';
+import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
 
 const DATE_FILTERS = [
-  { key: 'today', label: 'Today', icon: 'today' },
-  { key: 'yesterday', label: 'Yesterday', icon: 'history' },
-  { key: 'week', label: 'This Week', icon: 'date-range' },
-  { key: 'month', label: 'This Month', icon: 'calendar-month' },
-  { key: 'year', label: 'This Year', icon: 'event-note' },
-  { key: 'all', label: 'All', icon: 'list-alt' },
+  { key: 'today', label: 'Today' },
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: 'week', label: 'This Week' },
+  { key: 'month', label: 'This Month' },
+  { key: 'year', label: 'This Year' },
+  { key: 'all', label: 'All' },
 ];
 
 const parseTimestamp = (value) => {
@@ -36,7 +36,6 @@ const parseTimestamp = (value) => {
   const direct = Date.parse(text);
   if (!Number.isNaN(direct)) return direct;
 
-  // Handles "dd/mm/yyyy" or "dd-mm-yyyy" optionally with time.
   const match = text.match(
     /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/
   );
@@ -53,8 +52,28 @@ const parseTimestamp = (value) => {
   return 0;
 };
 
-const getOrderTimestamp = (item) =>
-  parseTimestamp(item?.orderplacedtime || item?.rcd || item?.orderdate);
+const getOrderTimestamp = (item) => {
+  // Strictly use order-created timestamps, not delivery/completion dates.
+  const candidates = [
+    item?.orderplacedtime,
+    item?.orderpalcedtime, // backend typo seen in API response
+    item?.order_placed_time,
+    item?.orderplacedat,
+    item?.ordertime,
+    item?.createdat,
+    item?.created_at,
+    item?.rcm,
+    item?.rcd,
+    item?.orderdate,
+  ];
+
+  for (const value of candidates) {
+    const ts = parseTimestamp(value);
+    if (Number.isFinite(ts) && ts > 0) return ts;
+  }
+
+  return 0;
+};
 
 const startOfDay = (date) => {
   const d = new Date(date);
@@ -62,7 +81,7 @@ const startOfDay = (date) => {
   return d.getTime();
 };
 
-const applyDateFilter = (list, filterKey) => {
+const applyDateFilterWithResolver = (list, filterKey, tsResolver) => {
   if (filterKey === 'all') return list;
 
   const now = new Date();
@@ -71,7 +90,7 @@ const applyDateFilter = (list, filterKey) => {
   const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
 
   return list.filter((item) => {
-    const ts = getOrderTimestamp(item);
+    const ts = tsResolver(item);
     if (!Number.isFinite(ts) || ts <= 0) return false;
 
     if (filterKey === 'today') {
@@ -83,9 +102,11 @@ const applyDateFilter = (list, filterKey) => {
     }
 
     const d = new Date(ts);
+
     if (filterKey === 'week') {
-      const weekStart = startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()));
-      return ts >= weekStart && ts < tomorrowStart;
+      // Rolling 7-day window based on order date.
+      const rollingWeekStart = todayStart - 6 * 24 * 60 * 60 * 1000;
+      return ts >= rollingWeekStart && ts < tomorrowStart;
     }
 
     if (filterKey === 'month') {
@@ -97,6 +118,45 @@ const applyDateFilter = (list, filterKey) => {
     }
 
     return true;
+  });
+};
+
+const applyDateFilter = (list, filterKey) =>
+  applyDateFilterWithResolver(list, filterKey, getOrderTimestamp);
+
+const getReturnTimestamp = (item) => {
+  const candidates = [
+    item?.requestedtime,
+    item?.rcm,
+    item?.lum,
+    item?.approvedtime,
+    item?.rejectedtime,
+    item?.pickuptime,
+    item?.refundedtime,
+    item?.closedtime,
+  ];
+
+  for (const value of candidates) {
+    const ts = parseTimestamp(value);
+    if (Number.isFinite(ts) && ts > 0) return ts;
+  }
+  return 0;
+};
+
+const formatNumber = (value) => {
+  const num = Number(value || 0);
+  return Number.isFinite(num) ? num : 0;
+};
+
+const formatDateTime = (value) => {
+  const ts = parseTimestamp(value);
+  if (!ts) return 'N/A';
+  return new Date(ts).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 };
 
@@ -117,6 +177,7 @@ const MyOrdersScreen = () => {
   const [selectedDateFilter, setSelectedDateFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [cacheLoaded, setCacheLoaded] = useState(false);
+  const [returnOrders, setReturnOrders] = useState([]);
 
   const getScreenTitle = () => {
     if (isallorders) return 'All Orders';
@@ -133,7 +194,9 @@ const MyOrdersScreen = () => {
         ? `MY_ORDERS_CACHE_ALL_${ordertype}`
         : `MY_ORDERS_CACHE_${userId}_${ordertype}`;
     } catch {
-      return isallorders ? `MY_ORDERS_CACHE_ALL_${ordertype}` : `MY_ORDERS_CACHE_FALLBACK_${ordertype}`;
+      return isallorders
+        ? `MY_ORDERS_CACHE_ALL_${ordertype}`
+        : `MY_ORDERS_CACHE_FALLBACK_${ordertype}`;
     }
   };
 
@@ -147,9 +210,29 @@ const MyOrdersScreen = () => {
       }
     } catch (error) {
       log('Cache load error:', error);
-    } finally {
-      setCacheLoaded(true);
-      setLoading(false);
+    }
+  };
+
+  const getReturnCacheKey = async () => {
+    try {
+      const userData = await Storage.getData('DATA');
+      const userId = userData?.transid || 'anonymous';
+      return `MY_RETURN_ORDERS_CACHE_${userId}`;
+    } catch {
+      return 'MY_RETURN_ORDERS_CACHE_FALLBACK';
+    }
+  };
+
+  const loadReturnsFromCache = async () => {
+    try {
+      const key = await getReturnCacheKey();
+      const cached = await Storage.getData(key);
+      const cachedReturns = Array.isArray(cached?.returns) ? cached.returns : [];
+      if (cachedReturns.length > 0) {
+        setReturnOrders(cachedReturns);
+      }
+    } catch (error) {
+      log('Return cache load error:', error);
     }
   };
 
@@ -166,8 +249,6 @@ const MyOrdersScreen = () => {
       let endpoint = 'ProductOrder';
       if (!isallorders) {
         endpoint = `ProductOrder/user_orders_history/${userId}`;
-      } else {
-        endpoint = 'ProductOrder';
       }
 
       const res = await API.GET(endpoint);
@@ -175,6 +256,8 @@ const MyOrdersScreen = () => {
 
       setTitle(getScreenTitle());
       setOrders(response);
+      console.log('Fetched orders:', response);
+
       try {
         const key = await getCacheKey();
         await Storage.storeData(key, {
@@ -191,32 +274,77 @@ const MyOrdersScreen = () => {
       }
     } finally {
       setLoading(false);
-      setRefreshing(false);
       setGlobalLoading(false);
     }
   };
 
+  const fetchReturnOrders = async () => {
+    if (isallorders) return;
+    try {
+      const userData = await Storage.getData('DATA');
+      const userId = userData?.transid;
+      if (!userId) return;
+
+      const payload = {
+        status: null,
+        fromDate: null,
+        toDate: null,
+        page: 1,
+        pageSize: 200,
+      };
+
+      let res = null;
+      try {
+        res = await API.PUT(`ProductReturn/user/${userId}`, payload);
+      } catch {
+        res = await API.GET(`ProductReturn/user/${userId}`);
+      }
+
+      const response = Array.isArray(res?.Response) ? res.Response : [];
+      setReturnOrders(response);
+
+      try {
+        const key = await getReturnCacheKey();
+        await Storage.storeData(key, {
+          returns: response,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (cacheError) {
+        log('Return cache save error:', cacheError);
+      }
+    } catch (error) {
+      log('Error fetching return orders:', error);
+    }
+  };
+
   useEffect(() => {
-    setTitle(getScreenTitle());
-    loadOrdersFromCache();
+    const bootstrap = async () => {
+      setTitle(getScreenTitle());
+      await Promise.all([loadOrdersFromCache(), loadReturnsFromCache()]);
+      setCacheLoaded(true);
+      setLoading(false);
+    };
+    bootstrap();
   }, []);
 
   useEffect(() => {
     if (!cacheLoaded) return;
     fetchOrders(orders.length === 0);
+    fetchReturnOrders();
   }, [cacheLoaded]);
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    fetchOrders(false);
-  };
-
-  const handleFilterChange = (filterKey) => {
-    setSelectedDateFilter(filterKey);
+    try {
+      await Promise.all([fetchOrders(false), fetchReturnOrders()]);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleOrderUpdate = () => {
     fetchOrders(false);
+    fetchReturnOrders();
   };
 
   const handleStartShopping = () => {
@@ -248,46 +376,79 @@ const MyOrdersScreen = () => {
         const orderId = String(item?.productorderid || item?.orderid || '').toLowerCase();
         const status = String(item?.orderstatus || '').toLowerCase();
         const customer = String(item?.name || item?.username || '').toLowerCase();
+        const product = String(item?.productname || item?.product || '').toLowerCase();
+
         return (
           orderId.includes(query) ||
           status.includes(query) ||
-          customer.includes(query)
+          customer.includes(query) ||
+          product.includes(query)
         );
       });
     }
 
-    return [...filtered].sort((a, b) => {
-      const dateA = getOrderTimestamp(a);
-      const dateB = getOrderTimestamp(b);
-      return dateB - dateA;
-    });
+    return [...filtered].sort((a, b) => getOrderTimestamp(b) - getOrderTimestamp(a));
   }, [orders, ordertype, searchQuery, selectedDateFilter]);
+
+  const summary = useMemo(() => {
+    const totalOrders = visibleOrders.length;
+
+    const totalLitres = visibleOrders.reduce((sum, item) => {
+      return sum + formatNumber(item?.quantity);
+    }, 0);
+
+    const totalAmount = visibleOrders.reduce((sum, item) => {
+      return sum + formatNumber(item?.totalamount || item?.amount || item?.price);
+    }, 0);
+
+    return {
+      totalOrders,
+      totalLitres,
+      totalAmount,
+    };
+  }, [visibleOrders]);
+
+  const visibleReturnOrders = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    let filtered = applyDateFilterWithResolver(returnOrders, selectedDateFilter, getReturnTimestamp);
+
+    if (query) {
+      filtered = filtered.filter((item) => {
+        const returnNumber = String(item?.returnnumber || item?.returnid || '').toLowerCase();
+        const sourceOrder = String(item?.productorderid || '').toLowerCase();
+        const status = String(item?.returnstatus || '').toLowerCase();
+        return returnNumber.includes(query) || sourceOrder.includes(query) || status.includes(query);
+      });
+    }
+
+    return [...filtered].sort((a, b) => getReturnTimestamp(b) - getReturnTimestamp(a));
+  }, [returnOrders, searchQuery, selectedDateFilter]);
 
   const renderEmptyStateMessage = () => {
     if (searchQuery.trim()) {
       return {
         title: 'No Matching Orders',
-        subtitle: 'Try a different order ID, status, or customer name.',
+        subtitle: 'Try another order ID, product name, customer, or status.',
       };
     }
 
     if (ordertype === 'fast') {
       return {
         title: 'No Fast Delivery Orders',
-        subtitle: 'No fast delivery orders found for this selected period.',
+        subtitle: 'No fast delivery orders found for the selected period.',
       };
     }
 
     if (ordertype === 'dailymilk') {
       return {
         title: 'No Daily Milk Orders',
-        subtitle: 'No daily milk orders found for this selected period.',
+        subtitle: 'No daily milk orders found for the selected period.',
       };
     }
 
     return {
       title: 'No Orders Found',
-      subtitle: 'No orders are available for this selected period.',
+      subtitle: 'No orders are available for the selected period.',
     };
   };
 
@@ -296,66 +457,66 @@ const MyOrdersScreen = () => {
   if (loading && !refreshing) {
     return (
       <View className="flex-1 justify-center items-center bg-gray-50">
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text className="text-gray-600 mt-4">Loading your orders...</Text>
+        <ActivityIndicator size="large" color="#2563EB" />
+        <Text className="text-gray-600 mt-4 font-medium">Loading orders...</Text>
       </View>
     );
   }
 
   return (
     <View className="flex-1 bg-gray-100">
-      <View className="bg-white px-4 pt-4 pb-3 border-b border-gray-200">
+      <View className="bg-white px-3 pt-2 pb-2 border-b border-gray-200">
         <View className="flex-row items-center justify-between">
           <TouchableOpacity
             onPress={() => navigation.goBack()}
-            className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
+            className="w-9 h-9 rounded-xl bg-gray-100 items-center justify-center"
           >
-            <Icon name="arrow-back" size={22} color="#1f2937" />
+            <Icon name="arrow-back" size={20} color="#111827" />
           </TouchableOpacity>
 
           <View className="flex-1 px-3">
-            <Text className="text-lg font-extrabold text-gray-900 text-center">{title}</Text>
-            <Text className="text-xs text-gray-500 text-center">
-              Filter: {DATE_FILTERS.find((f) => f.key === selectedDateFilter)?.label || 'All'}
-            </Text>
+            <Text className="text-base font-bold text-gray-900 text-center">{title}</Text>
           </View>
 
           <TouchableOpacity
             onPress={onRefresh}
             disabled={refreshing}
-            className="w-10 h-10 rounded-full bg-blue-50 items-center justify-center"
+            className="w-9 h-9 rounded-xl bg-blue-50 items-center justify-center"
           >
             <Icon
               name="refresh"
-              size={22}
-              color={refreshing ? '#9CA3AF' : '#2563eb'}
+              size={20}
+              color={refreshing ? '#9CA3AF' : '#2563EB'}
             />
           </TouchableOpacity>
         </View>
       </View>
 
-      <View className="bg-white px-4 py-2 border-b border-gray-200">
-        <View className="flex-row items-center bg-gray-100 rounded-lg px-3 py-1.5">
-          <Icon name="search" size={20} color="#6b7280" />
-          <TextInput
-            placeholder="Search by Order ID, status, customer..."
-            placeholderTextColor="#9ca3af"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            className="flex-1 text-gray-900 ml-2"
-          />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="close" size={18} color="#6b7280" />
-            </TouchableOpacity>
-          ) : null}
-        </View>
+      <View className="px-3 pt-2 bg-gray-100">
+        <Animated.View
+          entering={SlideInDown.duration(250)}
+          className="bg-white rounded-2xl p-2.5 border border-gray-200"
+        >
+          <View className="flex-row items-center bg-gray-100 rounded-xl px-2.5 py-1.5 border border-gray-200">
+            <Icon name="search" size={16} color="#6B7280" />
+            <TextInput
+              placeholder="Search order ID, product, customer, status..."
+              placeholderTextColor="#9CA3AF"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              className="flex-1 text-gray-900 ml-1.5 text-xs"
+            />
+            {searchQuery ? (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Icon name="close" size={14} color="#6B7280" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
 
-        <View className="flex-row items-center mt-2">
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            className="w-full"
+            className="mt-2"
             contentContainerStyle={{ paddingRight: 8 }}
           >
             {DATE_FILTERS.map((item) => {
@@ -364,16 +525,16 @@ const MyOrdersScreen = () => {
               return (
                 <TouchableOpacity
                   key={item.key}
-                  onPress={() => handleFilterChange(item.key)}
-                  className={`px-3 py-1 rounded-full mr-2 border ${
+                  onPress={() => setSelectedDateFilter(item.key)}
+                  activeOpacity={0.85}
+                  className={`mr-2 px-2.5 py-1 rounded-full border ${
                     isActive
-                      ? 'bg-blue-500 border-blue-500'
+                      ? 'bg-blue-600 border-blue-600'
                       : 'bg-white border-gray-300'
                   }`}
-                  activeOpacity={0.8}
                 >
                   <Text
-                    className={`text-xs font-medium ${
+                    className={`text-[11px] font-semibold ${
                       isActive ? 'text-white' : 'text-gray-700'
                     }`}
                   >
@@ -383,56 +544,110 @@ const MyOrdersScreen = () => {
               );
             })}
           </ScrollView>
-        </View>
+
+          <View className="mt-1.5 px-0.5">
+            <Text className="text-[11px] text-gray-600">
+              {summary.totalOrders} orders • {summary.totalLitres} L • ₹{summary.totalAmount}
+            </Text>
+          </View>
+        </Animated.View>
       </View>
 
       <Animated.ScrollView
-        className="flex-1 px-4 pt-4 bg-gray-100"
-        entering={SlideInRight.duration(250)}
+        className="flex-1 px-3 pt-2 bg-gray-100"
+        entering={FadeIn.duration(250)}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#3B82F6']}
+            colors={['#2563EB']}
           />
         }
         showsVerticalScrollIndicator={false}
       >
+        {!isallorders ? (
+          <View className="mb-2 bg-white rounded-2xl border border-gray-200 p-3">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-sm font-bold text-gray-900">Returned Orders</Text>
+              <View className="px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200">
+                <Text className="text-[10px] font-bold text-orange-700">
+                  {visibleReturnOrders.length}
+                </Text>
+              </View>
+            </View>
+
+            {visibleReturnOrders.length === 0 ? (
+              <Text className="text-xs text-gray-500 mt-2">No return requests yet.</Text>
+            ) : (
+              <View className="mt-2">
+                {visibleReturnOrders.map((item, idx) => (
+                  <View
+                    key={item?.returnid || `${item?.returnnumber || 'RET'}-${idx}`}
+                    className="rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 mb-2"
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-xs font-bold text-gray-900">
+                        {item?.returnnumber || item?.returnid || 'Return'}
+                      </Text>
+                      <View className="px-2 py-0.5 rounded-full bg-white border border-orange-200">
+                        <Text className="text-[10px] font-semibold text-orange-700">
+                          {item?.returnstatus || 'Requested'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text className="text-[11px] text-gray-600 mt-1">
+                      Order: {item?.productorderid || 'N/A'}
+                    </Text>
+                    <Text className="text-[11px] text-gray-600 mt-0.5">
+                      {formatDateTime(item?.requestedtime || item?.rcm)} • Qty {formatNumber(item?.totalreturnqty)} • ₹{formatNumber(item?.totalreturnamount)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        ) : null}
+
         {visibleOrders.length === 0 ? (
           <Animated.View
             entering={FadeIn.delay(100)}
-            className="items-center justify-center mt-12 py-8"
+            className="items-center justify-center mt-12 py-10"
           >
             <View className="bg-white p-6 rounded-full border border-gray-200">
-              <Icon name="inventory-2" size={48} color="#9ca3af" />
+              <Icon name="inventory-2" size={46} color="#9CA3AF" />
             </View>
 
-            <Text className="text-gray-700 text-lg mt-6 font-bold">
+            <Text className="text-gray-800 text-lg mt-6 font-bold">
               {emptyState.title}
             </Text>
 
-            <Text className="text-gray-500 mt-1 text-center px-6">
+            <Text className="text-gray-500 mt-2 text-center px-6 leading-5">
               {emptyState.subtitle}
             </Text>
 
             {!isallorders && (
               <TouchableOpacity
                 onPress={handleStartShopping}
-                className="bg-blue-600 px-6 py-3 rounded-full mt-6 shadow-sm"
+                className="bg-blue-600 px-6 py-3 rounded-full mt-6"
               >
                 <Text className="text-white font-semibold">Start Shopping</Text>
               </TouchableOpacity>
             )}
           </Animated.View>
         ) : (
-          <View className="pb-6">
+          <View className="pb-4">
             {visibleOrders.map((order, index) => (
               <Animated.View
                 key={order.productorderid || order.orderid || index}
-                entering={FadeIn.delay(index * 80)}
-                className="mb-4"
+                entering={FadeIn.delay(index * 60)}
+                className="mb-2"
               >
-                <OrderCard order={order} onOrderUpdate={handleOrderUpdate} />
+                <OrderCard
+                  order={order}
+                  onOrderUpdate={handleOrderUpdate}
+                  enableReturnOrder={!isallorders}
+                  onReturnCreated={fetchReturnOrders}
+                />
               </Animated.View>
             ))}
           </View>

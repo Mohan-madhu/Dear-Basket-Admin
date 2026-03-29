@@ -51,6 +51,7 @@ import PartnerLanding from "../App/Screens/PartnerLanding";
 import ViewPartnerOrderScreen from "../App/Screens/ViewPartnerOrderScreen";
 import GroceryOrdersDashboard from "../App/Screens/GroceryOrdersDashboard";
 import DailyMilk_Dashboard_Admin from "../App/Screens/DailyMilk_Dashboard_Admin";
+import ProductReturnAdminScreen from "../App/Screens/ProductReturnAdminScreen";
 
 const StackNavigator = () => {
   const Stack = createNativeStackNavigator();
@@ -235,6 +236,12 @@ const StackNavigator = () => {
         name="GroceryOrdersDashboard"
         component={GroceryOrdersDashboard}
         options={{ title: 'Grocery Orders Dashboard' }}
+      />
+
+      <Stack.Screen
+        name="ProductReturnAdminScreen"
+        component={ProductReturnAdminScreen}
+        options={{ title: 'Return Orders Dashboard' }}
       />
 
         <Stack.Screen

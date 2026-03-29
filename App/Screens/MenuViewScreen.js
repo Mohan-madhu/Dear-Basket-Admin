@@ -16,9 +16,13 @@ export default function MenuViewScreen({ MENU }) {
   const [sections, setSections] = useState([]);
 
   const getRole = async () => {
-    var role = await Storage.getData("ROLE");
-    //console.log(role);
-    setROLE(role);
+    try {
+      const role = await Storage.getData("ROLE");
+      setROLE(role || null);
+    } catch (error) {
+      log(error, "Failed to get ROLE");
+      setROLE(null);
+    }
   };
 
   useEffect(() => {
@@ -26,11 +30,18 @@ export default function MenuViewScreen({ MENU }) {
   }, []);
 
   useEffect(() => {
-    // simulate fetch
-    setTimeout(() => {
+    // Simulate fetch safely and avoid state update after unmount
+    let isMounted = true;
+    const timer = setTimeout(() => {
+      if (!isMounted) return;
       setSections([]);
       setLoading(true);
     }, 1000);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   if (ROLE && MENU && MENU.id === "376A5632-41F7-489C-9522-D6293A61D1E0") {

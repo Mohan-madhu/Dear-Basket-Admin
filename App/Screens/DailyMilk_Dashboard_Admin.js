@@ -133,11 +133,10 @@ const QuickDateFilters = ({ selectedFilter, onChange }) => {
             key={item.key}
             activeOpacity={0.85}
             onPress={() => onChange(item.key)}
-            className={`mr-3 rounded-full border flex-row items-center ${
-              isActive
-                ? "bg-blue-600 border-blue-600 px-4 py-2.5"
-                : "bg-white border-gray-200 px-4 py-2.5"
-            }`}
+            className={`mr-3 rounded-full border flex-row items-center ${isActive
+              ? "bg-blue-600 border-blue-600 px-4 py-2.5"
+              : "bg-white border-gray-200 px-4 py-2.5"
+              }`}
           >
             <Icon
               name={item.icon}
@@ -145,9 +144,8 @@ const QuickDateFilters = ({ selectedFilter, onChange }) => {
               color={isActive ? "#fff" : "#6b7280"}
             />
             <Text
-              className={`ml-2 font-semibold ${
-                isActive ? "text-white text-xs" : "text-gray-700 text-xs"
-              }`}
+              className={`ml-2 font-semibold ${isActive ? "text-white text-xs" : "text-gray-700 text-xs"
+                }`}
             >
               {item.label}
             </Text>
@@ -174,11 +172,10 @@ const EntryTypeFilters = ({ selectedFilter, onChange }) => {
             key={item.key}
             activeOpacity={0.85}
             onPress={() => onChange(item.key)}
-            className={`mr-2 rounded-full border flex-row items-center ${
-              isActive
-                ? "bg-gray-900 border-gray-900 px-4 py-2.5"
-                : "bg-gray-50 border-gray-200 px-4 py-2.5"
-            }`}
+            className={`mr-2 rounded-full border flex-row items-center ${isActive
+              ? "bg-gray-900 border-gray-900 px-4 py-2.5"
+              : "bg-gray-50 border-gray-200 px-4 py-2.5"
+              }`}
           >
             <Icon
               name={item.icon}
@@ -186,9 +183,8 @@ const EntryTypeFilters = ({ selectedFilter, onChange }) => {
               color={isActive ? "#fff" : "#6b7280"}
             />
             <Text
-              className={`ml-2 text-xs font-semibold ${
-                isActive ? "text-white" : "text-gray-700"
-              }`}
+              className={`ml-2 text-xs font-semibold ${isActive ? "text-white" : "text-gray-700"
+                }`}
             >
               {item.label}
             </Text>
@@ -502,12 +498,13 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
     });
 
     return Object.values(partnerMap).map((partner) => {
-      const users = Object.values(partner.usersMap).map((user) => {
-        const totalLitres = user.rows.reduce(
+      const users = Object.values(partner.usersMap || {}).map((user) => {
+        const totalLitres = (user.rows || []).reduce(
           (sum, x) => sum + Number(x.quantity || 0),
           0
         );
-        const totalAmount = user.rows.reduce(
+
+        const totalAmount = (user.rows || []).reduce(
           (sum, x) => sum + Number(x.amount || 0),
           0
         );
@@ -519,10 +516,52 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
         };
       });
 
+      const partnerDailyLitres = users.reduce((sum, u) => {
+        const userDaily = (u.rows || [])
+          .filter((row) => Number(row.cancelled) !== 1 && Number(row.extra) !== 1)
+          .reduce(
+            (innerSum, row) =>
+              innerSum + Number(row.regular_quantity || row.quantity || 0),
+            0
+          );
+
+        return sum + userDaily;
+      }, 0);
+
+      const partnerExtraLitres = users.reduce((sum, u) => {
+        const userExtra = (u.rows || [])
+          .filter((row) => Number(row.cancelled) !== 1 && Number(row.extra) === 1)
+          .reduce(
+            (innerSum, row) =>
+              innerSum + Number(row.extra_quantity || row.quantity || 0),
+            0
+          );
+
+        return sum + userExtra;
+      }, 0);
+
+      const partnerCancelledLitres = users.reduce((sum, u) => {
+        const userCancelled = (u.rows || [])
+          .filter((row) => Number(row.cancelled) === 1)
+          .reduce(
+            (innerSum, row) =>
+              innerSum + Number(row.cancelled_quantity || row.quantity || 0),
+            0
+          );
+
+        return sum + userCancelled;
+      }, 0);
+
+      const partnerTotalLitres = partnerDailyLitres + partnerExtraLitres;
+
       return {
         mappedpartnerid: partner.mappedpartnerid,
         partnername: partner.partnername,
         users,
+        partnerDailyLitres,
+        partnerExtraLitres,
+        partnerCancelledLitres,
+        partnerTotalLitres,
       };
     });
   }, [filteredRows]);
@@ -590,18 +629,47 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
                   </Text>
                 </View>
 
-                <View className="flex-row items-center">
-                  <View className="bg-gray-100 px-3 py-1.5 rounded-full mr-2">
-                    <Text className="text-[11px] font-semibold text-gray-700">
-                      {partner.users.length} users
-                    </Text>
-                  </View>
-                  <Icon
-                    name={isPartnerExpanded ? "expand-less" : "expand-more"}
-                    size={24}
-                    color="#4b5563"
-                  />
-                </View>
+              <View className="items-end">
+  <View className="flex-row items-center mb-1.5">
+    <View className="bg-gray-100 px-3 py-1.5 rounded-full mr-2">
+      <Text className="text-[11px] font-semibold text-gray-700">
+        {partner.users.length} users
+      </Text>
+    </View>
+
+    <View className="bg-blue-50 px-3 py-1.5 rounded-full mr-2">
+      <Text className="text-[11px] font-semibold text-blue-700">
+        {litresText(partner.partnerTotalLitres)}
+      </Text>
+    </View>
+
+    <Icon
+      name={isPartnerExpanded ? "expand-less" : "expand-more"}
+      size={24}
+      color="#4b5563"
+    />
+  </View>
+
+  <View className="flex-row">
+    <View className="bg-emerald-50 px-2.5 py-1 rounded-full mr-1.5">
+      <Text className="text-[10px] font-semibold text-emerald-700">
+        D {litresText(partner.partnerDailyLitres)}
+      </Text>
+    </View>
+
+    <View className="bg-amber-50 px-2.5 py-1 rounded-full mr-1.5">
+      <Text className="text-[10px] font-semibold text-amber-700">
+        E {litresText(partner.partnerExtraLitres)}
+      </Text>
+    </View>
+
+    <View className="bg-red-50 px-2.5 py-1 rounded-full">
+      <Text className="text-[10px] font-semibold text-red-700">
+        C {litresText(partner.partnerCancelledLitres)}
+      </Text>
+    </View>
+  </View>
+</View>
               </View>
             </TouchableOpacity>
 

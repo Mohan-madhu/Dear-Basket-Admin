@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { getImageUrl } from "../../config";
 import {
     View,
@@ -32,6 +32,7 @@ const getDaysInMonth = (monthValue, yearValue) => {
 
 const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegistered, isrenewal }) => {
     const { setLoading } = useLoading();
+    const isSubmittingRef = useRef(false);
 
     // Product States
     const [products, setProducts] = useState([]);
@@ -47,14 +48,13 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
     const [day, setDay] = useState("");
     const [year, setYear] = useState("");
     const [isConfirmButtonVisible, setisConfirmButtonVisible] = useState(true);
-    const navigation = useNavigation()
+    const navigation = useNavigation();
     // ──────────────────────────────────────────────────────────
     // T+2 CALCULATION LOGIC
     // ──────────────────────────────────────────────────────────
     const TODAY = new Date();
     // Safe date is Today + 2 days
     const SAFE_DATE = new Date();
-    console.log("isrenewal:", SAFE_DATE);
     if (!isrenewal) {
         SAFE_DATE.setDate(TODAY.getDate() + 3);
     }
@@ -78,8 +78,14 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
     // INITIALIZATION
     // ──────────────────────────────────────────────────────────
     const getRole = async () => {
-        var data = await Storage.getData("DATA");
-        setUSER(data.transid);
+        try {
+            const data = await Storage.getData("DATA");
+            if (data?.transid) {
+                setUSER(data.transid);
+            }
+        } catch (error) {
+            console.error("getRole error:", error);
+        }
     };
 
     useEffect(() => {
@@ -98,21 +104,27 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
     }, [USER]);
 
     const getDailyMilkProducts = async () => {
-        if (USER) {
-            setLoading(true, "Loading Products...");
-            try {
-                var { Response } = await API.GET("DailyMilkProducts");
-                setProducts(Response);
-                const initialQtys = Response.reduce((acc, prod) => {
+        if (!USER) return;
+
+        setLoading(true, "Loading Products...");
+        try {
+            const { Response } = await API.GET("DailyMilkProducts");
+            const safeProducts = Array.isArray(Response) ? Response : [];
+            setProducts(safeProducts);
+            setActiveIndex(0);
+            const initialQtys = safeProducts.reduce((acc, prod) => {
+                if (prod?.transid) {
                     acc[prod.transid] = 0;
-                    return acc;
-                }, {});
-                setQuantities(initialQtys);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
+                }
+                return acc;
+            }, {});
+            setQuantities(initialQtys);
+        } catch (err) {
+            console.error("getDailyMilkProducts error:", err);
+            setProducts([]);
+            setQuantities({});
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -120,21 +132,62 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
     // HANDLERS
     // ──────────────────────────────────────────────────────────
     const handleProductChange = (index) => {
-        setActiveIndex(index);
-        // Reset quantities so only the visible product is active
-        const resetQtys = products.reduce((acc, prod) => {
-            acc[prod.transid] = 0;
-            return acc;
-        }, {});
-        setQuantities(resetQtys);
+        try {
+            if (!Array.isArray(products) || products.length === 0) return;
+            if (index < 0 || index >= products.length) return;
+
+            setActiveIndex(index);
+            // Reset quantities so only the visible product is active
+            const resetQtys = products.reduce((acc, prod) => {
+                if (prod?.transid) {
+                    acc[prod.transid] = 0;
+                }
+                return acc;
+            }, {});
+            setQuantities(resetQtys);
+        } catch (error) {
+            console.error("handleProductChange error:", error);
+        }
     };
 
     const changeQuantity = (productId, increment) => {
-        setQuantities((prev) => {
-            const current = prev[productId] || 0;
-            const newQty = Math.max(0, current + increment);
-            return { ...prev, [productId]: parseFloat(newQty.toFixed(2)) };
-        });
+        try {
+            if (!productId || typeof increment !== "number") return;
+            setQuantities((prev) => {
+                const current = Number(prev?.[productId] || 0);
+                const newQty = Math.max(0, current + increment);
+                return { ...prev, [productId]: parseFloat(newQty.toFixed(2)) };
+            });
+        } catch (error) {
+            console.error("changeQuantity error:", error);
+        }
+    };
+
+    const safePostSubmitRefresh = async () => {
+        try {
+            if (typeof CheckAlreadyRegistered === "function") {
+                await CheckAlreadyRegistered();
+            }
+        } catch (error) {
+            console.error("CheckAlreadyRegistered callback error:", error);
+        }
+    };
+
+    const safeNavigateAfterSubmit = () => {
+        try {
+            if (navigation?.canGoBack?.()) {
+                navigation.goBack();
+                return;
+            }
+
+            const navState = navigation?.getState?.();
+            const currentRouteName = navState?.routes?.[navState.index]?.name;
+            if (currentRouteName !== "Main") {
+                navigation.navigate("Main");
+            }
+        } catch (error) {
+            console.error("safeNavigateAfterSubmit error:", error);
+        }
     };
 
     const getAvailableMonths = (selYear) => {
@@ -162,9 +215,17 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
     };
 
     const handleSubmit = async () => {
+        if (isSubmittingRef.current) return;
+
         try {
+            isSubmittingRef.current = true;
             const currentProd = products[activeIndex];
-            const qty = quantities[currentProd.transid];
+            if (!currentProd?.transid) {
+                Alert.alert("Error", "Product is not ready. Please try again.");
+                return;
+            }
+
+            const qty = Number(quantities?.[currentProd.transid] || 0);
 
             if (qty <= 0) {
                 Alert.alert("Error", "Please select a quantity.");
@@ -178,15 +239,23 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
                 Alert.alert("Error", "Please select a valid start date.");
                 return;
             }
+            if (!DailyMilkRegistrationID) {
+                Alert.alert("Error", "Registration ID missing. Please reopen this page.");
+                return;
+            }
 
             const USERID = await Storage.getData("USERID");
             const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const startdate = new Date(Number(year), Number(month) - 1, Number(day));
             const enddate = new Date(Number(year), Number(month), 0);
+            if (isNaN(startdate.getTime()) || isNaN(enddate.getTime())) {
+                Alert.alert("Error", "Invalid booking date selected.");
+                return;
+            }
             const endDateString = `${enddate.getFullYear()}-${String(enddate.getMonth() + 1).padStart(2, '0')}-${String(enddate.getDate()).padStart(2, '0')}`;
             const BookingID = uuidv4();
 
-          //  setLoading(true, "Confirming Booking...");
+            setLoading(true, "Confirming Booking...");
 
             const bookingdata = {
                 transid: uuidv4(),
@@ -203,22 +272,18 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
                 rcu: USER,
                 renewal: isrenewal ? 1 : 0,
             };
-            setisConfirmButtonVisible(false);
             await API.POST("DailyMilkBooking", bookingdata);
 
-            setLoading(false);
-            //setupd((prev) => prev + 1);
             Alert.alert("Success", `Booking confirmed for ${dateString}!`);
-            setLoading(false)
             setisConfirmButtonVisible(false);
-            setLoading(false)
-            // navigation.navigate("Main");
-            //CheckAlreadyRegistered();
+            await safePostSubmitRefresh();
+            safeNavigateAfterSubmit();
         } catch (err) {
             console.error("Submission error:", err);
             Alert.alert("Failed", "Could not complete booking.");
-            setLoading(false);
+            setisConfirmButtonVisible(true);
         } finally {
+            isSubmittingRef.current = false;
             setLoading(false);
         }
     };

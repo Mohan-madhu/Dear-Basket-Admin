@@ -592,11 +592,19 @@ const DailyMilkRegistrationScreen = () => {
   const registrationCheckInFlightRef = useRef(false);
   const prereqRunKeyRef = useRef(null);
   const getRole = async () => {
-    const role = await Storage.getData("ROLE");
-    const data = await Storage.getData("DATA");
-    setUSER(data.transid);
-    setName(data.name);
-    setMobile(data.mobile);
+    try {
+      await Storage.getData("ROLE");
+      const data = await Storage.getData("DATA");
+      if (!data?.transid) {
+        console.warn("DailyMilkRegistration: missing user data in storage");
+        return;
+      }
+      setUSER(data.transid);
+      setName(data.name || "");
+      setMobile(data.mobile || "");
+    } catch (error) {
+      console.error("DailyMilkRegistration getRole error:", error);
+    }
   };
 
   useEffect(() => {

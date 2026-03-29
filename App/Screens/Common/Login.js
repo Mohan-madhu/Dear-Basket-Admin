@@ -138,6 +138,24 @@ export default function LoginScreen({ navigation }) {
     setLoading(false);
   };
 
+  const handleForgotPassword = () => {
+    try {
+      const state = navigation?.getState?.();
+      const routeNames = state?.routeNames || [];
+      if (routeNames.includes("ForgotPassword")) {
+        navigation.navigate("ForgotPassword");
+        return;
+      }
+      Alert.alert(
+        "Not Available",
+        "Forgot Password screen is not configured in this build."
+      );
+    } catch (error) {
+      console.error("Forgot password navigation error:", error);
+      Alert.alert("Error", "Unable to open Forgot Password right now.");
+    }
+  };
+
   return (
     <View className="flex-1 bg-gray-100 justify-center px-6">
       <Text className="text-3xl font-bold text-gray-800 text-center mb-2">
@@ -187,7 +205,7 @@ export default function LoginScreen({ navigation }) {
 
       {/* Forgot Password */}
       <TouchableOpacity
-        onPress={() => navigation.navigate("ForgotPassword")}
+        onPress={handleForgotPassword}
         className="mb-6"
       >
         <Text className="text-blue-500 text-right">

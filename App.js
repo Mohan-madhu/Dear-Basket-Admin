@@ -1,7 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet } from "react-native";
-import { NavigationContainer } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+} from "@react-navigation/native";
 import StackNavigator from "./App_Utils/StackNavigator";
 import "./global.css";
 import Toast from "react-native-toast-message";
@@ -23,23 +26,61 @@ import { LoadCartComponent } from "./App_Utils/LoadCartComponent";
 // Register a locale ONCE before render
 registerTranslation("en", en);
 
+const navigationRef = createNavigationContainerRef();
+
+const toErrorObject = (value, fallbackMessage = "Unknown error") => {
+  if (value instanceof Error) return value;
+  if (typeof value === "string") return new Error(value);
+  try {
+    return new Error(JSON.stringify(value) || fallbackMessage);
+  } catch {
+    return new Error(fallbackMessage);
+  }
+};
+
+const safeStringify = (value) => {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable payload]";
+  }
+};
+
 export default function App() {
   const netInfo = useNetInfo();
   const [globalError, setGlobalError] = useState(null);
+  const routeNameRef = useRef(null);
 
   useEffect(() => {
     const previousHandler = global.ErrorUtils?.getGlobalHandler?.();
+    const previousUnhandledRejection = globalThis.onunhandledrejection;
+
     if (global.ErrorUtils?.setGlobalHandler) {
-      global.ErrorUtils.setGlobalHandler((error) => {
-        setGlobalError(error);
-        console.error("Global error:", error);
+      global.ErrorUtils.setGlobalHandler((error, isFatal) => {
+        const safeError = toErrorObject(error, "Global JS error");
+        const routeName = routeNameRef.current || "UnknownRoute";
+        safeError.message = `[${routeName}] ${safeError.message}${
+          isFatal ? " (fatal)" : ""
+        }`;
+        setGlobalError(safeError);
+        console.error("Global error:", safeError);
       });
     }
+
+    globalThis.onunhandledrejection = (event) => {
+      const reason = event?.reason ?? "Unhandled promise rejection";
+      const safeError = toErrorObject(reason, "Unhandled promise rejection");
+      const routeName = routeNameRef.current || "UnknownRoute";
+      safeError.message = `[${routeName}] ${safeError.message}`;
+      console.error("Unhandled rejection:", safeError);
+      setGlobalError(safeError);
+    };
 
     return () => {
       if (global.ErrorUtils?.setGlobalHandler && previousHandler) {
         global.ErrorUtils.setGlobalHandler(previousHandler);
       }
+      globalThis.onunhandledrejection = previousUnhandledRejection;
     };
   }, []);
 
@@ -72,7 +113,44 @@ export default function App() {
                   onError={(error) => setGlobalError(error)}
                   onRetry={() => setGlobalError(null)}
                 >
-                  <NavigationContainer>
+                  <NavigationContainer
+                    ref={navigationRef}
+                    onReady={() => {
+                      try {
+                        routeNameRef.current =
+                          navigationRef.getCurrentRoute()?.name || null;
+                      } catch (error) {
+                        console.error("Navigation onReady tracking error:", error);
+                      }
+                    }}
+                    onStateChange={() => {
+                      try {
+                        routeNameRef.current =
+                          navigationRef.getCurrentRoute()?.name || null;
+                      } catch (error) {
+                        console.error(
+                          "Navigation onStateChange tracking error:",
+                          error
+                        );
+                      }
+                    }}
+                    onUnhandledAction={(action) => {
+                      try {
+                        const routeName = routeNameRef.current || "UnknownRoute";
+                        const type = action?.type || "UNKNOWN_ACTION";
+                        const payload = action?.payload
+                          ? safeStringify(action.payload)
+                          : "{}";
+                        const navError = new Error(
+                          `[${routeName}] Unhandled navigation action: ${type} ${payload}`
+                        );
+                        console.error("Navigation unhandled action:", navError);
+                        setGlobalError(navError);
+                      } catch (error) {
+                        console.error("Navigation onUnhandledAction error:", error);
+                      }
+                    }}
+                  >
                     <StackNavigator />
                   </NavigationContainer>
                 </GlobalErrorBoundary>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { getImageUrl } from "../../config";
 import {
     View,
@@ -33,10 +33,11 @@ const getDaysInMonth = (monthValue, yearValue) => {
 const DailyMilkBooking = () => {
     const { setLoading } = useLoading();
     const route = useRoute();
-    const { UserBooked } = route.params;
+    const UserBooked = Array.isArray(route?.params?.UserBooked) ? route.params.UserBooked : [];
     console.log("UserBooked:", UserBooked);
 
-    const navigation = useNavigation()
+    const navigation = useNavigation();
+    const isSubmittingRef = useRef(false);
 
     // Product States
     const [products, setProducts] = useState([]);
@@ -80,8 +81,14 @@ const DailyMilkBooking = () => {
     // INITIALIZATION
     // ──────────────────────────────────────────────────────────
     const getRole = async () => {
-        var data = await Storage.getData("DATA");
-        setUSER(data.transid);
+        try {
+            const data = await Storage.getData("DATA");
+            if (data?.transid) {
+                setUSER(data.transid);
+            }
+        } catch (error) {
+            console.error("getRole error:", error);
+        }
     };
 
     useEffect(() => {
@@ -96,51 +103,63 @@ const DailyMilkBooking = () => {
     // INITIALIZE FROM EXISTING BOOKING DATA (FOR RENEWAL)
     // ──────────────────────────────────────────────────────────
     useEffect(() => {
-        if (UserBooked && UserBooked.length > 0) {
+        try {
+            if (!UserBooked || UserBooked.length === 0) return;
+
             const booking = UserBooked[0];
             // Pre-fill data from existing booking
-            if (booking.deliverytype) {
+            if (booking?.deliverytype) {
                 setTimeSlot(booking.deliverytype);
             }
             // Set start date to the day after the previous booking ended
-            if (booking.bookingenddate) {
+            if (booking?.bookingenddate) {
                 const endDate = new Date(booking.bookingenddate);
-                const renewalStartDate = new Date(endDate);
-                renewalStartDate.setDate(renewalStartDate.getDate() + 1);
-                const yearStr = String(renewalStartDate.getFullYear());
-                const monthNum = renewalStartDate.getMonth() + 1;
-                const dayStr = String(renewalStartDate.getDate()).padStart(2, '0');
+                if (!isNaN(endDate.getTime())) {
+                    const renewalStartDate = new Date(endDate);
+                    renewalStartDate.setDate(renewalStartDate.getDate() + 1);
+                    const yearStr = String(renewalStartDate.getFullYear());
+                    const monthNum = renewalStartDate.getMonth() + 1;
+                    const dayStr = String(renewalStartDate.getDate()).padStart(2, "0");
 
-                setYear(yearStr);
-                setMonth(monthNum);
-                setDay(dayStr);
+                    setYear(yearStr);
+                    setMonth(monthNum);
+                    setDay(dayStr);
+                }
             }
             // Pre-fill quantity
-            if (booking.productid && booking.quantity) {
+            if (booking?.productid && booking?.quantity) {
                 setQuantities((prev) => ({
                     ...prev,
                     [booking.productid]: booking.quantity
                 }));
             }
+        } catch (error) {
+            console.error("Prefill booking data error:", error);
         }
     }, [UserBooked, products]);
 
     const getDailyMilkProducts = async () => {
-        if (USER) {
-            setLoading(true, "Loading Products...");
-            try {
-                var { Response } = await API.GET("DailyMilkProducts");
-                setProducts(Response);
-                const initialQtys = Response.reduce((acc, prod) => {
+        if (!USER) return;
+
+        setLoading(true, "Loading Products...");
+        try {
+            const { Response } = await API.GET("DailyMilkProducts");
+            const safeProducts = Array.isArray(Response) ? Response : [];
+            setProducts(safeProducts);
+            setActiveIndex(0);
+            const initialQtys = safeProducts.reduce((acc, prod) => {
+                if (prod?.transid) {
                     acc[prod.transid] = 0;
-                    return acc;
-                }, {});
-                setQuantities(initialQtys);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
+                }
+                return acc;
+            }, {});
+            setQuantities(initialQtys);
+        } catch (err) {
+            console.error("getDailyMilkProducts error:", err);
+            setProducts([]);
+            setQuantities({});
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -148,21 +167,35 @@ const DailyMilkBooking = () => {
     // HANDLERS
     // ──────────────────────────────────────────────────────────
     const handleProductChange = (index) => {
-        setActiveIndex(index);
-        // Reset quantities so only the visible product is active
-        const resetQtys = products.reduce((acc, prod) => {
-            acc[prod.transid] = 0;
-            return acc;
-        }, {});
-        setQuantities(resetQtys);
+        try {
+            if (!Array.isArray(products) || products.length === 0) return;
+            if (index < 0 || index >= products.length) return;
+
+            setActiveIndex(index);
+            // Reset quantities so only the visible product is active
+            const resetQtys = products.reduce((acc, prod) => {
+                if (prod?.transid) {
+                    acc[prod.transid] = 0;
+                }
+                return acc;
+            }, {});
+            setQuantities(resetQtys);
+        } catch (error) {
+            console.error("handleProductChange error:", error);
+        }
     };
 
     const changeQuantity = (productId, increment) => {
-        setQuantities((prev) => {
-            const current = prev[productId] || 0;
-            const newQty = Math.max(0, current + increment);
-            return { ...prev, [productId]: parseFloat(newQty.toFixed(2)) };
-        });
+        try {
+            if (!productId || typeof increment !== "number") return;
+            setQuantities((prev) => {
+                const current = Number(prev?.[productId] || 0);
+                const newQty = Math.max(0, current + increment);
+                return { ...prev, [productId]: parseFloat(newQty.toFixed(2)) };
+            });
+        } catch (error) {
+            console.error("changeQuantity error:", error);
+        }
     };
 
     const getAvailableMonths = (selYear) => {
@@ -189,10 +222,35 @@ const DailyMilkBooking = () => {
         return days;
     };
 
-    const handleSubmit = async () => {
+    const safeNavigateAfterSubmit = () => {
         try {
+            if (navigation?.canGoBack?.()) {
+                navigation.goBack();
+                return;
+            }
+
+            const navState = navigation?.getState?.();
+            const currentRouteName = navState?.routes?.[navState.index]?.name;
+            if (currentRouteName !== "Main") {
+                navigation.navigate("Main");
+            }
+        } catch (error) {
+            console.error("safeNavigateAfterSubmit error:", error);
+        }
+    };
+
+    const handleSubmit = async () => {
+        if (isSubmittingRef.current) return;
+
+        try {
+            isSubmittingRef.current = true;
             const currentProd = products[activeIndex];
-            const qty = quantities[currentProd.transid];
+            if (!currentProd?.transid) {
+                Alert.alert("Error", "Product is not ready. Please try again.");
+                return;
+            }
+
+            const qty = Number(quantities?.[currentProd.transid] || 0);
 
             if (qty <= 0) {
                 Alert.alert("Error", "Please select a quantity.");
@@ -208,10 +266,23 @@ const DailyMilkBooking = () => {
             }
 
             const USERID = await Storage.getData("USERID");
+            const bookingSource = UserBooked?.[0];
+
+            if (!bookingSource?.dailymilkregistrationid) {
+                Alert.alert("Error", "Renewal data is missing. Please reopen the page.");
+                return;
+            }
+
             const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const startdate = new Date(dateString);
             const enddate = new Date(startdate);
             enddate.setDate(startdate.getDate() + 29);
+
+            if (isNaN(startdate.getTime()) || isNaN(enddate.getTime())) {
+                Alert.alert("Error", "Invalid booking date selected.");
+                return;
+            }
+
             const BookingID = uuidv4();
             const totalAmount = qty * currentProd.price * 30;
 
@@ -222,7 +293,7 @@ const DailyMilkBooking = () => {
             const bookingdata = {
                 transid: uuidv4(),
                 bookingid: BookingID,
-                dailymilkregistrationid: UserBooked[0].dailymilkregistrationid,
+                dailymilkregistrationid: bookingSource.dailymilkregistrationid,
                 userid: USERID,
                 productid: currentProd.transid,
                 productname: currentProd.name,
@@ -246,8 +317,18 @@ const DailyMilkBooking = () => {
             console.warn("Booking Data:", JSON.stringify(bookingdata, null, 2));
             await API.POST("DailyMilkBooking", bookingdata);
 
-
-            navigation.navigate("Main");
+            Alert.alert(
+                "Success",
+                `Booking renewed successfully from ${dateString}.`,
+                [
+                    {
+                        text: "OK",
+                        onPress: () => {
+                            safeNavigateAfterSubmit();
+                        },
+                    },
+                ]
+            );
 
             // Alert.alert("Success", `Booking renewed for ${dateString}!`, [
             //     {
@@ -262,6 +343,7 @@ const DailyMilkBooking = () => {
             console.error("Submission error:", err);
             Alert.alert("Failed", "Could not complete booking renewal.");
         } finally {
+            isSubmittingRef.current = false;
             setLoading(false);
         }
     };

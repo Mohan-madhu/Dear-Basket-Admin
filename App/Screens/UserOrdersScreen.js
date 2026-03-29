@@ -87,6 +87,20 @@ const MyOrdersScreen = () => {
         fetchOrders();
     };
 
+    const handleStartShopping = () => {
+        try {
+            navigation.navigate("Main", { screen: "Home" });
+        } catch (error) {
+            console.error("Start shopping navigation error:", error);
+            try {
+                navigation.navigate("Main");
+            } catch (fallbackError) {
+                console.error("Start shopping fallback navigation error:", fallbackError);
+                Alert.alert("Navigation Error", "Unable to open Home right now.");
+            }
+        }
+    };
+
     if (loading) {
         return (
             <View className="flex-1 justify-center items-center bg-gray-50">
@@ -201,7 +215,7 @@ const MyOrdersScreen = () => {
                                     Your orders will appear here once you place them
                                 </Text>
                                 <TouchableOpacity
-                                    onPress={() => navigation.navigate('Home')}
+                                    onPress={handleStartShopping}
                                     className="bg-blue-600 px-6 py-3 rounded-full mt-6"
                                 >
                                     <Text className="text-white font-semibold">Start Shopping</Text>

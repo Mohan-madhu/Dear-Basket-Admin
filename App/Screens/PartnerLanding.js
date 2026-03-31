@@ -606,10 +606,14 @@ export default function PartnerLanding() {
       var responsebeforefilter = res.Response;
       var apiresponse = []
 
-      apiresponse = responsebeforefilter.filter(order => order.mappedpartnerid === partnerid && order.orderdelivered !== 1);
 
 
-
+  apiresponse = responsebeforefilter.filter(order =>
+          order.ordercancelled !== 1 &&
+          order.orderdelivered !== 1 &&
+          order.orderpacked === 1 &&
+          ((order.isdailymilkuser === 0 && order.orderoutofdeliveryby === null) || order.mappedpartnerid === partnerid || order.orderoutofdeliveryby === partnerid))
+    
 
       const updatedData = apiresponse.map(order => {
         let type = '';

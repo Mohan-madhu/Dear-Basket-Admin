@@ -453,7 +453,7 @@ const ViewCartScreen = () => {
                 "userid": userData?.transid,
                 "name": userData?.name,
                 "isdailymilkuser": deliveryOption === 2 ? 1 : 0,
-                "mappedpartnerid": userData?.mappedpartnerid,
+                "mappedpartnerid": deliveryOption === 2 ?    userData?.mappedpartnerid : null,
                 "itemtotal": total,
                 "deliverycharge": deliveryfeeValue,
                 "tax": (taxpercentage * total) / 100,

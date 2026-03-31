@@ -148,7 +148,11 @@ const ViewPartnerOrderScreen = () => {
   }, []);
 
   const getOrderCountForPartner = (partnerId) => {
-    return orders.filter((order) => order.mappedpartnerid === partnerId).length;
+    return orders.filter(order =>
+      order.ordercancelled !== 1 &&
+      order.orderdelivered !== 1 &&
+      order.orderpacked === 1 &&
+      ((order.isdailymilkuser === 0 && order.orderoutofdeliveryby === null && order.outofdeliveryby === null) || order.mappedpartnerid === partnerId || order.orderoutofdeliveryby === partnerId)).length;
   };
 
   const renderProfileImage = (profile) => {

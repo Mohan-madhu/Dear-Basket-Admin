@@ -14,18 +14,45 @@ const fetchWithTimeout = async (url, options, timeout = 15000) => {
   );
 
   try {
-    //console.log(url,options)
     const response = await Promise.race([fetch(url, options), timeoutPromise]);
-    const data = await response.json();
+    const raw = await response.text();
+    const contentType = response.headers?.get?.("content-type") || "";
+    const isJsonLike =
+      contentType.toLowerCase().includes("application/json") ||
+      raw.trim().startsWith("{") ||
+      raw.trim().startsWith("[");
+
+    let data = null;
+    if (isJsonLike) {
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error("Invalid JSON response from server.");
+      }
+    } else {
+      const snippet = (raw || "").replace(/\s+/g, " ").slice(0, 160);
+      throw new Error(
+        `Server returned non-JSON response (${response.status}) for ${options?.method || "GET"} ${url}. ${snippet || "No response body"}`
+      );
+    }
 
     if (!response.ok) {
-      console.log(data); 
-      throw new Error(data.Message || data.message|| data.error||  "API Error");
+      console.log(data);
+      throw new Error(
+        data.Message ||
+          data.message ||
+          data.error ||
+          `API Error (${response.status}) for ${options?.method || "GET"} ${url}`
+      );
     }
 
     return data;
   } catch (error) {
-    console.error("API Error:", error);
+    console.error("API Error:", {
+      method: options?.method || "GET",
+      url,
+      message: error?.message || "Unknown error",
+    });
     throw error;
   }
 };
@@ -43,8 +70,9 @@ const apiRequest = async (endpoint, method = "GET", body = null) => {
     return await fetchWithTimeout(`${BASE_URL}/${endpoint}`, options, 15000);
 
   } catch (error) {
-    console.error("API Error from apiRequest:", error);
-    throw error;
+    const enrichedMessage = `API ${method} ${BASE_URL}/${endpoint} failed: ${error?.message || "Unknown error"}`;
+    console.error("API Error from apiRequest:", enrichedMessage);
+    throw new Error(enrichedMessage);
   }
 };
 

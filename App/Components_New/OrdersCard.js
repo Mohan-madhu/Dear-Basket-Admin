@@ -24,6 +24,14 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [returnSelections, setReturnSelections] = useState({});
   const [returnReason, setReturnReason] = useState('');
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+  const [refundMethod, setRefundMethod] = useState('BankTransfer');
+  const [refundGpayNumber, setRefundGpayNumber] = useState('');
+  const [refundUpiId, setRefundUpiId] = useState('');
+  const [refundBankHolderName, setRefundBankHolderName] = useState('');
+  const [refundBankName, setRefundBankName] = useState('');
+  const [refundAccountNumber, setRefundAccountNumber] = useState('');
+  const [refundIfscCode, setRefundIfscCode] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [ROLE, setROLE] = useState('');
   const [USER, setUSER] = useState('');
@@ -47,6 +55,13 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     setReturnSelections({});
     setShowReturnModal(false);
     setReturnReason('');
+    setRefundMethod('BankTransfer');
+    setRefundGpayNumber('');
+    setRefundUpiId('');
+    setRefundBankHolderName('');
+    setRefundBankName('');
+    setRefundAccountNumber('');
+    setRefundIfscCode('');
   }, [order?.productorderid]);
 
   const getUserRole = async () => {
@@ -537,16 +552,79 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     });
     setReturnSelections(initial);
     setShowReturnModal(true);
+    hydrateRefundPrefs();
+  };
+
+  const getRefundPrefsKey = () =>
+    `RETURN_REFUND_PREFS_${order?.userid || USER || 'ANON'}`;
+
+  const hydrateRefundPrefs = async () => {
+    try {
+      const pref = await Storage.getData(getRefundPrefsKey());
+      if (!pref) return;
+      setRefundMethod(pref?.refundmethod || 'BankTransfer');
+      setRefundGpayNumber(pref?.gpaynumber || '');
+      setRefundUpiId(pref?.upiid || '');
+      setRefundBankHolderName(pref?.bankholdername || '');
+      setRefundBankName(pref?.bankname || '');
+      setRefundAccountNumber(pref?.accountnumber || '');
+      setRefundIfscCode(pref?.ifsccode || '');
+    } catch (error) {
+      log('Failed to hydrate refund prefs:', error);
+    }
+  };
+
+  const persistRefundPrefs = async () => {
+    try {
+      await Storage.storeData(getRefundPrefsKey(), {
+        refundmethod: refundMethod,
+        gpaynumber: refundGpayNumber,
+        upiid: refundUpiId,
+        bankholdername: refundBankHolderName,
+        bankname: refundBankName,
+        accountnumber: refundAccountNumber,
+        ifsccode: refundIfscCode,
+      });
+    } catch (error) {
+      log('Failed to persist refund prefs:', error);
+    }
   };
 
   const submitReturnRequest = async () => {
+    if (isSubmittingReturn) return;
+
     const selectedItems = orderItems.filter((_, index) => returnSelections[index]);
     if (selectedItems.length === 0) {
       Alert.alert('Select Products', 'Please select at least one product to return.');
       return;
     }
+    if (!returnReason.trim()) {
+      Alert.alert('Reason Required', 'Please enter the reason for this return request.');
+      return;
+    }
+
+    if (refundMethod === 'GPay' && !refundGpayNumber.trim() && !refundUpiId.trim()) {
+      Alert.alert('Refund Details', 'Provide GPay number or UPI ID for GPay refund.');
+      return;
+    }
+
+    if (refundMethod === 'BankTransfer') {
+      if (
+        !refundBankHolderName.trim() ||
+        !refundBankName.trim() ||
+        !refundAccountNumber.trim() ||
+        !refundIfscCode.trim()
+      ) {
+        Alert.alert(
+          'Refund Details',
+          'Bank holder name, bank name, account number, and IFSC are required.'
+        );
+        return;
+      }
+    }
 
     try {
+      setIsSubmittingReturn(true);
       setLoading(true, 'Submitting return request...');
 
       const items = selectedItems.map((item) => {
@@ -563,7 +641,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
           returnqty,
           unitprice,
           lineamount: Number((returnqty * unitprice).toFixed(2)),
-          itemreason: returnReason?.trim() || null,
+          itemreason: returnReason.trim(),
         };
       });
 
@@ -578,7 +656,14 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
         pickuppincode: order?.deliverypincode || null,
         pickuplatitude: order?.latitude || null,
         pickuplongitude: order?.longitude || null,
-        returnreason: returnReason?.trim() || null,
+        returnreason: returnReason.trim(),
+        refundmethod: refundMethod,
+        gpaynumber: refundGpayNumber.trim() || null,
+        upiid: refundUpiId.trim() || null,
+        bankholdername: refundBankHolderName.trim() || null,
+        bankname: refundBankName.trim() || null,
+        accountnumber: refundAccountNumber.trim() || null,
+        ifsccode: refundIfscCode.trim() || null,
         items,
         rcu: USER || order?.name || order?.userid || 'USER',
       };
@@ -594,6 +679,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
       setShowReturnModal(false);
       setReturnSelections({});
       setReturnReason('');
+      await persistRefundPrefs();
 
       Alert.alert(
         'Return Requested',
@@ -601,12 +687,16 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
         [{ text: 'OK' }]
       );
 
-      if (onReturnCreated) onReturnCreated();
-      if (onOrderUpdate) onOrderUpdate();
+      if (onReturnCreated) {
+        onReturnCreated();
+      } else if (onOrderUpdate) {
+        onOrderUpdate();
+      }
     } catch (error) {
       log('Error creating return request:', error);
       Alert.alert('Return Failed', error?.message || 'Unable to create return request right now.');
     } finally {
+      setIsSubmittingReturn(false);
       setLoading(false);
     }
   };
@@ -935,12 +1025,84 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
             <TextInput
               value={returnReason}
               onChangeText={setReturnReason}
-              placeholder="Reason for return (optional)"
+              placeholder="Reason for return (required)"
               multiline
               numberOfLines={2}
               textAlignVertical="top"
               className="border border-gray-300 rounded-2xl p-3 text-gray-800 mt-2 bg-gray-50"
             />
+
+            <View className="mt-3">
+              <Text className="text-xs font-semibold text-gray-700 mb-2">Refund Method</Text>
+              <View className="flex-row">
+                {['BankTransfer', 'GPay', 'Cash'].map((method) => {
+                  const active = refundMethod === method;
+                  return (
+                    <TouchableOpacity
+                      key={method}
+                      onPress={() => setRefundMethod(method)}
+                      className={`mr-2 px-3 py-1.5 rounded-full border ${
+                        active ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
+                      }`}
+                    >
+                      <Text className={`text-[11px] font-semibold ${active ? 'text-white' : 'text-gray-700'}`}>
+                        {method === 'BankTransfer' ? 'Bank' : method}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {refundMethod === 'GPay' ? (
+              <View className="mt-2">
+                <TextInput
+                  value={refundGpayNumber}
+                  onChangeText={setRefundGpayNumber}
+                  placeholder="GPay Number"
+                  keyboardType="phone-pad"
+                  className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50"
+                />
+                <TextInput
+                  value={refundUpiId}
+                  onChangeText={setRefundUpiId}
+                  placeholder="UPI ID"
+                  autoCapitalize="none"
+                  className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50 mt-2"
+                />
+              </View>
+            ) : null}
+
+            {refundMethod === 'BankTransfer' ? (
+              <View className="mt-2">
+                <TextInput
+                  value={refundBankHolderName}
+                  onChangeText={setRefundBankHolderName}
+                  placeholder="Account Holder Name"
+                  className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50"
+                />
+                <TextInput
+                  value={refundBankName}
+                  onChangeText={setRefundBankName}
+                  placeholder="Bank Name"
+                  className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50 mt-2"
+                />
+                <TextInput
+                  value={refundAccountNumber}
+                  onChangeText={setRefundAccountNumber}
+                  placeholder="Account Number"
+                  keyboardType="number-pad"
+                  className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50 mt-2"
+                />
+                <TextInput
+                  value={refundIfscCode}
+                  onChangeText={setRefundIfscCode}
+                  placeholder="IFSC Code"
+                  autoCapitalize="characters"
+                  className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50 mt-2"
+                />
+              </View>
+            ) : null}
 
             <View className="flex-row mt-4">
               <TouchableOpacity
@@ -952,10 +1114,13 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={submitReturnRequest}
+                disabled={isSubmittingReturn}
                 className="flex-1 bg-orange-600 py-3 rounded-2xl ml-2"
                 activeOpacity={0.85}
               >
-                <Text className="text-white font-semibold text-center">Submit Return</Text>
+                <Text className="text-white font-semibold text-center">
+                  {isSubmittingReturn ? 'Submitting...' : 'Submit Return'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
+  Modal,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { API } from '../../App_Utils/Services/APIService';
@@ -157,6 +158,7 @@ const formatDateTime = (value) => {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'UTC',
   });
 };
 
@@ -178,6 +180,16 @@ const MyOrdersScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [cacheLoaded, setCacheLoaded] = useState(false);
   const [returnOrders, setReturnOrders] = useState([]);
+  const [isReturnServiceUnavailable, setIsReturnServiceUnavailable] = useState(false);
+  const [returnDetailsVisible, setReturnDetailsVisible] = useState(false);
+  const [returnDetailsLoading, setReturnDetailsLoading] = useState(false);
+  const [selectedReturn, setSelectedReturn] = useState(null);
+  const [selectedReturnDetail, setSelectedReturnDetail] = useState({
+    Header: null,
+    Details: [],
+    StatusHistory: [],
+    Refund: null,
+  });
 
   const getScreenTitle = () => {
     if (isallorders) return 'All Orders';
@@ -279,7 +291,7 @@ const MyOrdersScreen = () => {
   };
 
   const fetchReturnOrders = async () => {
-    if (isallorders) return;
+    if (isallorders || isReturnServiceUnavailable) return;
     try {
       const userData = await Storage.getData('DATA');
       const userId = userData?.transid;
@@ -302,6 +314,7 @@ const MyOrdersScreen = () => {
 
       const response = Array.isArray(res?.Response) ? res.Response : [];
       setReturnOrders(response);
+      if (isReturnServiceUnavailable) setIsReturnServiceUnavailable(false);
 
       try {
         const key = await getReturnCacheKey();
@@ -314,6 +327,15 @@ const MyOrdersScreen = () => {
       }
     } catch (error) {
       log('Error fetching return orders:', error);
+      const msg = String(error?.message || '').toLowerCase();
+      if (
+        msg.includes('non-json response') ||
+        msg.includes('unexpected character') ||
+        msg.includes('<html') ||
+        msg.includes('<!doctype')
+      ) {
+        setIsReturnServiceUnavailable(true);
+      }
     }
   };
 
@@ -356,6 +378,33 @@ const MyOrdersScreen = () => {
       } catch {
         Alert.alert('Navigation Error', 'Unable to open Home right now.');
       }
+    }
+  };
+
+  const openReturnDetails = async (item) => {
+    if (!item?.returnid) return;
+    setSelectedReturn(item);
+    setReturnDetailsVisible(true);
+    setReturnDetailsLoading(true);
+    try {
+      let res = null;
+      try {
+        res = await API.PUT('ProductReturn/detail', { returnid: item.returnid });
+      } catch {
+        res = await API.GET(`ProductReturn/${item.returnid}`);
+      }
+
+      setSelectedReturnDetail({
+        Header: res?.Header || null,
+        Details: Array.isArray(res?.Details) ? res.Details : [],
+        StatusHistory: Array.isArray(res?.StatusHistory) ? res.StatusHistory : [],
+        Refund: res?.Refund || null,
+      });
+    } catch (error) {
+      log('Error fetching return details:', error);
+      Alert.alert('Error', 'Failed to load return details.');
+    } finally {
+      setReturnDetailsLoading(false);
     }
   };
 
@@ -453,6 +502,13 @@ const MyOrdersScreen = () => {
   };
 
   const emptyState = renderEmptyStateMessage();
+  const detailHeader = selectedReturnDetail?.Header || selectedReturn;
+  const rawTimeline = Array.isArray(selectedReturnDetail?.StatusHistory)
+    ? selectedReturnDetail.StatusHistory
+    : [];
+  const timeline = [...rawTimeline].sort(
+    (a, b) => parseTimestamp(a?.changedtime) - parseTimestamp(b?.changedtime)
+  );
 
   if (loading && !refreshing) {
     return (
@@ -577,12 +633,18 @@ const MyOrdersScreen = () => {
             </View>
 
             {visibleReturnOrders.length === 0 ? (
-              <Text className="text-xs text-gray-500 mt-2">No return requests yet.</Text>
+              <Text className="text-xs text-gray-500 mt-2">
+                {isReturnServiceUnavailable
+                  ? 'Return service is currently unavailable.'
+                  : 'No return requests yet.'}
+              </Text>
             ) : (
               <View className="mt-2">
                 {visibleReturnOrders.map((item, idx) => (
-                  <View
+                  <TouchableOpacity
                     key={item?.returnid || `${item?.returnnumber || 'RET'}-${idx}`}
+                    activeOpacity={0.85}
+                    onPress={() => openReturnDetails(item)}
                     className="rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 mb-2"
                   >
                     <View className="flex-row items-center justify-between">
@@ -601,7 +663,13 @@ const MyOrdersScreen = () => {
                     <Text className="text-[11px] text-gray-600 mt-0.5">
                       {formatDateTime(item?.requestedtime || item?.rcm)} • Qty {formatNumber(item?.totalreturnqty)} • ₹{formatNumber(item?.totalreturnamount)}
                     </Text>
-                  </View>
+                    <View className="flex-row items-center justify-end mt-1">
+                      <Text className="text-[10px] text-orange-700 font-semibold mr-0.5">
+                        View Timeline
+                      </Text>
+                      <Icon name="chevron-right" size={14} color="#C2410C" />
+                    </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -653,6 +721,136 @@ const MyOrdersScreen = () => {
           </View>
         )}
       </Animated.ScrollView>
+
+      <Modal visible={returnDetailsVisible} animationType="slide" onRequestClose={() => setReturnDetailsVisible(false)}>
+        <View className="flex-1 bg-gray-100">
+          <View className="bg-white px-3 pt-2 pb-2 border-b border-gray-200">
+            <View className="flex-row items-center justify-between">
+              <TouchableOpacity
+                onPress={() => setReturnDetailsVisible(false)}
+                className="w-9 h-9 rounded-xl bg-gray-100 items-center justify-center"
+              >
+                <Icon name="arrow-back" size={20} color="#111827" />
+              </TouchableOpacity>
+              <Text className="text-base font-bold text-gray-900">Return Details</Text>
+              <View className="w-9 h-9" />
+            </View>
+          </View>
+
+          <ScrollView className="flex-1 p-3">
+            {returnDetailsLoading ? (
+              <View className="bg-white rounded-2xl border border-gray-200 p-5 items-center">
+                <ActivityIndicator size="small" color="#2563EB" />
+                <Text className="text-xs text-gray-500 mt-2">Loading return details...</Text>
+              </View>
+            ) : (
+              <>
+                <View className="bg-white rounded-2xl border border-gray-200 p-3">
+                  <Text className="text-xs text-gray-500">Return Number</Text>
+                  <Text className="text-sm font-bold text-gray-900">
+                    {detailHeader?.returnnumber || detailHeader?.returnid || 'N/A'}
+                  </Text>
+                  <Text className="text-xs text-gray-500 mt-2">Order</Text>
+                  <Text className="text-sm font-semibold text-gray-800">
+                    {detailHeader?.productorderid || 'N/A'}
+                  </Text>
+                  <Text className="text-xs text-gray-500 mt-2">Current Status</Text>
+                  <Text className="text-sm font-bold text-orange-700">
+                    {detailHeader?.returnstatus || 'Requested'}
+                  </Text>
+                </View>
+
+                <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
+                  <Text className="text-sm font-bold text-gray-900 mb-2">Items</Text>
+                  {selectedReturnDetail?.Details?.length ? (
+                    selectedReturnDetail.Details.map((d, i) => (
+                      <View key={d?.returndetailid || i} className="py-2 border-b border-gray-100">
+                        <Text className="text-xs font-semibold text-gray-900">{d?.productname || 'Product'}</Text>
+                        <Text className="text-[11px] text-gray-600">
+                          Qty {formatNumber(d?.returnqty)} • ₹{formatNumber(d?.lineamount)} • {d?.itemstatus || 'Requested'}
+                        </Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text className="text-xs text-gray-500">No line items available.</Text>
+                  )}
+                </View>
+
+                <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
+                  <Text className="text-sm font-bold text-gray-900 mb-2">Refund Preference</Text>
+                  <Text className="text-[11px] text-gray-600">
+                    Method: {selectedReturnDetail?.Refund?.refundmethod || 'Not provided'}
+                  </Text>
+                  <Text className="text-[11px] text-gray-600 mt-1">
+                    Amount: ₹{formatNumber(selectedReturnDetail?.Refund?.refundamount || detailHeader?.totalreturnamount)}
+                  </Text>
+                  {selectedReturnDetail?.Refund?.upiid ? (
+                    <Text className="text-[11px] text-gray-600 mt-1">
+                      UPI: {selectedReturnDetail.Refund.upiid}
+                    </Text>
+                  ) : null}
+                  {selectedReturnDetail?.Refund?.bankholdername ? (
+                    <Text className="text-[11px] text-gray-600 mt-1">
+                      Holder: {selectedReturnDetail.Refund.bankholdername}
+                    </Text>
+                  ) : null}
+                  {selectedReturnDetail?.Refund?.bankname ? (
+                    <Text className="text-[11px] text-gray-600 mt-1">
+                      Bank: {selectedReturnDetail.Refund.bankname}
+                    </Text>
+                  ) : null}
+                  {selectedReturnDetail?.Refund?.accountnumber ? (
+                    <Text className="text-[11px] text-gray-600 mt-1">
+                      A/C: {selectedReturnDetail.Refund.accountnumber}
+                    </Text>
+                  ) : null}
+                  {selectedReturnDetail?.Refund?.ifsccode ? (
+                    <Text className="text-[11px] text-gray-600 mt-1">
+                      IFSC: {selectedReturnDetail.Refund.ifsccode}
+                    </Text>
+                  ) : null}
+                </View>
+
+                <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
+                  <Text className="text-sm font-bold text-gray-900 mb-2">Timeline</Text>
+                  {timeline.length ? (
+                    timeline.map((entry, idx) => (
+                      <View key={entry?.returnstatusid || `${entry?.newstatus || 'status'}-${idx}`} className="flex-row mb-2">
+                        <View className="items-center mr-2.5">
+                          <View className="w-2.5 h-2.5 rounded-full bg-blue-500 mt-1" />
+                          {idx !== timeline.length - 1 ? <View className="w-0.5 flex-1 bg-blue-200 mt-1" /> : null}
+                        </View>
+                        <View className="flex-1 pb-1">
+                          <Text className="text-xs font-semibold text-gray-900">
+                            {entry?.newstatus || 'Status Updated'}
+                          </Text>
+                          <Text className="text-[11px] text-gray-600 mt-0.5">
+                            {formatDateTime(entry?.changedtime)}
+                          </Text>
+                          {entry?.changedby ? (
+                            <Text className="text-[11px] text-gray-600 mt-0.5">
+                              By: {entry.changedby}
+                            </Text>
+                          ) : null}
+                          {entry?.remarks ? (
+                            <Text className="text-[11px] text-gray-600 mt-0.5">
+                              {entry.remarks}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    ))
+                  ) : (
+                    <Text className="text-xs text-gray-500">
+                      No timeline updates yet.
+                    </Text>
+                  )}
+                </View>
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 };

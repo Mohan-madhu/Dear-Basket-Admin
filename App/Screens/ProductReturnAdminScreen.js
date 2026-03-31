@@ -45,6 +45,12 @@ const num = (v) => {
   const n = Number(v || 0);
   return Number.isFinite(n) ? n : 0;
 };
+const getTs = (v) => {
+  if (!v) return 0;
+  const d = new Date(v);
+  const t = d.getTime();
+  return Number.isFinite(t) ? t : 0;
+};
 
 const ProductReturnAdminScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
@@ -229,6 +235,26 @@ const ProductReturnAdminScreen = ({ navigation }) => {
   }, [returns, search]);
 
   const currentStatus = selectedDetail?.Header?.returnstatus || selectedReturn?.returnstatus;
+  const header = selectedDetail?.Header || selectedReturn || {};
+  const statusHistory = Array.isArray(selectedDetail?.StatusHistory) ? selectedDetail.StatusHistory : [];
+  const sortedStatusHistory = [...statusHistory].sort(
+    (a, b) => getTs(a?.changedtime) - getTs(b?.changedtime)
+  );
+  const fallbackTimeline = [
+    { newstatus: 'Requested', changedtime: header?.requestedtime || header?.rcm, changedby: header?.rcu || null, remarks: null },
+    { newstatus: 'Approved', changedtime: header?.approvedtime, changedby: header?.approvedby || null, remarks: null },
+    { newstatus: 'Rejected', changedtime: header?.rejectedtime, changedby: header?.rejectedby || null, remarks: null },
+    { newstatus: 'PickupScheduled', changedtime: header?.pickupscheduledtime, changedby: header?.pickupscheduledby || null, remarks: null },
+    { newstatus: 'PickedUp', changedtime: header?.pickuptime, changedby: header?.pickupby || null, remarks: null },
+    { newstatus: 'ReceivedAtHub', changedtime: header?.receivedathubtime, changedby: header?.receivedathubby || null, remarks: null },
+    { newstatus: 'QCInProgress', changedtime: header?.qcstarttime, changedby: header?.qcby || null, remarks: null },
+    { newstatus: 'RefundInitiated', changedtime: header?.refundinitiatedtime, changedby: header?.refundinitiatedby || null, remarks: null },
+    { newstatus: 'Refunded', changedtime: header?.refundedtime, changedby: header?.refundedby || null, remarks: null },
+    { newstatus: 'Closed', changedtime: header?.closedtime, changedby: header?.closedby || null, remarks: null },
+  ]
+    .filter((x) => getTs(x?.changedtime) > 0)
+    .sort((a, b) => getTs(a?.changedtime) - getTs(b?.changedtime));
+  const timelineEntries = sortedStatusHistory.length > 0 ? sortedStatusHistory : fallbackTimeline;
 
   if (loading) {
     return (
@@ -382,6 +408,85 @@ const ProductReturnAdminScreen = ({ navigation }) => {
                 ))
               ) : (
                 <Text className="text-xs text-gray-500">No items found.</Text>
+              )}
+            </View>
+
+            <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
+              <Text className="text-sm font-bold text-gray-900 mb-2">Refund Preference</Text>
+              <Text className="text-[11px] text-gray-600">
+                Method: {selectedDetail?.Refund?.refundmethod || 'Not provided'}
+              </Text>
+              <Text className="text-[11px] text-gray-600 mt-1">
+                Amount: ₹{num(selectedDetail?.Refund?.refundamount || selectedDetail?.Header?.totalreturnamount)}
+              </Text>
+              {selectedDetail?.Refund?.gpaynumber ? (
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  GPay: {selectedDetail.Refund.gpaynumber}
+                </Text>
+              ) : null}
+              {selectedDetail?.Refund?.upiid ? (
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  UPI: {selectedDetail.Refund.upiid}
+                </Text>
+              ) : null}
+              {selectedDetail?.Refund?.bankholdername ? (
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Holder: {selectedDetail.Refund.bankholdername}
+                </Text>
+              ) : null}
+              {selectedDetail?.Refund?.bankname ? (
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Bank: {selectedDetail.Refund.bankname}
+                </Text>
+              ) : null}
+              {selectedDetail?.Refund?.accountnumber ? (
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  A/C: {selectedDetail.Refund.accountnumber}
+                </Text>
+              ) : null}
+              {selectedDetail?.Refund?.ifsccode ? (
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  IFSC: {selectedDetail.Refund.ifsccode}
+                </Text>
+              ) : null}
+            </View>
+
+            <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
+              <Text className="text-sm font-bold text-gray-900 mb-2">Timeline</Text>
+              {timelineEntries.length > 0 ? (
+                timelineEntries.map((entry, idx) => (
+                  <View
+                    key={entry?.returnstatusid || `${entry?.newstatus || 'status'}-${idx}`}
+                    className="flex-row mb-2"
+                  >
+                    <View className="items-center mr-2.5">
+                      <View className="w-2.5 h-2.5 rounded-full bg-blue-500 mt-1" />
+                      {idx !== timelineEntries.length - 1 ? (
+                        <View className="w-0.5 flex-1 bg-blue-200 mt-1" />
+                      ) : null}
+                    </View>
+                    <View className="flex-1 pb-1">
+                      <Text className="text-xs font-semibold text-gray-900">
+                        {entry?.newstatus || 'Status Updated'}
+                      </Text>
+                      <Text className="text-[11px] text-gray-600 mt-0.5">
+                        {formatDateTime(entry?.changedtime)}
+                      </Text>
+                      {entry?.changedby ? (
+                        <Text className="text-[11px] text-gray-600 mt-0.5">
+                          By: {entry.changedby}
+                        </Text>
+                      ) : null}
+                      {entry?.remarks ? (
+                        <Text className="text-[11px] text-gray-600 mt-0.5">
+                          {entry.remarks}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <Text className="text-xs text-gray-500">No timeline updates yet.</Text>
               )}
             </View>
 

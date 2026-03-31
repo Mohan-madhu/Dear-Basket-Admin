@@ -70,6 +70,24 @@ const readParam = (req, key, fallback = null) => {
   return fallback;
 };
 
+const validateUserRefundPreference = (body) => {
+  const method = String(body?.refundmethod || '').trim();
+  if (!method) return null; // Optional at request time
+  if (!['Cash', 'GPay', 'BankTransfer'].includes(method)) {
+    return 'refundmethod must be one of Cash, GPay, BankTransfer.';
+  }
+  if (method === 'GPay' && !body?.gpaynumber && !body?.upiid) {
+    return 'For GPay refund, provide gpaynumber or upiid.';
+  }
+  if (
+    method === 'BankTransfer' &&
+    (!body?.bankholdername || !body?.bankname || !body?.accountnumber || !body?.ifsccode)
+  ) {
+    return 'For BankTransfer refund, bankholdername, bankname, accountnumber, ifsccode are required.';
+  }
+  return null;
+};
+
 // GET admin return dashboard summary
 const getAdminDashboard = async (req, res, next) => {
   try {
@@ -180,6 +198,13 @@ const createReturnRequest = async (req, res, next) => {
       pickuplatitude,
       pickuplongitude,
       returnreason,
+      refundmethod,
+      gpaynumber,
+      upiid,
+      bankholdername,
+      bankname,
+      accountnumber,
+      ifsccode,
       items = [],
       rcu,
     } = req.body;
@@ -188,6 +213,16 @@ const createReturnRequest = async (req, res, next) => {
       return res.status(400).json({
         message: 'productorderid, userid, items[], and rcu are required.',
       });
+    }
+    if (!String(returnreason || '').trim()) {
+      return res.status(400).json({
+        message: 'returnreason is required.',
+      });
+    }
+
+    const refundPreferenceError = validateUserRefundPreference(req.body);
+    if (refundPreferenceError) {
+      return res.status(400).json({ message: refundPreferenceError });
     }
 
     const sourceOrder = await getOrderById(productorderid);
@@ -346,6 +381,30 @@ const createReturnRequest = async (req, res, next) => {
           VALUES
           (NEWID(), @returnid, NULL, 'Requested', @changedby, DATEADD(MINUTE,330,GETUTCDATE()), NULL);
         `);
+
+      if (refundmethod) {
+        const refundReq = new sql.Request(transaction);
+        await refundReq
+          .input('returnid', sql.UniqueIdentifier, returnId)
+          .input('refundmethod', sql.VarChar(30), refundmethod)
+          .input('refundamount', sql.Decimal(18, 2), Number(totalReturnAmount || 0))
+          .input('paymentstatus', sql.VarChar(30), 'Pending')
+          .input('gpaynumber', sql.VarChar(30), gpaynumber || null)
+          .input('upiid', sql.VarChar(120), upiid || null)
+          .input('bankholdername', sql.VarChar(200), bankholdername || null)
+          .input('bankname', sql.VarChar(200), bankname || null)
+          .input('accountnumber', sql.VarChar(50), accountnumber || null)
+          .input('ifsccode', sql.VarChar(20), ifsccode || null)
+          .input('rcu', sql.VarChar(200), rcu)
+          .query(`
+            INSERT INTO dbo.tbl_product_return_refund
+            (refundid, returnid, refundmethod, refundamount, paymentstatus, paymentreference,
+             gpaynumber, upiid, bankholdername, bankname, accountnumber, ifsccode, cashpaidby, cashpaidtime, rcu, rcm)
+            VALUES
+            (NEWID(), @returnid, @refundmethod, @refundamount, @paymentstatus, NULL,
+             @gpaynumber, @upiid, @bankholdername, @bankname, @accountnumber, @ifsccode, NULL, NULL, @rcu, DATEADD(MINUTE,330,GETUTCDATE()));
+          `);
+      }
 
       await transaction.commit();
       res.status(201).json({

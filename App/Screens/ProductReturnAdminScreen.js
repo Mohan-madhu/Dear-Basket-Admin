@@ -30,7 +30,23 @@ const STATUS_FILTERS = [
 
 const formatDateTime = (value) => {
   if (!value) return 'N/A';
-  const d = new Date(value);
+  let d = null;
+
+  if (value instanceof Date) {
+    d = value;
+  } else if (typeof value === 'number') {
+    d = new Date(value);
+  } else {
+    const text = String(value).trim();
+    // Backend sometimes sends local DB time with a trailing timezone marker (e.g. "Z").
+    // To show DB time as entered, strip TZ suffix and parse as local datetime first.
+    const localLike = text.replace(/([+-]\d{2}:\d{2}|Z)$/i, '');
+    d = new Date(localLike);
+    if (Number.isNaN(d.getTime())) {
+      d = new Date(text);
+    }
+  }
+
   if (Number.isNaN(d.getTime())) return 'N/A';
   return d.toLocaleString('en-IN', {
     day: '2-digit',
@@ -38,6 +54,7 @@ const formatDateTime = (value) => {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: true,
   });
 };
 
@@ -236,6 +253,21 @@ const ProductReturnAdminScreen = ({ navigation }) => {
 
   const currentStatus = selectedDetail?.Header?.returnstatus || selectedReturn?.returnstatus;
   const header = selectedDetail?.Header || selectedReturn || {};
+  const refund = selectedDetail?.Refund || {};
+  const getRefundField = (...keys) => {
+    for (const key of keys) {
+      const value = refund?.[key] ?? header?.[key] ?? selectedReturn?.[key];
+      if (value !== undefined && value !== null && String(value).trim() !== '') {
+        return value;
+      }
+    }
+    return null;
+  };
+  const textOrNA = (value) => {
+    if (value === undefined || value === null) return 'N/A';
+    const s = String(value).trim();
+    return s ? s : 'N/A';
+  };
   const statusHistory = Array.isArray(selectedDetail?.StatusHistory) ? selectedDetail.StatusHistory : [];
   const sortedStatusHistory = [...statusHistory].sort(
     (a, b) => getTs(a?.changedtime) - getTs(b?.changedtime)
@@ -392,6 +424,8 @@ const ProductReturnAdminScreen = ({ navigation }) => {
               <View className="bg-white rounded-2xl border border-gray-200 p-3">
                 <Text className="text-xs text-gray-500">Return No</Text>
                 <Text className="text-sm font-bold text-gray-900">{selectedDetail?.Header?.returnnumber || selectedReturn?.returnnumber || 'N/A'}</Text>
+                <Text className="text-xs text-gray-500 mt-2">Order</Text>
+                <Text className="text-sm font-semibold text-gray-800">{header?.productorderid || 'N/A'}</Text>
                 <Text className="text-xs text-gray-500 mt-2">Status</Text>
                 <Text className="text-sm font-bold text-orange-700">{currentStatus || 'Requested'}</Text>
                 <Text className="text-xs text-gray-500 mt-2">Remarks</Text>
@@ -401,6 +435,69 @@ const ProductReturnAdminScreen = ({ navigation }) => {
                   placeholder="Optional admin remarks"
                   className="mt-1 border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-900 bg-gray-50"
                 />
+              </View>
+
+              <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
+                <Text className="text-sm font-bold text-gray-900 mb-2">User & Partner</Text>
+                <Text className="text-[11px] text-gray-600">
+                  User: {textOrNA(header?.username)} ({textOrNA(header?.userid)})
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Partner: {header?.partnerid ? textOrNA(header?.partnerid) : 'Not Assigned'}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Pickup Address: {textOrNA(header?.pickupaddress)}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  City/State: {textOrNA(header?.pickupcity)}, {textOrNA(header?.pickupstate)} {header?.pickuppincode || ''}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Geo: {textOrNA(header?.pickuplatitude)}, {textOrNA(header?.pickuplongitude)}
+                </Text>
+              </View>
+
+              <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
+                <Text className="text-sm font-bold text-gray-900 mb-2">Return Meta</Text>
+                <Text className="text-[11px] text-gray-600">
+                  Return ID: {textOrNA(header?.returnid)}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Total Items: {num(header?.totalitems)} • Qty: {num(header?.totalreturnqty)} • Amount: ₹{num(header?.totalreturnamount)}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Reason: {textOrNA(header?.returnreason)}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Admin Remarks: {textOrNA(header?.adminremarks)}
+                </Text>
+              </View>
+
+              <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
+                <Text className="text-sm font-bold text-gray-900 mb-2">Audit & Tracking</Text>
+                <Text className="text-[11px] text-gray-600">
+                  Requested: {formatDateTime(header?.requestedtime || header?.rcm)}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Approved: {formatDateTime(header?.approvedtime)}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Rejected: {formatDateTime(header?.rejectedtime)}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Pickup: {formatDateTime(header?.pickuptime)}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Refunded: {formatDateTime(header?.refundedtime)}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Closed: {formatDateTime(header?.closedtime)}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Created By: {textOrNA(header?.rcu)} • Updated By: {textOrNA(header?.luu)}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Updated At: {formatDateTime(header?.lum)}
+                </Text>
               </View>
 
               <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
@@ -422,39 +519,39 @@ const ProductReturnAdminScreen = ({ navigation }) => {
               <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
                 <Text className="text-sm font-bold text-gray-900 mb-2">Refund Preference</Text>
                 <Text className="text-[11px] text-gray-600">
-                  Method: {selectedDetail?.Refund?.refundmethod || 'Not provided'}
+                  Method: {getRefundField('refundmethod', 'refundMethod') || 'Not provided'}
                 </Text>
                 <Text className="text-[11px] text-gray-600 mt-1">
-                  Amount: ₹{num(selectedDetail?.Refund?.refundamount || selectedDetail?.Header?.totalreturnamount)}
+                  Amount: ₹{num(getRefundField('refundamount', 'refundAmount') || selectedDetail?.Header?.totalreturnamount)}
                 </Text>
-                {selectedDetail?.Refund?.gpaynumber ? (
+                {getRefundField('gpaynumber', 'gpayNumber') ? (
                   <Text className="text-[11px] text-gray-600 mt-1">
-                    GPay: {selectedDetail.Refund.gpaynumber}
+                    GPay: {getRefundField('gpaynumber', 'gpayNumber')}
                   </Text>
                 ) : null}
-                {selectedDetail?.Refund?.upiid ? (
+                {getRefundField('upiid', 'upiId') ? (
                   <Text className="text-[11px] text-gray-600 mt-1">
-                    UPI: {selectedDetail.Refund.upiid}
+                    UPI: {getRefundField('upiid', 'upiId')}
                   </Text>
                 ) : null}
-                {selectedDetail?.Refund?.bankholdername ? (
+                {getRefundField('bankholdername', 'bankHolderName', 'accountholdername', 'accountHolderName') ? (
                   <Text className="text-[11px] text-gray-600 mt-1">
-                    Holder: {selectedDetail.Refund.bankholdername}
+                    Holder: {getRefundField('bankholdername', 'bankHolderName', 'accountholdername', 'accountHolderName')}
                   </Text>
                 ) : null}
-                {selectedDetail?.Refund?.bankname ? (
+                {getRefundField('bankname', 'bankName') ? (
                   <Text className="text-[11px] text-gray-600 mt-1">
-                    Bank: {selectedDetail.Refund.bankname}
+                    Bank: {getRefundField('bankname', 'bankName')}
                   </Text>
                 ) : null}
-                {selectedDetail?.Refund?.accountnumber ? (
+                {getRefundField('accountnumber', 'accountNumber', 'bankaccountnumber', 'bankAccountNumber') ? (
                   <Text className="text-[11px] text-gray-600 mt-1">
-                    A/C: {selectedDetail.Refund.accountnumber}
+                    A/C: {getRefundField('accountnumber', 'accountNumber', 'bankaccountnumber', 'bankAccountNumber')}
                   </Text>
                 ) : null}
-                {selectedDetail?.Refund?.ifsccode ? (
+                {getRefundField('ifsccode', 'ifscCode', 'ifsc') ? (
                   <Text className="text-[11px] text-gray-600 mt-1">
-                    IFSC: {selectedDetail.Refund.ifsccode}
+                    IFSC: {getRefundField('ifsccode', 'ifscCode', 'ifsc')}
                   </Text>
                 ) : null}
               </View>

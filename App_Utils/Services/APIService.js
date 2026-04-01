@@ -27,7 +27,14 @@ const fetchWithTimeout = async (url, options, timeout = 15000) => {
       try {
         data = raw ? JSON.parse(raw) : {};
       } catch {
-        throw new Error("Invalid JSON response from server.");
+        try {
+          // Some responses contain illegal control chars (U+0000..U+001F) inside strings.
+          // Strip them as a recovery fallback so clients don't crash on otherwise-valid payloads.
+          const sanitized = (raw || "").replace(/[\u0000-\u0019]/g, "");
+          data = sanitized ? JSON.parse(sanitized) : {};
+        } catch {
+          throw new Error("Invalid JSON response from server.");
+        }
       }
     } else {
       const snippet = (raw || "").replace(/\s+/g, " ").slice(0, 160);

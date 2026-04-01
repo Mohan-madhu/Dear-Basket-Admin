@@ -376,32 +376,32 @@ const AdminDashboardScreen = () => {
   // ===== Cards =====
 
   const userManagementCards = [
-    { id: 1, title: 'Add New User', gradient: gradientPairs[0], screen: 'NewUser', icon: 'account-plus' },
-    { id: 2, title: 'Manage Users', gradient: gradientPairs[1], screen: 'ManageUsersScreen', icon: 'account-group' },
-    { id: 3, title: 'User-Partner Mapping', gradient: gradientPairs[2], screen: 'PartnerUserMappingScreen', icon: 'account-switch' },
-    { id: 4, title: 'View Mappings', gradient: gradientPairs[3], screen: 'ViewPartnerUserMappingScreen', icon: 'link' },
-    { id: 5, title: 'View Partner Orders', gradient: gradientPairs[4], screen: 'ViewPartnerOrderScreen', icon: 'cart-outline' },
-    { id: 16, title: 'Birthday Offers', gradient: gradientPairs[5], screen: 'DailyMilkBirthdayList', icon: 'cake' },
+    { id: 101, title: 'Add New User', gradient: gradientPairs[0], screen: 'NewUser', icon: 'account-plus' },
+    { id: 102, title: 'Manage Users', gradient: gradientPairs[1], screen: 'ManageUsersScreen', icon: 'account-group' },
+    { id: 103, title: 'User-Partner Mapping', gradient: gradientPairs[2], screen: 'PartnerUserMappingScreen', icon: 'account-switch' },
+    { id: 104, title: 'View Mappings', gradient: gradientPairs[3], screen: 'ViewPartnerUserMappingScreen', icon: 'link' },
+    { id: 105, title: 'View Partner Orders', gradient: gradientPairs[4], screen: 'ViewPartnerOrderScreen', icon: 'cart-outline' },
+    { id: 106, title: 'Birthday Offers', gradient: gradientPairs[5], screen: 'DailyMilkBirthdayList', icon: 'cake' },
   ];
 
   const milkManagementCards = [
-    { id: 5, title: 'Milk Approval', gradient: gradientPairs[6], screen: 'DailyMilkRegistrationApprovalScreen', icon: 'check-decagram' },
-    { id: 5, title: 'Daily Milk Status Dashboard', gradient: gradientPairs[7], screen: 'DailyMilk_Dashboard_Admin', icon: 'check-decagram' },
-    { id: 15, title: 'Pregnancy Applications', gradient: gradientPairs[8], screen: 'AdminPregnancyApproval', icon: 'baby-face-outline' },
-    { id: 6, title: 'Manage Daily Milk Users', gradient: gradientPairs[9], screen: 'ManageDailyMilkRegistrationScreen', icon: 'clipboard-text' },
-    { id: 7, title: 'View Milk Users', gradient: gradientPairs[10], screen: 'ViewDailyMilkRegisteredUsersScreen', icon: 'account-multiple' },
-    { id: 8, title: 'Manage Products', gradient: gradientPairs[11], screen: 'Main', icon: 'bottle-tonic' },
-    { id: 9, title: 'Product Offers', gradient: gradientPairs[12], screen: 'OfferViewScreen', icon: 'tag' },
-    { id: 14, title: 'Daily Milk Accounts', gradient: gradientPairs[13], screen: 'DailyMilk_AccountsManage', icon: 'tag' },
-    { id: 14, title: 'Daily Milk Active Bookings', gradient: gradientPairs[14], screen: 'DailyMilkActiveBookingScreen', icon: 'tag' },
+    { id: 201, title: 'Milk Approval', gradient: gradientPairs[6], screen: 'DailyMilkRegistrationApprovalScreen', icon: 'check-decagram' },
+    { id: 202, title: 'Daily Milk Status Dashboard', gradient: gradientPairs[7], screen: 'DailyMilk_Dashboard_Admin', icon: 'check-decagram' },
+    { id: 203, title: 'Pregnancy Applications', gradient: gradientPairs[8], screen: 'AdminPregnancyApproval', icon: 'baby-face-outline' },
+    { id: 204, title: 'Manage Daily Milk Users', gradient: gradientPairs[9], screen: 'ManageDailyMilkRegistrationScreen', icon: 'clipboard-text' },
+    { id: 205, title: 'View Milk Users', gradient: gradientPairs[10], screen: 'ViewDailyMilkRegisteredUsersScreen', icon: 'account-multiple' },
+    { id: 206, title: 'Manage Products', gradient: gradientPairs[11], screen: 'Main', icon: 'bottle-tonic' },
+    { id: 207, title: 'Product Offers', gradient: gradientPairs[12], screen: 'OfferViewScreen', icon: 'tag' },
+    { id: 208, title: 'Daily Milk Accounts', gradient: gradientPairs[13], screen: 'DailyMilk_AccountsManage', icon: 'tag' },
+    { id: 209, title: 'Daily Milk Active Bookings', gradient: gradientPairs[14], screen: 'DailyMilkActiveBookingScreen', icon: 'tag' },
   ];
 
   const deliveryOrdersCards = [
-    { id: 10, title: 'Fast Delivery Orders', gradient: gradientPairs[15], screen: 'MyOrdersScreen_FAST', icon: 'truck-fast' },
-    { id: 11, title: 'Daily Milk Orders', gradient: gradientPairs[16], screen: 'MyOrdersScreen_DAILYMILK', icon: 'clipboard-list' },
-    { id: 13, title: 'All Orders', gradient: gradientPairs[17], screen: 'MyOrdersScreen', icon: 'truck-check-outline' },
-    { id: 12, title: 'Order Analytics', gradient: gradientPairs[18], screen: 'GroceryOrdersDashboard', icon: 'chart-bar' },
-    { id: 17, title: 'Return Orders', gradient: gradientPairs[19], screen: 'ProductReturnAdminScreen', icon: 'backup-restore' },
+    { id: 301, title: 'Fast Delivery Orders', gradient: gradientPairs[15], screen: 'MyOrdersScreen_FAST', icon: 'truck-fast' },
+    { id: 302, title: 'Daily Milk Orders', gradient: gradientPairs[16], screen: 'MyOrdersScreen_DAILYMILK', icon: 'clipboard-list' },
+    { id: 303, title: 'All Orders', gradient: gradientPairs[17], screen: 'MyOrdersScreen', icon: 'truck-check-outline' },
+    { id: 304, title: 'Order Analytics', gradient: gradientPairs[18], screen: 'GroceryOrdersDashboard', icon: 'chart-bar' },
+    { id: 305, title: 'Return Orders', gradient: gradientPairs[19], screen: 'ProductReturnAdminScreen', icon: 'backup-restore' },
   ];
   const handleCardPress = (screenName) => {
     try {
@@ -424,10 +424,11 @@ const AdminDashboardScreen = () => {
     }
   };
 
+  const getCardKey = (card, index) => `${card.id}-${card.screen || 'screen'}-${index}`;
+
   // ===== Card UI =====
   const DashboardCard = ({ card, index }) => (
     <Animated.View
-      key={card.id}
       entering={FadeInDown.delay(index * 100).duration(500)}
       style={{ width: cardWidth }}
       className="mb-5"
@@ -449,7 +450,7 @@ const AdminDashboardScreen = () => {
       <Text className="text-xl text-gray-800 font-bold mb-4">Partner and User Management</Text>
       <View className="flex-row flex-wrap justify-between">
         {userManagementCards.map((card, index) => (
-          <DashboardCard key={card.id} card={card} index={index} />
+          <DashboardCard key={getCardKey(card, index)} card={card} index={index} />
         ))}
       </View>
     </ScrollView>
@@ -460,7 +461,7 @@ const AdminDashboardScreen = () => {
       <Text className="text-xl text-gray-800 font-bold mb-4">Products and Milk Management</Text>
       <View className="flex-row flex-wrap justify-between">
         {milkManagementCards.map((card, index) => (
-          <DashboardCard key={card.id} card={card} index={index} />
+          <DashboardCard key={getCardKey(card, index)} card={card} index={index} />
         ))}
       </View>
     </ScrollView>
@@ -471,7 +472,7 @@ const AdminDashboardScreen = () => {
       <Text className="text-xl text-gray-800 font-bold mb-4">Delivery Orders</Text>
       <View className="flex-row flex-wrap justify-between">
         {deliveryOrdersCards.map((card, index) => (
-          <DashboardCard key={card.id} card={card} index={index} />
+          <DashboardCard key={getCardKey(card, index)} card={card} index={index} />
         ))}
       </View>
     </ScrollView>

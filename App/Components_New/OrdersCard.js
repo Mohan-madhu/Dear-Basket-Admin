@@ -10,6 +10,9 @@ import {
   Modal,
   TextInput,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { createLogger } from '../../App_Utils/Utils/logger';
@@ -18,6 +21,7 @@ import { API } from '../../App_Utils/Services/APIService';
 import Storage from '../../App_Utils/Services/StorageService';
 
 const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCreated }) => {
+  const RETURN_MODAL_BODY_MAX_HEIGHT = Dimensions.get('window').height * 0.62;
   const [expanded, setExpanded] = useState(false);
   const [hasNewUpdates, setHasNewUpdates] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -185,10 +189,57 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
 
   const parseOrderData = () => {
     try {
-      if (typeof order.orderdata === 'string') {
-        return JSON.parse(order.orderdata);
+      let parsedOrderData = order?.orderdata;
+
+      if (typeof parsedOrderData === 'string') {
+        parsedOrderData = JSON.parse(parsedOrderData);
       }
-      return order.orderdata || [];
+
+      if (Array.isArray(parsedOrderData) && parsedOrderData.length > 0) {
+        return parsedOrderData;
+      }
+
+      const isDailyMilkType = [1, 2, 3].includes(Number(order?.isdailymilkuser));
+      if (!isDailyMilkType) return [];
+
+      let milkData = order?.dailymilk_json;
+      if (typeof milkData === 'string') {
+        milkData = JSON.parse(milkData);
+      }
+
+      const milkRows = Array.isArray(milkData) ? milkData : milkData ? [milkData] : [];
+      if (milkRows.length === 0) return [];
+
+      return milkRows.map((row, idx) => {
+        const regularQty = Number(row?.regular_quantity ?? row?.quantity ?? row?.orderquantity ?? 0) || 0;
+        const extraQty = Number(row?.extra_quantity ?? row?.extra ?? 0) || 0;
+        const cancelledQty = Number(row?.cancelled_quantity ?? 0) || 0;
+        const totalQtyRaw = Number(row?.total_quantity);
+        const totalQty = Number.isFinite(totalQtyRaw) ? totalQtyRaw : (regularQty + extraQty);
+        const effectiveQty = totalQty > 0 ? totalQty : regularQty;
+        const baseAmount = Number(row?.lineamount ?? row?.amount ?? row?.price ?? order?.itemtotal ?? 0) || 0;
+        const unitPriceBase = regularQty > 0 ? regularQty : (effectiveQty > 0 ? effectiveQty : 1);
+        const unitPrice = baseAmount / unitPriceBase;
+        const amount = Number(row?.finalamount ?? row?.totalamount ?? row?.effectiveamount) ||
+          (unitPrice * (effectiveQty > 0 ? effectiveQty : unitPriceBase));
+
+        return {
+          id: row?.id || row?.transid || `${order?.productorderid || 'milk'}-${idx}`,
+          productname: row?.productname || row?.milkname || 'Daily Milk',
+          variantname: row?.date
+            ? `Date: ${new Date(row.date).toLocaleDateString('en-IN')}`
+            : (row?.variantname || 'Milk Order'),
+          orderquantity: effectiveQty,
+          price: unitPrice,
+          amount,
+          quantity: regularQty,
+          regular_quantity: regularQty,
+          extra_quantity: extraQty,
+          cancelled_quantity: cancelledQty,
+          total_quantity: totalQty,
+          imageurl: row?.imageurl || null,
+        };
+      });
     } catch (error) {
       return [];
     }
@@ -249,9 +300,20 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   };
 
   const calculateItemTotal = (item) => {
+    const explicitAmount = Number(item?.lineamount ?? item?.amount);
+    if (Number.isFinite(explicitAmount) && explicitAmount >= 0) return explicitAmount;
     const price = Number(item.price || 0);
     const quantity = Number(item.orderquantity || 1);
     return price * quantity;
+  };
+
+  const getMilkBreakdown = (item) => {
+    const regular = Number(item?.regular_quantity ?? item?.quantity ?? 0) || 0;
+    const extra = Number(item?.extra_quantity ?? item?.extra ?? 0) || 0;
+    const cancelled = Number(item?.cancelled_quantity ?? 0) || 0;
+    const totalRaw = Number(item?.total_quantity);
+    const total = Number.isFinite(totalRaw) ? totalRaw : (regular + extra);
+    return { regular, extra, cancelled, total };
   };
 
   const openMaps = (lat, lng) => {
@@ -550,8 +612,13 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
 
   const style = getOrderColor(type);
   const statusStyle = getStatusStyle();
+  const isMilkTypeOrder = [1, 2, 3].includes(Number(order?.isdailymilkuser || 0));
+  const computedItemSubtotal = orderItems.reduce((sum, item) => sum + calculateItemTotal(item), 0);
+  const itemSubtotal = isMilkTypeOrder && computedItemSubtotal > 0
+    ? computedItemSubtotal
+    : Number(order?.itemtotal || 0);
   const totalAmount =
-    Number(order?.itemtotal || 0) + Number(order?.deliverycharge || 0) + Number(order?.tax || 0);
+    Number(itemSubtotal || 0) + Number(order?.deliverycharge || 0) + Number(order?.tax || 0);
 
   const orderDisplayId =
     order?.dailymilkorderid ||
@@ -682,9 +749,12 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
         gpaynumber: refundGpayNumber.trim() || null,
         upiid: refundUpiId.trim() || null,
         bankholdername: refundBankHolderName.trim() || null,
+        accountholdername: refundBankHolderName.trim() || null,
         bankname: refundBankName.trim() || null,
         accountnumber: refundAccountNumber.trim() || null,
+        bankaccountnumber: refundAccountNumber.trim() || null,
         ifsccode: refundIfscCode.trim() || null,
+        ifsc: refundIfscCode.trim() || null,
         items,
         rcu: USER || order?.name || order?.userid || 'USER',
       };
@@ -853,6 +923,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
 
                 {orderItems.map((item, index) => {
                   const itemTotal = calculateItemTotal(item);
+                  const milkBreakdown = getMilkBreakdown(item);
                   return (
                     <View
                       key={index}
@@ -884,6 +955,39 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                           </Text>
                           <Text className="text-sm font-bold text-gray-900">₹{itemTotal}</Text>
                         </View>
+
+                        {[1, 2, 3].includes(Number(order?.isdailymilkuser || 0)) ? (
+                          <View className="flex-row flex-wrap mt-2">
+                            {milkBreakdown.regular > 0 ? (
+                              <View className="bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full mr-1.5 mb-1">
+                                <Text className="text-[10px] font-semibold text-blue-700">
+                                  Regular {milkBreakdown.regular}L
+                                </Text>
+                              </View>
+                            ) : null}
+                            {milkBreakdown.extra > 0 ? (
+                              <View className="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full mr-1.5 mb-1">
+                                <Text className="text-[10px] font-semibold text-amber-700">
+                                  Extra {milkBreakdown.extra}L
+                                </Text>
+                              </View>
+                            ) : null}
+                            {milkBreakdown.cancelled > 0 ? (
+                              <View className="bg-red-50 border border-red-200 px-2 py-0.5 rounded-full mr-1.5 mb-1">
+                                <Text className="text-[10px] font-semibold text-red-700">
+                                  Cancelled {milkBreakdown.cancelled}L
+                                </Text>
+                              </View>
+                            ) : null}
+                            {milkBreakdown.total >= 0 ? (
+                              <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mb-1">
+                                <Text className="text-[10px] font-semibold text-emerald-700">
+                                  Final {milkBreakdown.total}L
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : null}
                       </View>
                     </View>
                   );
@@ -895,7 +999,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
 
                 <View className="flex-row justify-between mb-2">
                   <Text className="text-sm text-gray-600">Item Total</Text>
-                  <Text className="text-sm font-medium text-gray-800">₹{order.itemtotal || 0}</Text>
+                  <Text className="text-sm font-medium text-gray-800">₹{itemSubtotal || 0}</Text>
                 </View>
 
                 <View className="flex-row justify-between mb-2">
@@ -998,151 +1102,169 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
         </View>
       </View>
 
-      <Modal visible={showReturnModal} transparent animationType="slide">
-        <View className="flex-1 justify-center items-center bg-black/40 p-4">
-          <View className="bg-white w-full max-w-md rounded-3xl p-5 max-h-[80%]">
-            <View className="flex-row items-center mb-3">
-              <View className="w-10 h-10 rounded-full bg-orange-50 items-center justify-center">
-                <Icon name="backup-restore" size={22} color="#C2410C" />
+      <Modal visible={showReturnModal} transparent animationType="slide" onRequestClose={() => setShowReturnModal(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <View className="flex-1 justify-center items-center bg-black/40 p-4">
+            <View style={{ width: '100%', maxWidth: 520, maxHeight: '92%' }} className="bg-white rounded-3xl overflow-hidden">
+              <View className="px-5 pt-5 pb-3 border-b border-gray-100">
+                <View className="flex-row items-center">
+                  <View className="w-10 h-10 rounded-full bg-orange-50 items-center justify-center">
+                    <Icon name="backup-restore" size={22} color="#C2410C" />
+                  </View>
+                  <Text className="text-lg font-extrabold text-gray-900 ml-3">Return Order</Text>
+                </View>
+
+                <Text className="text-sm text-gray-600 mt-2">
+                  Select the products you want to return from this order.
+                </Text>
               </View>
-              <Text className="text-lg font-extrabold text-gray-900 ml-3">Return Order</Text>
-            </View>
 
-            <Text className="text-sm text-gray-600 mb-3">
-              Select the products you want to return from this order.
-            </Text>
+              <ScrollView
+                style={{ maxHeight: RETURN_MODAL_BODY_MAX_HEIGHT }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {orderItems.length === 0 ? (
+                  <View className="border border-gray-200 rounded-xl p-4 bg-gray-50 mb-2">
+                    <Text className="text-xs text-gray-600">No returnable items available for this order.</Text>
+                  </View>
+                ) : (
+                  orderItems.map((item, index) => {
+                    const checked = !!returnSelections[index];
+                    return (
+                      <TouchableOpacity
+                        key={`${item?.productid || item?.variantid || 'item'}-${index}`}
+                        className={`flex-row items-center p-3 rounded-xl border mb-2 ${checked ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white'
+                          }`}
+                        onPress={() => toggleReturnSelection(index)}
+                        activeOpacity={0.85}
+                      >
+                        <Icon
+                          name={checked ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                          size={22}
+                          color={checked ? '#EA580C' : '#6B7280'}
+                        />
+                        <View className="ml-3 flex-1">
+                          <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
+                            {item?.productname || 'Product'}
+                          </Text>
+                          <Text className="text-xs text-gray-500 mt-0.5">
+                            Qty: {item?.orderquantity || 1} • ₹{item?.price || 0}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
 
-            <ScrollView className="max-h-[320px]">
-              {orderItems.map((item, index) => {
-                const checked = !!returnSelections[index];
-                return (
+                <TextInput
+                  value={returnReason}
+                  onChangeText={setReturnReason}
+                  placeholder="Reason for return (required)"
+                  multiline
+                  numberOfLines={2}
+                  textAlignVertical="top"
+                  className="border border-gray-300 rounded-2xl p-3 text-gray-800 mt-2 bg-gray-50"
+                />
+
+                <View className="mt-3">
+                  <Text className="text-xs font-semibold text-gray-700 mb-2">Refund Method</Text>
+                  <View className="flex-row">
+                    {['BankTransfer', 'GPay', 'Cash'].map((method) => {
+                      const active = refundMethod === method;
+                      return (
+                        <TouchableOpacity
+                          key={method}
+                          onPress={() => setRefundMethod(method)}
+                          className={`mr-2 px-3 py-1.5 rounded-full border ${active ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
+                            }`}
+                        >
+                          <Text className={`text-[11px] font-semibold ${active ? 'text-white' : 'text-gray-700'}`}>
+                            {method === 'BankTransfer' ? 'Bank' : method}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {refundMethod === 'GPay' ? (
+                  <View className="mt-2">
+                    <TextInput
+                      value={refundGpayNumber}
+                      onChangeText={setRefundGpayNumber}
+                      placeholder="GPay Number"
+                      keyboardType="phone-pad"
+                      className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50"
+                    />
+                    <TextInput
+                      value={refundUpiId}
+                      onChangeText={setRefundUpiId}
+                      placeholder="UPI ID"
+                      autoCapitalize="none"
+                      className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50 mt-2"
+                    />
+                  </View>
+                ) : null}
+
+                {refundMethod === 'BankTransfer' ? (
+                  <View className="mt-2">
+                    <TextInput
+                      value={refundBankHolderName}
+                      onChangeText={setRefundBankHolderName}
+                      placeholder="Account Holder Name"
+                      className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50"
+                    />
+                    <TextInput
+                      value={refundBankName}
+                      onChangeText={setRefundBankName}
+                      placeholder="Bank Name"
+                      className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50 mt-2"
+                    />
+                    <TextInput
+                      value={refundAccountNumber}
+                      onChangeText={setRefundAccountNumber}
+                      placeholder="Account Number"
+                      keyboardType="number-pad"
+                      className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50 mt-2"
+                    />
+                    <TextInput
+                      value={refundIfscCode}
+                      onChangeText={setRefundIfscCode}
+                      placeholder="IFSC Code"
+                      autoCapitalize="characters"
+                      className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50 mt-2"
+                    />
+                  </View>
+                ) : null}
+
+                <View className="flex-row mt-4">
                   <TouchableOpacity
-                    key={`${item?.productid || item?.variantid || 'item'}-${index}`}
-                    className={`flex-row items-center p-3 rounded-xl border mb-2 ${checked ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white'
-                      }`}
-                    onPress={() => toggleReturnSelection(index)}
+                    onPress={() => setShowReturnModal(false)}
+                    className="flex-1 bg-gray-200 py-3 rounded-2xl mr-2"
                     activeOpacity={0.85}
                   >
-                    <Icon
-                      name={checked ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                      size={22}
-                      color={checked ? '#EA580C' : '#6B7280'}
-                    />
-                    <View className="ml-3 flex-1">
-                      <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
-                        {item?.productname || 'Product'}
-                      </Text>
-                      <Text className="text-xs text-gray-500 mt-0.5">
-                        Qty: {item?.orderquantity || 1} • ₹{item?.price || 0}
-                      </Text>
-                    </View>
+                    <Text className="text-gray-800 font-semibold text-center">Close</Text>
                   </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <TextInput
-              value={returnReason}
-              onChangeText={setReturnReason}
-              placeholder="Reason for return (required)"
-              multiline
-              numberOfLines={2}
-              textAlignVertical="top"
-              className="border border-gray-300 rounded-2xl p-3 text-gray-800 mt-2 bg-gray-50"
-            />
-
-            <View className="mt-3">
-              <Text className="text-xs font-semibold text-gray-700 mb-2">Refund Method</Text>
-              <View className="flex-row">
-                {['BankTransfer', 'GPay', 'Cash'].map((method) => {
-                  const active = refundMethod === method;
-                  return (
-                    <TouchableOpacity
-                      key={method}
-                      onPress={() => setRefundMethod(method)}
-                      className={`mr-2 px-3 py-1.5 rounded-full border ${active ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
-                        }`}
-                    >
-                      <Text className={`text-[11px] font-semibold ${active ? 'text-white' : 'text-gray-700'}`}>
-                        {method === 'BankTransfer' ? 'Bank' : method}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            {refundMethod === 'GPay' ? (
-              <View className="mt-2">
-                <TextInput
-                  value={refundGpayNumber}
-                  onChangeText={setRefundGpayNumber}
-                  placeholder="GPay Number"
-                  keyboardType="phone-pad"
-                  className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50"
-                />
-                <TextInput
-                  value={refundUpiId}
-                  onChangeText={setRefundUpiId}
-                  placeholder="UPI ID"
-                  autoCapitalize="none"
-                  className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50 mt-2"
-                />
-              </View>
-            ) : null}
-
-            {refundMethod === 'BankTransfer' ? (
-              <View className="mt-2">
-                <TextInput
-                  value={refundBankHolderName}
-                  onChangeText={setRefundBankHolderName}
-                  placeholder="Account Holder Name"
-                  className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50"
-                />
-                <TextInput
-                  value={refundBankName}
-                  onChangeText={setRefundBankName}
-                  placeholder="Bank Name"
-                  className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50 mt-2"
-                />
-                <TextInput
-                  value={refundAccountNumber}
-                  onChangeText={setRefundAccountNumber}
-                  placeholder="Account Number"
-                  keyboardType="number-pad"
-                  className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50 mt-2"
-                />
-                <TextInput
-                  value={refundIfscCode}
-                  onChangeText={setRefundIfscCode}
-                  placeholder="IFSC Code"
-                  autoCapitalize="characters"
-                  className="border border-gray-300 rounded-xl p-3 text-gray-800 bg-gray-50 mt-2"
-                />
-              </View>
-            ) : null}
-
-            <View className="flex-row mt-4">
-              <TouchableOpacity
-                onPress={() => setShowReturnModal(false)}
-                className="flex-1 bg-gray-200 py-3 rounded-2xl mr-2"
-                activeOpacity={0.85}
-              >
-                <Text className="text-gray-800 font-semibold text-center">Close</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={submitReturnRequest}
-                disabled={isSubmittingReturn}
-                className="flex-1 bg-orange-600 py-3 rounded-2xl ml-2"
-                activeOpacity={0.85}
-              >
-                <Text className="text-white font-semibold text-center">
-                  {isSubmittingReturn ? 'Submitting...' : 'Submit Return'}
-                </Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={submitReturnRequest}
+                    disabled={isSubmittingReturn}
+                    className="flex-1 bg-orange-600 py-3 rounded-2xl ml-2"
+                    activeOpacity={0.85}
+                  >
+                    <Text className="text-white font-semibold text-center">
+                      {isSubmittingReturn ? 'Submitting...' : 'Submit Return'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

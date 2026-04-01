@@ -192,9 +192,11 @@ const MyOrdersScreen = () => {
   });
 
   const getScreenTitle = () => {
-    if (isallorders) return 'All Orders';
-    if (ordertype === 'fast') return 'Fast Delivery Orders';
+
+   if (ordertype === 'fast') return 'Fast Delivery Orders';
     if (ordertype === 'dailymilk') return 'Daily Milk Orders';
+    if (isallorders) return 'All Orders';
+
     return 'My Orders';
   };
 
@@ -268,7 +270,7 @@ const MyOrdersScreen = () => {
 
       setTitle(getScreenTitle());
       setOrders(response);
-      console.log('Fetched orders:', response);
+      // console.log('Fetched orders:', response);
 
       try {
         const key = await getCacheKey();
@@ -583,16 +585,14 @@ const MyOrdersScreen = () => {
                   key={item.key}
                   onPress={() => setSelectedDateFilter(item.key)}
                   activeOpacity={0.85}
-                  className={`mr-2 px-2.5 py-1 rounded-full border ${
-                    isActive
+                  className={`mr-2 px-2.5 py-1 rounded-full border ${isActive
                       ? 'bg-blue-600 border-blue-600'
                       : 'bg-white border-gray-300'
-                  }`}
+                    }`}
                 >
                   <Text
-                    className={`text-[11px] font-semibold ${
-                      isActive ? 'text-white' : 'text-gray-700'
-                    }`}
+                    className={`text-[11px] font-semibold ${isActive ? 'text-white' : 'text-gray-700'
+                      }`}
                   >
                     {item.label}
                   </Text>
@@ -706,7 +706,7 @@ const MyOrdersScreen = () => {
           <View className="pb-4">
             {visibleOrders.map((order, index) => (
               <Animated.View
-                key={order.productorderid || order.orderid || index}
+                key={order.productorderid + index || order.orderid + index || index}
                 entering={FadeIn.delay(index * 60)}
                 className="mb-2"
               >

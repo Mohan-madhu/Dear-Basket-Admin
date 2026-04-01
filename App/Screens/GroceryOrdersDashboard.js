@@ -1083,6 +1083,7 @@ const GroceryTabContent = ({ navigation, orderType, onSummaryChange }) => {
         setLoading(true, "Fetching grocery orders dashboard...");
       }
 
+      console.log("Fetching data with URL:", buildUrl());
       const res = await API.GET(buildUrl());
 
       const payload = {

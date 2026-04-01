@@ -4,7 +4,6 @@ import Animated, {
   FadeIn,
   FadeOut,
   Layout,
-  SlideInRight,
 } from "react-native-reanimated";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
@@ -31,6 +30,38 @@ const toISODate = (date) => {
 
 const litresText = (value) => `${Number(value || 0).toFixed(2)}L`;
 const amountText = (value) => `₹${Number(value || 0).toFixed(2)}`;
+const toNumber = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const getRegularQty = (row) => toNumber(row?.regular_quantity ?? row?.quantity);
+const getExtraQty = (row) => toNumber(row?.extra_quantity ?? row?.extra);
+const getCancelledQty = (row) => toNumber(row?.cancelled_quantity);
+const getTotalQty = (row) => {
+  const total = toNumber(row?.total_quantity);
+  if (total > 0 || getCancelledQty(row) > 0 || Number(row?.cancelled) === 1) {
+    return total;
+  }
+  return getRegularQty(row) + getExtraQty(row);
+};
+const getUnitPrice = (row) => {
+  const regularQty = getRegularQty(row);
+  const amount = toNumber(row?.amount);
+  return regularQty > 0 ? amount / regularQty : 0;
+};
+const getEffectiveAmount = (row) => getUnitPrice(row) * getTotalQty(row);
+const getQtyByFilter = (row, filterType) => {
+  if (filterType === "daily") return isCancelledRow(row) ? 0 : getRegularQty(row);
+  if (filterType === "extra") return isCancelledRow(row) ? 0 : getExtraQty(row);
+  if (filterType === "cancelled") return getCancelledQty(row);
+  return getTotalQty(row);
+};
+const getAmountByFilter = (row, filterType) => getUnitPrice(row) * getQtyByFilter(row, filterType);
+
+const isCancelledRow = (row) => Number(row?.cancelled) === 1 || getCancelledQty(row) > 0;
+const hasExtraQty = (row) => getExtraQty(row) > 0;
+const hasRegularQty = (row) => getRegularQty(row) > 0;
 
 const getDateRangeByType = (type) => {
   const today = new Date();
@@ -64,14 +95,16 @@ const getDateRangeByType = (type) => {
   }
 };
 
-const getEntryType = (row) => {
-  if (Number(row.cancelled) === 1) return "cancelled";
-  if (Number(row.extra) === 1) return "extra";
-  return "daily";
+const matchesEntryFilter = (row, filterType) => {
+  if (filterType === "all") return true;
+  if (filterType === "cancelled") return isCancelledRow(row);
+  if (filterType === "extra") return !isCancelledRow(row) && hasExtraQty(row);
+  if (filterType === "daily") return !isCancelledRow(row) && hasRegularQty(row);
+  return true;
 };
 
-const getStatusMeta = (row) => {
-  if (Number(row.cancelled) === 1) {
+const getStatusMetaByType = (entryType) => {
+  if (entryType === "cancelled") {
     return {
       text: "Cancelled",
       wrap: "bg-red-50 border-red-100",
@@ -81,7 +114,7 @@ const getStatusMeta = (row) => {
     };
   }
 
-  if (Number(row.extra) === 1) {
+  if (entryType === "extra") {
     return {
       text: "Extra Milk",
       wrap: "bg-amber-50 border-amber-100",
@@ -98,6 +131,55 @@ const getStatusMeta = (row) => {
     icon: "local-drink",
     iconColor: "#10b981",
   };
+};
+
+const splitRowToEntries = (row) => {
+  const entries = [];
+  const regularQty = getRegularQty(row);
+  const extraQty = getExtraQty(row);
+  const cancelledQty = getCancelledQty(row);
+  const unitPrice = getUnitPrice(row);
+
+  if (isCancelledRow(row)) {
+    if (cancelledQty > 0) {
+      entries.push({
+        ...row,
+        entryType: "cancelled",
+        displayQuantity: cancelledQty,
+        displayAmount: unitPrice * cancelledQty,
+      });
+    }
+    return entries;
+  }
+
+  if (regularQty > 0) {
+    entries.push({
+      ...row,
+      entryType: "daily",
+      displayQuantity: regularQty,
+      displayAmount: unitPrice * regularQty,
+    });
+  }
+
+  if (extraQty > 0) {
+    entries.push({
+      ...row,
+      entryType: "extra",
+      displayQuantity: extraQty,
+      displayAmount: unitPrice * extraQty,
+    });
+  }
+
+  if (!entries.length) {
+    entries.push({
+      ...row,
+      entryType: "daily",
+      displayQuantity: getTotalQty(row),
+      displayAmount: getEffectiveAmount(row),
+    });
+  }
+
+  return entries;
 };
 
 /* ----------------------------- FILTERS ----------------------------- */
@@ -213,25 +295,24 @@ const CompactStatCard = ({ title, value, subValue, icon, tint }) => {
 const DashboardSummary = ({ data, rangeLabel, fromDate, toDate }) => {
   const summary = useMemo(() => {
     const dailyRows = data.filter(
-      (x) => Number(x.cancelled) !== 1 && Number(x.extra) !== 1
+      (x) => !isCancelledRow(x) && getRegularQty(x) > 0
     );
     const extraRows = data.filter(
-      (x) => Number(x.cancelled) !== 1 && Number(x.extra) === 1
+      (x) => !isCancelledRow(x) && getExtraQty(x) > 0
     );
-    const cancelledRows = data.filter((x) => Number(x.cancelled) === 1);
+    const cancelledRows = data.filter((x) => isCancelledRow(x));
 
     const uniqueCount = (rows) => new Set(rows.map((x) => x.userid)).size;
-    const sumQty = (rows, key) =>
-      rows.reduce((sum, row) => sum + Number(row[key] || row.quantity || 0), 0);
+    const sumQty = (rows, getQtyFn) => rows.reduce((sum, row) => sum + getQtyFn(row), 0);
 
     const dailyMilkUsers = uniqueCount(dailyRows);
     const extraMilkUsers = uniqueCount(extraRows);
     const cancelledUsers = uniqueCount(cancelledRows);
 
-    const dailyMilkLitres = sumQty(dailyRows, "regular_quantity");
-    const extraMilkLitres = sumQty(extraRows, "extra_quantity");
-    const cancelledLitres = sumQty(cancelledRows, "cancelled_quantity");
-    const totalFinalLitres = dailyMilkLitres + extraMilkLitres;
+    const dailyMilkLitres = sumQty(data, (row) => (isCancelledRow(row) ? 0 : getRegularQty(row)));
+    const extraMilkLitres = sumQty(data, (row) => (isCancelledRow(row) ? 0 : getExtraQty(row)));
+    const cancelledLitres = sumQty(data, getCancelledQty);
+    const totalFinalLitres = sumQty(data, getTotalQty);
 
     return {
       dailyMilkUsers,
@@ -297,47 +378,50 @@ const DashboardSummary = ({ data, rangeLabel, fromDate, toDate }) => {
 
 /* ----------------------------- ROW CARD ----------------------------- */
 
-const DailyEntryCard = ({ row }) => {
-  const status = getStatusMeta(row);
+const DailyEntryCard = ({ entry, showMeta = true }) => {
+  const status = getStatusMetaByType(entry.entryType);
 
   return (
     <Animated.View
       entering={FadeIn.duration(180)}
       exiting={FadeOut.duration(120)}
       layout={Layout.springify()}
-      className="bg-gray-50 border border-gray-100 rounded-2xl p-3 mb-2.5"
+      className="bg-white border border-gray-100 rounded-xl px-2.5 py-2 mb-2"
     >
-      <View className="flex-row justify-between items-start mb-3">
-        <View className="flex-1 pr-3">
-          <Text className="text-sm font-bold text-gray-900">
-            {formatDate(row.date)}
-          </Text>
-          <Text className="text-[11px] text-gray-500 mt-1">
-            {row.orderid || "N/A"}
-          </Text>
-        </View>
+      {showMeta ? (
+        <View className="flex-row justify-between items-center mb-2">
+          <View className="flex-1 pr-3">
+            <Text className="text-xs font-bold text-gray-900">
+              {formatDate(entry.date)}
+            </Text>
+            <Text className="text-[10px] text-gray-500 mt-0.5">
+              {entry.orderid || "N/A"}
+            </Text>
+          </View>
 
-        <View className={`px-3 py-1.5 rounded-full border ${status.wrap}`}>
-          <Text className={`text-[11px] font-semibold ${status.textColor}`}>
-            {status.text}
-          </Text>
+          <View className={`px-2.5 py-1 rounded-full border ${status.wrap}`}>
+            <Text className={`text-[10px] font-semibold ${status.textColor}`}>
+              {status.text}
+            </Text>
+          </View>
         </View>
-      </View>
+      ) : (
+        <View className="items-end mb-1.5">
+          <View className={`px-2.5 py-1 rounded-full border ${status.wrap}`}>
+            <Text className={`text-[10px] font-semibold ${status.textColor}`}>
+              {status.text}
+            </Text>
+          </View>
+        </View>
+      )}
 
-      <View className="flex-row justify-between">
-        <View className="bg-white border border-gray-100 rounded-xl px-3 py-2 flex-1 mr-2">
-          <Text className="text-[11px] text-gray-500">Quantity</Text>
-          <Text className="text-sm font-bold text-gray-900 mt-1">
-            {litresText(row.quantity)}
-          </Text>
-        </View>
-
-        <View className="bg-white border border-gray-100 rounded-xl px-3 py-2 flex-1">
-          <Text className="text-[11px] text-gray-500">Amount</Text>
-          <Text className="text-sm font-bold text-gray-900 mt-1">
-            {amountText(row.amount)}
-          </Text>
-        </View>
+      <View className="flex-row items-center justify-between">
+        <Text className="text-[11px] text-gray-600">
+          Qty <Text className="font-bold text-gray-900">{litresText(entry.displayQuantity)}</Text>
+        </Text>
+        <Text className="text-[11px] text-gray-600">
+          Amt <Text className="font-bold text-gray-900">{amountText(entry.displayAmount)}</Text>
+        </Text>
       </View>
     </Animated.View>
   );
@@ -346,26 +430,27 @@ const DailyEntryCard = ({ row }) => {
 /* ----------------------------- USER DETAILS ----------------------------- */
 
 const UserDetailsCard = ({ userData, entryFilter }) => {
-  const filteredRows = useMemo(() => {
-    if (entryFilter === "all") return userData.rows || [];
-    return (userData.rows || []).filter((row) => getEntryType(row) === entryFilter);
+  const filteredEntries = useMemo(() => {
+    const allEntries = (userData.rows || []).flatMap((row) => splitRowToEntries(row));
+    if (entryFilter === "all") return allEntries;
+    return allEntries.filter((entry) => entry.entryType === entryFilter);
   }, [userData.rows, entryFilter]);
 
   const summary = useMemo(() => {
-    const regularLitres = filteredRows
-      .filter((x) => Number(x.cancelled) !== 1 && Number(x.extra) !== 1)
-      .reduce((sum, x) => sum + Number(x.regular_quantity || x.quantity || 0), 0);
+    const regularLitres = filteredEntries
+      .filter((x) => x.entryType === "daily")
+      .reduce((sum, x) => sum + toNumber(x.displayQuantity), 0);
 
-    const extraLitres = filteredRows
-      .filter((x) => Number(x.cancelled) !== 1 && Number(x.extra) === 1)
-      .reduce((sum, x) => sum + Number(x.extra_quantity || x.quantity || 0), 0);
+    const extraLitres = filteredEntries
+      .filter((x) => x.entryType === "extra")
+      .reduce((sum, x) => sum + toNumber(x.displayQuantity), 0);
 
-    const cancelledLitres = filteredRows
-      .filter((x) => Number(x.cancelled) === 1)
-      .reduce((sum, x) => sum + Number(x.cancelled_quantity || x.quantity || 0), 0);
+    const cancelledLitres = filteredEntries
+      .filter((x) => x.entryType === "cancelled")
+      .reduce((sum, x) => sum + toNumber(x.displayQuantity), 0);
 
-    const totalAmount = filteredRows.reduce(
-      (sum, x) => sum + Number(x.amount || 0),
+    const totalAmount = filteredEntries.reduce(
+      (sum, x) => sum + toNumber(x.displayAmount),
       0
     );
 
@@ -375,7 +460,19 @@ const UserDetailsCard = ({ userData, entryFilter }) => {
       cancelledLitres,
       totalAmount,
     };
-  }, [filteredRows]);
+  }, [filteredEntries]);
+
+  const isSameEntryGroup = (current, previous) => {
+    if (!current || !previous) return false;
+    if (current.transid && previous.transid) {
+      return current.transid === previous.transid;
+    }
+    return (
+      current.userid === previous.userid &&
+      current.orderid === previous.orderid &&
+      current.date === previous.date
+    );
+  };
 
   return (
     <Animated.View
@@ -384,73 +481,50 @@ const UserDetailsCard = ({ userData, entryFilter }) => {
       layout={Layout.springify()}
       className="mx-3 mb-3 mt-1 bg-white border border-gray-200 rounded-2xl overflow-hidden"
     >
-      <View className="p-3">
-        <View className="bg-slate-50 border border-slate-100 rounded-2xl p-3 mb-3">
-          <View className="flex-row items-center mb-2">
-            <Icon name="person" size={16} color="#2563eb" />
-            <Text className="text-sm font-semibold text-gray-900 ml-2">
+      <View className="p-2.5">
+        <View className="flex-row items-center justify-between mb-2">
+          <View className="flex-1 pr-2">
+            <Text className="text-sm font-semibold text-gray-900">
               {userData.username || "Unknown User"}
             </Text>
-          </View>
-
-          <View className="flex-row items-center mb-2">
-            <Icon name="badge" size={15} color="#8b5cf6" />
-            <Text className="text-xs text-gray-600 ml-2">
-              User ID: {userData.userid || "N/A"}
+            <Text className="text-[10px] text-gray-500 mt-0.5">
+              {userData.userid || "N/A"} • {userData.partnername || "Unknown Partner"} ({userData.mappedpartnerid || "N/A"})
             </Text>
           </View>
-
-          <View className="flex-row items-center">
-            <Icon name="groups" size={15} color="#10b981" />
-            <Text className="text-xs text-gray-600 ml-2 flex-1">
-              {userData.partnername || "Unknown Partner"} ({userData.mappedpartnerid || "N/A"})
-            </Text>
-          </View>
-        </View>
-
-        <View className="flex-row justify-between mb-3">
-          <View className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 mr-2">
-            <Text className="text-[10px] text-gray-500">Daily</Text>
-            <Text className="text-sm font-bold text-gray-900 mt-1">
-              {litresText(summary.regularLitres)}
-            </Text>
-          </View>
-
-          <View className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 mr-2">
-            <Text className="text-[10px] text-gray-500">Extra</Text>
-            <Text className="text-sm font-bold text-gray-900 mt-1">
-              {litresText(summary.extraLitres)}
-            </Text>
-          </View>
-
-          <View className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
-            <Text className="text-[10px] text-gray-500">Cancelled</Text>
-            <Text className="text-sm font-bold text-gray-900 mt-1">
-              {litresText(summary.cancelledLitres)}
-            </Text>
-          </View>
-        </View>
-
-        <View className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 mb-3">
-          <Text className="text-[11px] text-blue-600">Total Amount</Text>
-          <Text className="text-sm font-bold text-blue-800 mt-1">
+          <Text className="text-[11px] font-bold text-blue-700">
             {amountText(summary.totalAmount)}
           </Text>
         </View>
 
-        <Text className="text-sm font-bold text-gray-900 mb-2">Entries</Text>
+        <View className="flex-row items-center mb-2">
+          <View className="bg-emerald-50 px-2 py-1 rounded-full mr-1.5">
+            <Text className="text-[10px] font-semibold text-emerald-700">D {litresText(summary.regularLitres)}</Text>
+          </View>
+          <View className="bg-amber-50 px-2 py-1 rounded-full mr-1.5">
+            <Text className="text-[10px] font-semibold text-amber-700">E {litresText(summary.extraLitres)}</Text>
+          </View>
+          <View className="bg-red-50 px-2 py-1 rounded-full">
+            <Text className="text-[10px] font-semibold text-red-700">C {litresText(summary.cancelledLitres)}</Text>
+          </View>
+        </View>
 
-        {filteredRows.length === 0 ? (
-          <View className="bg-gray-50 border border-gray-100 rounded-xl py-5 items-center">
-            <Text className="text-gray-500 text-sm">No entries in this filter</Text>
+        {filteredEntries.length === 0 ? (
+          <View className="bg-gray-50 border border-gray-100 rounded-xl py-4 items-center">
+            <Text className="text-gray-500 text-xs">No entries in this filter</Text>
           </View>
         ) : (
-          filteredRows.map((row, index) => (
-            <DailyEntryCard
-              key={`${row.orderid}-${row.date}-${index}`}
-              row={row}
-            />
-          ))
+          filteredEntries.map((entry, index) => {
+            const prevEntry = filteredEntries[index - 1];
+            const showMeta = index === 0 || !isSameEntryGroup(entry, prevEntry);
+
+            return (
+              <DailyEntryCard
+                key={`${entry.orderid}-${entry.date}-${entry.entryType}-${index}`}
+                entry={entry}
+                showMeta={showMeta}
+              />
+            );
+          })
         )}
       </View>
     </Animated.View>
@@ -464,9 +538,111 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
   const [expandedUser, setExpandedUser] = useState(null);
 
   const filteredRows = useMemo(() => {
-    if (entryFilter === "all") return rows || [];
-    return (rows || []).filter((row) => getEntryType(row) === entryFilter);
+    return (rows || []).filter((row) => matchesEntryFilter(row, entryFilter));
   }, [rows, entryFilter]);
+
+  // const groupedPartners = useMemo(() => {
+  //   const partnerMap = {};
+
+  //   filteredRows.forEach((row) => {
+  //     const partnerKey = row.mappedpartnerid || "NO_PARTNER";
+
+  //     if (!partnerMap[partnerKey]) {
+  //       partnerMap[partnerKey] = {
+  //         mappedpartnerid: row.mappedpartnerid,
+  //         partnername: row.partnername || "Unknown Partner",
+  //         usersMap: {},
+  //       };
+  //     }
+
+  //     const userKey = row.userid || "NO_USER";
+
+  //     if (!partnerMap[partnerKey].usersMap[userKey]) {
+  //       partnerMap[partnerKey].usersMap[userKey] = {
+  //         userid: row.userid,
+  //         username: row.username || "Unknown User",
+  //         mappedpartnerid: row.mappedpartnerid,
+  //         partnername: row.partnername || "Unknown Partner",
+  //         rows: [],
+  //       };
+  //     }
+
+  //     partnerMap[partnerKey].usersMap[userKey].rows.push(row);
+  //   });
+
+  //   console.log("Partner Map:", partnerMap['369DP-B'].usersMap['369DU-E']);
+
+
+
+  //   return Object.values(partnerMap).map((partner) => {
+  //     const users = Object.values(partner.usersMap || {}).map((user) => {
+  //       const totalLitres = (user.rows || []).reduce(
+  //         (sum, x) => sum + Number(x.quantity || 0),
+  //         0
+  //       );
+
+  //       const totalAmount = (user.rows || []).reduce(
+  //         (sum, x) => sum + Number(x.amount || 0),
+  //         0
+  //       );
+
+  //       return {
+  //         ...user,
+  //         totalLitres,
+  //         totalAmount,
+  //       };
+  //     });
+
+  //     const partnerDailyLitres = users.reduce((sum, u) => {
+  //       const userDaily = (u.rows || [])
+  //         .filter((row) => Number(row.cancelled) !== 1 && Number(row.extra) !== 1)
+  //         .reduce(
+  //           (innerSum, row) =>
+  //             innerSum + Number(row.regular_quantity || row.quantity || 0),
+  //           0
+  //         );
+
+  //       return sum + userDaily;
+  //     }, 0);
+
+  //     const partnerExtraLitres = users.reduce((sum, u) => {
+  //       const userExtra = (u.rows || [])
+  //         .filter((row) => Number(row.cancelled) !== 1 && Number(row.extra) === 1)
+  //         .reduce(
+  //           (innerSum, row) =>
+  //             innerSum + Number(row.extra_quantity || row.quantity || 0),
+  //           0
+  //         );
+
+  //       return sum + userExtra;
+  //     }, 0);
+
+  //     const partnerCancelledLitres = users.reduce((sum, u) => {
+  //       const userCancelled = (u.rows || [])
+  //         .filter((row) => Number(row.cancelled) === 1)
+  //         .reduce(
+  //           (innerSum, row) =>
+  //             innerSum + Number(row.cancelled_quantity || row.quantity || 0),
+  //           0
+  //         );
+
+  //       return sum + userCancelled;
+  //     }, 0);
+
+  //     const partnerTotalLitres = partnerDailyLitres + partnerExtraLitres;
+
+  //     return {
+  //       mappedpartnerid: partner.mappedpartnerid,
+  //       partnername: partner.partnername,
+  //       users,
+  //       partnerDailyLitres,
+  //       partnerExtraLitres,
+  //       partnerCancelledLitres,
+  //       partnerTotalLitres,
+  //     };
+  //   });
+  // }, [filteredRows]);
+
 
   const groupedPartners = useMemo(() => {
     const partnerMap = {};
@@ -499,60 +675,50 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
 
     return Object.values(partnerMap).map((partner) => {
       const users = Object.values(partner.usersMap || {}).map((user) => {
-        const totalLitres = (user.rows || []).reduce(
-          (sum, x) => sum + Number(x.quantity || 0),
-          0
-        );
-
-        const totalAmount = (user.rows || []).reduce(
-          (sum, x) => sum + Number(x.amount || 0),
-          0
-        );
+        const totals = (user.rows || []).reduce((acc, row) => {
+          acc.totalLitres += getQtyByFilter(row, entryFilter);
+          acc.totalAmount += getAmountByFilter(row, entryFilter);
+          return acc;
+        }, { totalLitres: 0, totalAmount: 0 });
+        const visibleEntries = (user.rows || [])
+          .flatMap((row) => splitRowToEntries(row))
+          .filter((entry) => entryFilter === "all" || entry.entryType === entryFilter);
 
         return {
           ...user,
-          totalLitres,
-          totalAmount,
+          totalLitres: totals.totalLitres,
+          totalAmount: totals.totalAmount,
+          entriesCount: visibleEntries.length,
         };
       });
 
       const partnerDailyLitres = users.reduce((sum, u) => {
         const userDaily = (u.rows || [])
-          .filter((row) => Number(row.cancelled) !== 1 && Number(row.extra) !== 1)
-          .reduce(
-            (innerSum, row) =>
-              innerSum + Number(row.regular_quantity || row.quantity || 0),
-            0
-          );
+          .reduce((innerSum, row) => innerSum + (isCancelledRow(row) ? 0 : getRegularQty(row)), 0);
 
         return sum + userDaily;
       }, 0);
 
       const partnerExtraLitres = users.reduce((sum, u) => {
         const userExtra = (u.rows || [])
-          .filter((row) => Number(row.cancelled) !== 1 && Number(row.extra) === 1)
-          .reduce(
-            (innerSum, row) =>
-              innerSum + Number(row.extra_quantity || row.quantity || 0),
-            0
-          );
+          .reduce((innerSum, row) => innerSum + (isCancelledRow(row) ? 0 : getExtraQty(row)), 0);
 
         return sum + userExtra;
       }, 0);
 
       const partnerCancelledLitres = users.reduce((sum, u) => {
         const userCancelled = (u.rows || [])
-          .filter((row) => Number(row.cancelled) === 1)
-          .reduce(
-            (innerSum, row) =>
-              innerSum + Number(row.cancelled_quantity || row.quantity || 0),
-            0
-          );
+          .reduce((innerSum, row) => innerSum + getCancelledQty(row), 0);
 
         return sum + userCancelled;
       }, 0);
 
-      const partnerTotalLitres = partnerDailyLitres + partnerExtraLitres;
+      const partnerTotalLitres = users.reduce((sum, u) => sum + Number(u.totalLitres || 0), 0);
+
+      const partnerTotalAmount = users.reduce(
+        (sum, u) => sum + Number(u.totalAmount || 0),
+        0
+      );
 
       return {
         mappedpartnerid: partner.mappedpartnerid,
@@ -562,6 +728,7 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
         partnerExtraLitres,
         partnerCancelledLitres,
         partnerTotalLitres,
+        partnerTotalAmount,
       };
     });
   }, [filteredRows]);
@@ -629,47 +796,47 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
                   </Text>
                 </View>
 
-              <View className="items-end">
-  <View className="flex-row items-center mb-1.5">
-    <View className="bg-gray-100 px-3 py-1.5 rounded-full mr-2">
-      <Text className="text-[11px] font-semibold text-gray-700">
-        {partner.users.length} users
-      </Text>
-    </View>
+                <View className="items-end">
+                  <View className="flex-row items-center mb-1.5">
+                    <View className="bg-gray-100 px-3 py-1.5 rounded-full mr-2">
+                      <Text className="text-[11px] font-semibold text-gray-700">
+                        {partner.users.length} users
+                      </Text>
+                    </View>
 
-    <View className="bg-blue-50 px-3 py-1.5 rounded-full mr-2">
-      <Text className="text-[11px] font-semibold text-blue-700">
-        {litresText(partner.partnerTotalLitres)}
-      </Text>
-    </View>
+                    <View className="bg-blue-50 px-3 py-1.5 rounded-full mr-2">
+                      <Text className="text-[11px] font-semibold text-blue-700">
+                        {litresText(partner.partnerTotalLitres)}
+                      </Text>
+                    </View>
 
-    <Icon
-      name={isPartnerExpanded ? "expand-less" : "expand-more"}
-      size={24}
-      color="#4b5563"
-    />
-  </View>
+                    <Icon
+                      name={isPartnerExpanded ? "expand-less" : "expand-more"}
+                      size={24}
+                      color="#4b5563"
+                    />
+                  </View>
 
-  <View className="flex-row">
-    <View className="bg-emerald-50 px-2.5 py-1 rounded-full mr-1.5">
-      <Text className="text-[10px] font-semibold text-emerald-700">
-        D {litresText(partner.partnerDailyLitres)}
-      </Text>
-    </View>
+                  <View className="flex-row">
+                    <View className="bg-emerald-50 px-2.5 py-1 rounded-full mr-1.5">
+                      <Text className="text-[10px] font-semibold text-emerald-700">
+                        D {litresText(partner.partnerDailyLitres)}
+                      </Text>
+                    </View>
 
-    <View className="bg-amber-50 px-2.5 py-1 rounded-full mr-1.5">
-      <Text className="text-[10px] font-semibold text-amber-700">
-        E {litresText(partner.partnerExtraLitres)}
-      </Text>
-    </View>
+                    <View className="bg-amber-50 px-2.5 py-1 rounded-full mr-1.5">
+                      <Text className="text-[10px] font-semibold text-amber-700">
+                        E {litresText(partner.partnerExtraLitres)}
+                      </Text>
+                    </View>
 
-    <View className="bg-red-50 px-2.5 py-1 rounded-full">
-      <Text className="text-[10px] font-semibold text-red-700">
-        C {litresText(partner.partnerCancelledLitres)}
-      </Text>
-    </View>
-  </View>
-</View>
+                    <View className="bg-red-50 px-2.5 py-1 rounded-full">
+                      <Text className="text-[10px] font-semibold text-red-700">
+                        C {litresText(partner.partnerCancelledLitres)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
               </View>
             </TouchableOpacity>
 
@@ -703,7 +870,7 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
                               {user.userid || "N/A"}
                             </Text>
                             <Text className="text-[11px] text-gray-500 mt-1">
-                              {user.rows.length} entries
+                              {user.entriesCount} entries
                             </Text>
                           </View>
 

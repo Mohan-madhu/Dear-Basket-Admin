@@ -368,7 +368,11 @@ const ProductReturnAdminScreen = ({ navigation }) => {
         </View>
       </ScrollView>
 
-      <Modal visible={detailsVisible} animationType="slide">
+      <Modal
+        visible={detailsVisible}
+        animationType="slide"
+        onRequestClose={() => setDetailsVisible(false)}
+      >
         <View className="flex-1 bg-gray-100">
           <View className="bg-white px-3 pt-2 pb-2 border-b border-gray-200">
             <View className="flex-row items-center justify-between">
@@ -379,173 +383,177 @@ const ProductReturnAdminScreen = ({ navigation }) => {
               <View className="w-9 h-9" />
             </View>
           </View>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: 12, paddingBottom: 32 }}
+            showsVerticalScrollIndicator={false}
+          >
+              {/* ...existing code for modal content... */}
+              <View className="bg-white rounded-2xl border border-gray-200 p-3">
+                <Text className="text-xs text-gray-500">Return No</Text>
+                <Text className="text-sm font-bold text-gray-900">{selectedDetail?.Header?.returnnumber || selectedReturn?.returnnumber || 'N/A'}</Text>
+                <Text className="text-xs text-gray-500 mt-2">Status</Text>
+                <Text className="text-sm font-bold text-orange-700">{currentStatus || 'Requested'}</Text>
+                <Text className="text-xs text-gray-500 mt-2">Remarks</Text>
+                <TextInput
+                  value={remarks}
+                  onChangeText={setRemarks}
+                  placeholder="Optional admin remarks"
+                  className="mt-1 border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-900 bg-gray-50"
+                />
+              </View>
 
-          <ScrollView className="flex-1 p-3">
-            <View className="bg-white rounded-2xl border border-gray-200 p-3">
-              <Text className="text-xs text-gray-500">Return No</Text>
-              <Text className="text-sm font-bold text-gray-900">{selectedDetail?.Header?.returnnumber || selectedReturn?.returnnumber || 'N/A'}</Text>
-              <Text className="text-xs text-gray-500 mt-2">Status</Text>
-              <Text className="text-sm font-bold text-orange-700">{currentStatus || 'Requested'}</Text>
-              <Text className="text-xs text-gray-500 mt-2">Remarks</Text>
-              <TextInput
-                value={remarks}
-                onChangeText={setRemarks}
-                placeholder="Optional admin remarks"
-                className="mt-1 border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-900 bg-gray-50"
-              />
-            </View>
-
-            <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
-              <Text className="text-sm font-bold text-gray-900 mb-2">Return Items</Text>
-              {selectedDetail?.Details?.length ? (
-                selectedDetail.Details.map((d, i) => (
-                  <View key={d?.returndetailid || i} className="py-2 border-b border-gray-100">
-                    <Text className="text-xs font-semibold text-gray-900">{d?.productname || 'Product'}</Text>
-                    <Text className="text-[11px] text-gray-600">
-                      Qty {num(d?.returnqty)} • ₹{num(d?.lineamount)} • {d?.itemstatus || 'Requested'}
-                    </Text>
-                  </View>
-                ))
-              ) : (
-                <Text className="text-xs text-gray-500">No items found.</Text>
-              )}
-            </View>
-
-            <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
-              <Text className="text-sm font-bold text-gray-900 mb-2">Refund Preference</Text>
-              <Text className="text-[11px] text-gray-600">
-                Method: {selectedDetail?.Refund?.refundmethod || 'Not provided'}
-              </Text>
-              <Text className="text-[11px] text-gray-600 mt-1">
-                Amount: ₹{num(selectedDetail?.Refund?.refundamount || selectedDetail?.Header?.totalreturnamount)}
-              </Text>
-              {selectedDetail?.Refund?.gpaynumber ? (
-                <Text className="text-[11px] text-gray-600 mt-1">
-                  GPay: {selectedDetail.Refund.gpaynumber}
-                </Text>
-              ) : null}
-              {selectedDetail?.Refund?.upiid ? (
-                <Text className="text-[11px] text-gray-600 mt-1">
-                  UPI: {selectedDetail.Refund.upiid}
-                </Text>
-              ) : null}
-              {selectedDetail?.Refund?.bankholdername ? (
-                <Text className="text-[11px] text-gray-600 mt-1">
-                  Holder: {selectedDetail.Refund.bankholdername}
-                </Text>
-              ) : null}
-              {selectedDetail?.Refund?.bankname ? (
-                <Text className="text-[11px] text-gray-600 mt-1">
-                  Bank: {selectedDetail.Refund.bankname}
-                </Text>
-              ) : null}
-              {selectedDetail?.Refund?.accountnumber ? (
-                <Text className="text-[11px] text-gray-600 mt-1">
-                  A/C: {selectedDetail.Refund.accountnumber}
-                </Text>
-              ) : null}
-              {selectedDetail?.Refund?.ifsccode ? (
-                <Text className="text-[11px] text-gray-600 mt-1">
-                  IFSC: {selectedDetail.Refund.ifsccode}
-                </Text>
-              ) : null}
-            </View>
-
-            <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
-              <Text className="text-sm font-bold text-gray-900 mb-2">Timeline</Text>
-              {timelineEntries.length > 0 ? (
-                timelineEntries.map((entry, idx) => (
-                  <View
-                    key={entry?.returnstatusid || `${entry?.newstatus || 'status'}-${idx}`}
-                    className="flex-row mb-2"
-                  >
-                    <View className="items-center mr-2.5">
-                      <View className="w-2.5 h-2.5 rounded-full bg-blue-500 mt-1" />
-                      {idx !== timelineEntries.length - 1 ? (
-                        <View className="w-0.5 flex-1 bg-blue-200 mt-1" />
-                      ) : null}
-                    </View>
-                    <View className="flex-1 pb-1">
-                      <Text className="text-xs font-semibold text-gray-900">
-                        {entry?.newstatus || 'Status Updated'}
+              <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
+                <Text className="text-sm font-bold text-gray-900 mb-2">Return Items</Text>
+                {selectedDetail?.Details?.length ? (
+                  selectedDetail.Details.map((d, i) => (
+                    <View key={d?.returndetailid || i} className="py-2 border-b border-gray-100">
+                      <Text className="text-xs font-semibold text-gray-900">{d?.productname || 'Product'}</Text>
+                      <Text className="text-[11px] text-gray-600">
+                        Qty {num(d?.returnqty)} • ₹{num(d?.lineamount)} • {d?.itemstatus || 'Requested'}
                       </Text>
-                      <Text className="text-[11px] text-gray-600 mt-0.5">
-                        {formatDateTime(entry?.changedtime)}
-                      </Text>
-                      {entry?.changedby ? (
-                        <Text className="text-[11px] text-gray-600 mt-0.5">
-                          By: {entry.changedby}
-                        </Text>
-                      ) : null}
-                      {entry?.remarks ? (
-                        <Text className="text-[11px] text-gray-600 mt-0.5">
-                          {entry.remarks}
-                        </Text>
-                      ) : null}
                     </View>
+                  ))
+                ) : (
+                  <Text className="text-xs text-gray-500">No items found.</Text>
+                )}
+              </View>
+
+              <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
+                <Text className="text-sm font-bold text-gray-900 mb-2">Refund Preference</Text>
+                <Text className="text-[11px] text-gray-600">
+                  Method: {selectedDetail?.Refund?.refundmethod || 'Not provided'}
+                </Text>
+                <Text className="text-[11px] text-gray-600 mt-1">
+                  Amount: ₹{num(selectedDetail?.Refund?.refundamount || selectedDetail?.Header?.totalreturnamount)}
+                </Text>
+                {selectedDetail?.Refund?.gpaynumber ? (
+                  <Text className="text-[11px] text-gray-600 mt-1">
+                    GPay: {selectedDetail.Refund.gpaynumber}
+                  </Text>
+                ) : null}
+                {selectedDetail?.Refund?.upiid ? (
+                  <Text className="text-[11px] text-gray-600 mt-1">
+                    UPI: {selectedDetail.Refund.upiid}
+                  </Text>
+                ) : null}
+                {selectedDetail?.Refund?.bankholdername ? (
+                  <Text className="text-[11px] text-gray-600 mt-1">
+                    Holder: {selectedDetail.Refund.bankholdername}
+                  </Text>
+                ) : null}
+                {selectedDetail?.Refund?.bankname ? (
+                  <Text className="text-[11px] text-gray-600 mt-1">
+                    Bank: {selectedDetail.Refund.bankname}
+                  </Text>
+                ) : null}
+                {selectedDetail?.Refund?.accountnumber ? (
+                  <Text className="text-[11px] text-gray-600 mt-1">
+                    A/C: {selectedDetail.Refund.accountnumber}
+                  </Text>
+                ) : null}
+                {selectedDetail?.Refund?.ifsccode ? (
+                  <Text className="text-[11px] text-gray-600 mt-1">
+                    IFSC: {selectedDetail.Refund.ifsccode}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
+                <Text className="text-sm font-bold text-gray-900 mb-2">Timeline</Text>
+                {timelineEntries.length > 0 ? (
+                  timelineEntries.map((entry, idx) => (
+                    <View
+                      key={entry?.returnstatusid || `${entry?.newstatus || 'status'}-${idx}`}
+                      className="flex-row mb-2"
+                    >
+                      <View className="items-center mr-2.5">
+                        <View className="w-2.5 h-2.5 rounded-full bg-blue-500 mt-1" />
+                        {idx !== timelineEntries.length - 1 ? (
+                          <View className="w-0.5 flex-1 bg-blue-200 mt-1" />
+                        ) : null}
+                      </View>
+                      <View className="flex-1 pb-1">
+                        <Text className="text-xs font-semibold text-gray-900">
+                          {entry?.newstatus || 'Status Updated'}
+                        </Text>
+                        <Text className="text-[11px] text-gray-600 mt-0.5">
+                          {formatDateTime(entry?.changedtime)}
+                        </Text>
+                        {entry?.changedby ? (
+                          <Text className="text-[11px] text-gray-600 mt-0.5">
+                            By: {entry.changedby}
+                          </Text>
+                        ) : null}
+                        {entry?.remarks ? (
+                          <Text className="text-[11px] text-gray-600 mt-0.5">
+                            {entry.remarks}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  ))
+                ) : (
+                  <Text className="text-xs text-gray-500">No timeline updates yet.</Text>
+                )}
+              </View>
+
+              <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
+                <Text className="text-sm font-bold text-gray-900 mb-2">Actions</Text>
+
+                {currentStatus === 'Requested' ? (
+                  <View className="flex-row">
+                    <TouchableOpacity onPress={() => runReview('APPROVE')} className="flex-1 bg-green-600 py-2 rounded-xl mr-1.5">
+                      <Text className="text-white text-center font-semibold text-xs">Approve</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => runReview('REJECT')} className="flex-1 bg-red-600 py-2 rounded-xl ml-1.5">
+                      <Text className="text-white text-center font-semibold text-xs">Reject</Text>
+                    </TouchableOpacity>
                   </View>
-                ))
-              ) : (
-                <Text className="text-xs text-gray-500">No timeline updates yet.</Text>
-              )}
-            </View>
+                ) : null}
 
-            <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
-              <Text className="text-sm font-bold text-gray-900 mb-2">Actions</Text>
-
-              {currentStatus === 'Requested' ? (
-                <View className="flex-row">
-                  <TouchableOpacity onPress={() => runReview('APPROVE')} className="flex-1 bg-green-600 py-2 rounded-xl mr-1.5">
-                    <Text className="text-white text-center font-semibold text-xs">Approve</Text>
+                {currentStatus === 'Approved' ? (
+                  <TouchableOpacity onPress={() => runStatus('PickupScheduled')} className="mt-2 bg-blue-600 py-2 rounded-xl">
+                    <Text className="text-white text-center font-semibold text-xs">Mark Pickup Scheduled</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => runReview('REJECT')} className="flex-1 bg-red-600 py-2 rounded-xl ml-1.5">
-                    <Text className="text-white text-center font-semibold text-xs">Reject</Text>
+                ) : null}
+
+                {currentStatus === 'PickupScheduled' ? (
+                  <TouchableOpacity onPress={() => runStatus('PickedUp')} className="mt-2 bg-blue-600 py-2 rounded-xl">
+                    <Text className="text-white text-center font-semibold text-xs">Mark Picked Up</Text>
                   </TouchableOpacity>
-                </View>
-              ) : null}
+                ) : null}
 
-              {currentStatus === 'Approved' ? (
-                <TouchableOpacity onPress={() => runStatus('PickupScheduled')} className="mt-2 bg-blue-600 py-2 rounded-xl">
-                  <Text className="text-white text-center font-semibold text-xs">Mark Pickup Scheduled</Text>
-                </TouchableOpacity>
-              ) : null}
+                {currentStatus === 'PickedUp' ? (
+                  <TouchableOpacity onPress={() => runStatus('ReceivedAtHub')} className="mt-2 bg-blue-600 py-2 rounded-xl">
+                    <Text className="text-white text-center font-semibold text-xs">Mark Received At Hub</Text>
+                  </TouchableOpacity>
+                ) : null}
 
-              {currentStatus === 'PickupScheduled' ? (
-                <TouchableOpacity onPress={() => runStatus('PickedUp')} className="mt-2 bg-blue-600 py-2 rounded-xl">
-                  <Text className="text-white text-center font-semibold text-xs">Mark Picked Up</Text>
-                </TouchableOpacity>
-              ) : null}
+                {currentStatus === 'ReceivedAtHub' ? (
+                  <TouchableOpacity onPress={() => runStatus('QCInProgress')} className="mt-2 bg-amber-600 py-2 rounded-xl">
+                    <Text className="text-white text-center font-semibold text-xs">Start QC</Text>
+                  </TouchableOpacity>
+                ) : null}
 
-              {currentStatus === 'PickedUp' ? (
-                <TouchableOpacity onPress={() => runStatus('ReceivedAtHub')} className="mt-2 bg-blue-600 py-2 rounded-xl">
-                  <Text className="text-white text-center font-semibold text-xs">Mark Received At Hub</Text>
-                </TouchableOpacity>
-              ) : null}
+                {currentStatus === 'QCInProgress' ? (
+                  <TouchableOpacity onPress={() => runStatus('RefundInitiated')} className="mt-2 bg-purple-600 py-2 rounded-xl">
+                    <Text className="text-white text-center font-semibold text-xs">Initiate Refund</Text>
+                  </TouchableOpacity>
+                ) : null}
 
-              {currentStatus === 'ReceivedAtHub' ? (
-                <TouchableOpacity onPress={() => runStatus('QCInProgress')} className="mt-2 bg-amber-600 py-2 rounded-xl">
-                  <Text className="text-white text-center font-semibold text-xs">Start QC</Text>
-                </TouchableOpacity>
-              ) : null}
+                {currentStatus === 'RefundInitiated' ? (
+                  <TouchableOpacity onPress={runRefundSuccessCash} className="mt-2 bg-green-600 py-2 rounded-xl">
+                    <Text className="text-white text-center font-semibold text-xs">Mark Refund Success (Cash)</Text>
+                  </TouchableOpacity>
+                ) : null}
 
-              {currentStatus === 'QCInProgress' ? (
-                <TouchableOpacity onPress={() => runStatus('RefundInitiated')} className="mt-2 bg-purple-600 py-2 rounded-xl">
-                  <Text className="text-white text-center font-semibold text-xs">Initiate Refund</Text>
-                </TouchableOpacity>
-              ) : null}
-
-              {currentStatus === 'RefundInitiated' ? (
-                <TouchableOpacity onPress={runRefundSuccessCash} className="mt-2 bg-green-600 py-2 rounded-xl">
-                  <Text className="text-white text-center font-semibold text-xs">Mark Refund Success (Cash)</Text>
-                </TouchableOpacity>
-              ) : null}
-
-              {currentStatus === 'Refunded' ? (
-                <TouchableOpacity onPress={() => runStatus('Closed')} className="mt-2 bg-gray-700 py-2 rounded-xl">
-                  <Text className="text-white text-center font-semibold text-xs">Close Return</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
+                {currentStatus === 'Refunded' ? (
+                  <TouchableOpacity onPress={() => runStatus('Closed')} className="mt-2 bg-gray-700 py-2 rounded-xl">
+                    <Text className="text-white text-center font-semibold text-xs">Close Return</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
           </ScrollView>
         </View>
       </Modal>

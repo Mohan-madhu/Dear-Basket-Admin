@@ -440,6 +440,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   };
 
   const getOrderColor = (type) => {
+
     return TYPE_STYLES[type] || TYPE_STYLES['Fast Grocery Delivery'];
   };
 
@@ -527,7 +528,27 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     </View>
   );
 
-  const style = getOrderColor(order?.type);
+  
+  let type = '';
+
+  switch (order.isdailymilkuser) {
+    case 1:
+      type = 'Daily Milk';
+      break;
+    case 0:
+      type = 'Fast Grocery Delivery';
+      break;
+    case 2:
+      type = 'Demo Daily Milk';
+      break;
+    case 3:
+      type = 'Daily Milk'; // Pure Daily Milk
+      break;
+    default:
+      type = 'Unknown';
+  }
+
+  const style = getOrderColor(type);
   const statusStyle = getStatusStyle();
   const totalAmount =
     Number(order?.itemtotal || 0) + Number(order?.deliverycharge || 0) + Number(order?.tax || 0);
@@ -716,11 +737,11 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
             <View className="flex-row items-center flex-wrap">
               <Text className="text-xs text-gray-500 font-medium">Order ID</Text>
 
-              {hasNewUpdates && (
+              {/* {hasNewUpdates && (
                 <View className="ml-2 px-2 py-0.5 rounded-full bg-red-50 border border-red-200">
                   <Text className="text-[10px] font-bold text-red-600">NEW UPDATE</Text>
                 </View>
-              )}
+              )} */}
             </View>
 
             <Text className="text-sm font-extrabold text-gray-900 mt-0.5">#{orderDisplayId || 'N/A'}</Text>
@@ -955,9 +976,8 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
               setExpanded(!expanded);
               if (hasNewUpdates) markAsViewed();
             }}
-            className={`flex-row items-center justify-center bg-gray-50 rounded-xl py-2 ${
-              isReturnEligible ? 'flex-1 mr-2' : 'w-full'
-            }`}
+            className={`flex-row items-center justify-center bg-gray-50 rounded-xl py-2 ${isReturnEligible ? 'flex-1 mr-2' : 'w-full'
+              }`}
             activeOpacity={0.85}
           >
             <Text className="text-blue-600 text-xs font-semibold mr-1.5">
@@ -998,9 +1018,8 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                 return (
                   <TouchableOpacity
                     key={`${item?.productid || item?.variantid || 'item'}-${index}`}
-                    className={`flex-row items-center p-3 rounded-xl border mb-2 ${
-                      checked ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white'
-                    }`}
+                    className={`flex-row items-center p-3 rounded-xl border mb-2 ${checked ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white'
+                      }`}
                     onPress={() => toggleReturnSelection(index)}
                     activeOpacity={0.85}
                   >
@@ -1041,9 +1060,8 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                     <TouchableOpacity
                       key={method}
                       onPress={() => setRefundMethod(method)}
-                      className={`mr-2 px-3 py-1.5 rounded-full border ${
-                        active ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
-                      }`}
+                      className={`mr-2 px-3 py-1.5 rounded-full border ${active ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
+                        }`}
                     >
                       <Text className={`text-[11px] font-semibold ${active ? 'text-white' : 'text-gray-700'}`}>
                         {method === 'BankTransfer' ? 'Bank' : method}

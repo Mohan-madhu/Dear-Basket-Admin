@@ -25,6 +25,10 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   const [expanded, setExpanded] = useState(false);
   const [hasNewUpdates, setHasNewUpdates] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showOutForDeliveryWarningModal, setShowOutForDeliveryWarningModal] = useState(false);
+  const [showMilkDeliveryModal, setShowMilkDeliveryModal] = useState(false);
+  const [milkContainerReturned, setMilkContainerReturned] = useState(1);
+  const [milkDeliveryNotes, setMilkDeliveryNotes] = useState('');
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [returnSelections, setReturnSelections] = useState({});
   const [returnReason, setReturnReason] = useState('');
@@ -41,6 +45,33 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   const [USER, setUSER] = useState('');
   const { setLoading } = useLoading();
   const log = createLogger('OrderCard');
+
+  const MILK_CAN_STATUS_OPTIONS = [
+    {
+      value: 0,
+      label: 'Can Not Returned',
+      chipActive: 'bg-red-600 border-red-600',
+      badgeWrap: 'bg-red-50 border-red-200',
+      badgeText: 'text-red-700',
+      dot: '#DC2626',
+    },
+    {
+      value: 1,
+      label: 'Can Returned',
+      chipActive: 'bg-green-600 border-green-600',
+      badgeWrap: 'bg-green-50 border-green-200',
+      badgeText: 'text-green-700',
+      dot: '#16A34A',
+    },
+    {
+      value: 2,
+      label: 'Can Damaged',
+      chipActive: 'bg-amber-500 border-amber-500',
+      badgeWrap: 'bg-amber-50 border-amber-200',
+      badgeText: 'text-amber-700',
+      dot: '#D97706',
+    },
+  ];
 
   const ORDER_STATUS_FLOW = [
     'Order Placed',
@@ -98,8 +129,42 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     }
   };
 
+  const handleMilkDelivery = async (containerReturned = 1, notes = '') => {
+    try {
+      setLoading(true, 'Marking milk as delivered...');
+      const USERDATA = await Storage.getData('DATA');
+      const userTransid = USERDATA?.transid || USER;
+
+      const payload = {
+        transid: order.productorderid,
+        received: 1,
+        cans_returned: containerReturned,
+        luu: userTransid,
+      };
+
+      const response = await API.PUT('DailyMilkStatus', payload);
+
+      Alert.alert('Success', response.message || 'Milk delivered successfully!');
+
+      if (onOrderUpdate) {
+        onOrderUpdate();
+      }
+    } catch (error) {
+      log('Error delivering milk:', error);
+      Alert.alert('Error', 'Failed to mark milk as delivered');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const updateOrderStatus = async (newStatus) => {
     if (!newStatus) return;
+
+    const isMilkDeliveryOrder = [1, 2, 3].includes(Number(order?.isdailymilkuser));
+    if (newStatus === 'Delivered' && isMilkDeliveryOrder) {
+      await handleMilkDelivery(1, '');
+      return;
+    }
 
     try {
       setLoading(true, `Updating order to ${newStatus}...`);
@@ -442,13 +507,30 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     }
 
     const buttonConfig = nextStatus ? getStatusButtonConfig(nextStatus) : null;
+    const isMilkDeliveryOrder = [1, 2, 3].includes(Number(order?.isdailymilkuser));
+    const isFastDeliveryOrder = Number(order?.isdailymilkuser) === 0;
+    const onStatusPress = () => {
+      if (nextStatus === 'Delivered' && isMilkDeliveryOrder) {
+        setMilkContainerReturned(1);
+        setMilkDeliveryNotes('');
+        setShowMilkDeliveryModal(true);
+        return;
+      }
+
+      if (nextStatus === 'Out for Delivery' && isFastDeliveryOrder) {
+        setShowOutForDeliveryWarningModal(true);
+        return;
+      }
+
+      updateOrderStatus(nextStatus);
+    };
 
     return (
       <View className="mt-2">
         <View className="flex-row">
           {buttonConfig && (
             <TouchableOpacity
-              onPress={() => updateOrderStatus(nextStatus)}
+              onPress={onStatusPress}
               className={`flex-1 ${buttonConfig.color} py-2 px-2 mx-1 rounded-xl flex-row items-center justify-center`}
               activeOpacity={0.85}
             >
@@ -1067,6 +1149,136 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                 activeOpacity={0.85}
               >
                 <Text className="text-white font-semibold text-center">Confirm Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showOutForDeliveryWarningModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowOutForDeliveryWarningModal(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/40 p-4">
+          <View className="bg-white w-full max-w-md rounded-3xl p-5">
+            <View className="flex-row items-center mb-3">
+              <View className="w-10 h-10 rounded-full bg-amber-50 items-center justify-center">
+                <Icon name="alert-outline" size={22} color="#D97706" />
+              </View>
+              <Text className="text-lg font-extrabold text-gray-900 ml-3">Confirm Out for Delivery</Text>
+            </View>
+
+            <Text className="text-sm text-gray-700 leading-5 mb-4">
+              This Fast Delivery order will be assigned to you once you mark it as Out for Delivery.
+            </Text>
+
+            <View className="bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-5">
+              <Text className="text-xs text-amber-800 leading-5">
+                After confirmation, other partners will not see this order and cannot deliver it. Only you can complete delivery.
+              </Text>
+            </View>
+
+            <View className="flex-row">
+              <TouchableOpacity
+                onPress={() => setShowOutForDeliveryWarningModal(false)}
+                className="flex-1 bg-gray-200 py-3 rounded-2xl mr-2"
+                activeOpacity={0.85}
+              >
+                <Text className="text-gray-800 font-semibold text-center">Back</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={async () => {
+                  setShowOutForDeliveryWarningModal(false);
+                  await updateOrderStatus('Out for Delivery');
+                }}
+                className="flex-1 bg-amber-600 py-3 rounded-2xl ml-2"
+                activeOpacity={0.85}
+              >
+                <Text className="text-white font-semibold text-center">Yes, Assign to Me</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showMilkDeliveryModal} transparent animationType="slide" onRequestClose={() => setShowMilkDeliveryModal(false)}>
+        <View className="flex-1 justify-center items-center bg-black/40 p-4">
+          <View className="bg-white w-full max-w-md rounded-3xl p-5">
+            <View className="flex-row items-center mb-3">
+              <View className="w-10 h-10 rounded-full bg-green-50 items-center justify-center">
+                <Icon name="check-circle-outline" size={22} color="#16A34A" />
+              </View>
+              <Text className="text-lg font-extrabold text-gray-900 ml-3">Milk Delivery</Text>
+            </View>
+
+            <Text className="text-sm text-gray-600 mb-3 leading-5">
+              Select container return status before marking this milk order as delivered.
+            </Text>
+
+            <Text className="text-sm font-semibold text-gray-700 mb-2">Cans Returned</Text>
+            <View className="flex-row flex-wrap mb-4">
+              {MILK_CAN_STATUS_OPTIONS.map((option) => {
+                const active = milkContainerReturned === option.value;
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    onPress={() => setMilkContainerReturned(option.value)}
+                    className={`mr-2 mb-2 px-3 py-2 rounded-full border flex-row items-center ${active ? option.chipActive : 'bg-white border-gray-300'}`}
+                    activeOpacity={0.85}
+                  >
+                    <View
+                      className="w-2 h-2 rounded-full mr-1.5"
+                      style={{ backgroundColor: active ? '#FFFFFF' : option.dot }}
+                    />
+                    <Text className={`text-[11px] font-semibold ${active ? 'text-white' : 'text-gray-700'}`}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* <View className="flex-row flex-wrap mb-4">
+              {MILK_CAN_STATUS_OPTIONS.map((option) => (
+                <View key={`badge-${option.value}`} className={`mr-2 mb-2 px-2.5 py-1 rounded-full border flex-row items-center ${option.badgeWrap}`}>
+                  <View className="w-2 h-2 rounded-full mr-1.5" style={{ backgroundColor: option.dot }} />
+                  <Text className={`text-[10px] font-semibold ${option.badgeText}`}>{option.label}</Text>
+                </View>
+              ))}
+            </View> */}
+
+            <Text className="text-sm font-semibold text-gray-700 mb-2">Notes (Optional)</Text>
+            <TextInput
+              value={milkDeliveryNotes}
+              onChangeText={setMilkDeliveryNotes}
+              placeholder="Add note for this delivery"
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+              className="border border-gray-300 rounded-2xl p-3 text-gray-800 mb-5 bg-gray-50"
+            />
+
+            <View className="flex-row">
+              <TouchableOpacity
+                onPress={() => setShowMilkDeliveryModal(false)}
+                className="flex-1 bg-gray-200 py-3 rounded-2xl mr-2"
+                activeOpacity={0.85}
+              >
+                <Text className="text-gray-800 font-semibold text-center">Back</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={async () => {
+                  await handleMilkDelivery(milkContainerReturned, milkDeliveryNotes);
+                  setShowMilkDeliveryModal(false);
+                }}
+                className="flex-1 bg-green-600 py-3 rounded-2xl ml-2"
+                activeOpacity={0.85}
+              >
+                <Text className="text-white font-semibold text-center">Mark Delivered</Text>
               </TouchableOpacity>
             </View>
           </View>

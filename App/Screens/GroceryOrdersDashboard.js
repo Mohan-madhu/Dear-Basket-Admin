@@ -291,7 +291,7 @@ const PartnerFilterBar = ({ partners, selectedPartnerId, onSelectPartner }) => {
                 fontWeight: "700",
               }}
             >
-              {partner?.mappedpartnerid || "No Partner"} ({partner?.totalorders || 0})
+              {partner?.mappedpartnerid || partner?.orderdeliveredby || partner?.orderoutofdeliveryby || "No Partner"} ({partner?.totalorders || 0})
             </Text>
           </TouchableOpacity>
         );
@@ -1085,7 +1085,6 @@ const GroceryTabContent = ({ navigation, orderType, onSummaryChange }) => {
 
       console.log("Fetching data with URL:", buildUrl());
       const res = await API.GET(buildUrl());
-
       const payload = {
         summary: res?.summary || {},
         partners: res?.partners || [],

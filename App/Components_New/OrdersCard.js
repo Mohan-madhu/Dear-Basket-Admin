@@ -160,8 +160,8 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   const updateOrderStatus = async (newStatus) => {
     if (!newStatus) return;
 
-    const isMilkDeliveryOrder = [1, 2, 3].includes(Number(order?.isdailymilkuser));
-    if (newStatus === 'Delivered' && isMilkDeliveryOrder) {
+    const isCanReturnApplicableMilkOrder = Number(order?.isdailymilkuser) === 3;
+    if (newStatus === 'Delivered' && isCanReturnApplicableMilkOrder) {
       await handleMilkDelivery(1, '');
       return;
     }
@@ -381,6 +381,22 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     return { regular, extra, cancelled, total };
   };
 
+  const isDateWithinRange = (startDate, endDate) => {
+    if (!startDate || !endDate) return false;
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+
+    return today >= start && today <= end;
+  };
+
   const openMaps = (lat, lng) => {
     if (!lat || !lng) {
       Alert.alert('Location not available');
@@ -507,10 +523,10 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     }
 
     const buttonConfig = nextStatus ? getStatusButtonConfig(nextStatus) : null;
-    const isMilkDeliveryOrder = [1, 2, 3].includes(Number(order?.isdailymilkuser));
+    const isCanReturnApplicableMilkOrder = Number(order?.isdailymilkuser) === 3;
     const isFastDeliveryOrder = Number(order?.isdailymilkuser) === 0;
     const onStatusPress = () => {
-      if (nextStatus === 'Delivered' && isMilkDeliveryOrder) {
+      if (nextStatus === 'Delivered' && isCanReturnApplicableMilkOrder) {
         setMilkContainerReturned(1);
         setMilkDeliveryNotes('');
         setShowMilkDeliveryModal(true);
@@ -581,6 +597,13 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
       icon: 'food',
       label: 'Food Order',
     },
+    'Milk': {
+      bgColor: '#fef3c7',
+      textColor: '#92400e',
+      borderColor: '#fde68a',
+      icon: 'cup',
+      label: 'Milk Order',
+    }
   };
 
   const getOrderColor = (type) => {
@@ -686,7 +709,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
       type = 'Demo Daily Milk';
       break;
     case 3:
-      type = 'Daily Milk'; // Pure Daily Milk
+      type = 'Milk'; // Pure Daily Milk
       break;
     default:
       type = 'Unknown';
@@ -695,6 +718,24 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   const style = getOrderColor(type);
   const statusStyle = getStatusStyle();
   const isMilkTypeOrder = [1, 2, 3].includes(Number(order?.isdailymilkuser || 0));
+  const pregnancyBenefitMl = Number(
+    order?.milkamountml ??
+    order?.pregnancy_milkamountml ??
+    order?.pregnancymilkamountml ??
+    250
+  ) || 250;
+  const pregnancyBenefitLitres = pregnancyBenefitMl / 1000;
+  const pregnancyStatusActive =
+    Number(order?.pregnancy_status ?? order?.pregnancystatus ?? 0) === 1 ||
+    Number(order?.isbenefitsactive ?? 0) === 1 ||
+    order?.isbenefitsactive === true ||
+    isDateWithinRange(order?.benefitsstartdate, order?.benefitsenddate) ||
+    orderItems.some(
+      (item) =>
+        Number(item?.pregnancy_status ?? item?.pregnancystatus ?? 0) === 1 ||
+        Number(item?.isbenefitsactive ?? 0) === 1 ||
+        item?.isbenefitsactive === true
+    );
   const computedItemSubtotal = orderItems.reduce((sum, item) => sum + calculateItemTotal(item), 0);
   const itemSubtotal = isMilkTypeOrder && computedItemSubtotal > 0
     ? computedItemSubtotal
@@ -924,6 +965,12 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                   {order?.isdailymilkuser === 2 ? 'Demo Daily Milk' : style.label}
                 </Text>
               </View>
+
+              {pregnancyStatusActive && isMilkTypeOrder ? (
+                <View className="bg-pink-50 border border-pink-200 px-2 py-[3px] rounded-full flex-row items-center">
+                  <Text className="text-[10px] font-bold text-pink-700">Pregnancy Care</Text>
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -942,6 +989,11 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
           <Text className="text-[11px] text-gray-500 mt-0.5" numberOfLines={1}>
             {formatDate(order?.ordertime || order?.orderpalcedtime || order?.orderplacedtime)} • {order?.isdailymilkuser === 2 ? 'Demo' : `${totalItems} item${totalItems !== 1 ? 's' : ''}`} • {order?.isdailymilkuser === 2 ? 'Demo Order' : `₹${totalAmount}`}
           </Text>
+          {pregnancyStatusActive && isMilkTypeOrder ? (
+            <Text className="text-[11px] text-amber-700 mt-1 font-semibold" numberOfLines={1}>
+              Complimentary +{pregnancyBenefitMl}ml pregnancy milk active
+            </Text>
+          ) : null}
         </View>
 
         {(order?.user_mobile && ROLE !== 'USER') || (order?.latitude && order?.longitude && order?.orderdelivered !== 1 && ROLE === 'ADMIN') ? (
@@ -1003,9 +1055,27 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
               <View className="mt-4 bg-white p-4 rounded-2xl border border-gray-200">
                 <Text className="text-sm font-bold text-gray-800 mb-3">Order Items</Text>
 
+                {pregnancyStatusActive && isMilkTypeOrder ? (
+                  <View className="bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2 mb-3">
+                    <Text className="text-xs font-semibold text-amber-900">
+                      Pregnancy Care Active
+                    </Text>
+                    <Text className="text-[11px] text-amber-800 mt-1">
+                      Add complimentary +{pregnancyBenefitMl}ml ({pregnancyBenefitLitres.toFixed(2)}L) milk for this active order.
+                    </Text>
+                  </View>
+                ) : null}
+
                 {orderItems.map((item, index) => {
                   const itemTotal = calculateItemTotal(item);
                   const milkBreakdown = getMilkBreakdown(item);
+                  const effectivePregnancyExtra =
+                    pregnancyStatusActive && [1, 3].includes(Number(order?.isdailymilkuser || 0))
+                      ? pregnancyBenefitLitres
+                      : 0;
+                  const finalQtyWithPregnancy = Number(
+                    (milkBreakdown.total + effectivePregnancyExtra).toFixed(2)
+                  );
                   return (
                     <View
                       key={index}
@@ -1054,6 +1124,13 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                                 </Text>
                               </View>
                             ) : null}
+                            {effectivePregnancyExtra > 0 ? (
+                              <View className="bg-pink-50 border border-pink-200 px-2 py-0.5 rounded-full mr-1.5 mb-1">
+                                <Text className="text-[10px] font-semibold text-pink-700">
+                                  Pregnancy +{effectivePregnancyExtra.toFixed(2)}L
+                                </Text>
+                              </View>
+                            ) : null}
                             {milkBreakdown.cancelled > 0 ? (
                               <View className="bg-red-50 border border-red-200 px-2 py-0.5 rounded-full mr-1.5 mb-1">
                                 <Text className="text-[10px] font-semibold text-red-700">
@@ -1061,10 +1138,10 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                                 </Text>
                               </View>
                             ) : null}
-                            {milkBreakdown.total >= 0 ? (
+                            {finalQtyWithPregnancy >= 0 ? (
                               <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mb-1">
                                 <Text className="text-[10px] font-semibold text-emerald-700">
-                                  Final {milkBreakdown.total}L
+                                  Final {finalQtyWithPregnancy}L
                                 </Text>
                               </View>
                             ) : null}

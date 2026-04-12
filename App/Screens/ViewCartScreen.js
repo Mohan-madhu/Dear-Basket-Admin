@@ -255,7 +255,7 @@ const ViewCartScreen = () => {
 
 
             console.log("User TransID:", userData.transid);
-            const res = await API.GET("DailyMilkRegistration/CheckUserForRegistration/" + userData.transid);
+            const res = await API.GET("user/dailymilk-active-check/" + userData.transid);
             console.log("API Response for CheckAlreadyRegistered:", res);
             console.log("CheckAlreadyRegistered Response:", res);
             if (res.Response.length === 0) {

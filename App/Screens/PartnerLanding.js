@@ -32,7 +32,7 @@ const getISTMinutes = () => {
 const inRange = (minutes, start, end) => minutes >= start && minutes < end;
 
 const getOrderType = (order) => {
-  switch (Number(order?.isdailymilkuser)) {
+   switch (Number(order?.isdailymilkuser)) {
     case 1:
       return 'Daily Milk';
     case 0:

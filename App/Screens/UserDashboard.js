@@ -7,13 +7,16 @@ import { API } from "../../App_Utils/Services/APIService";
 export default function UserDashboard({ navigation }) {
   const [ROLE, setROLE] = useState(null);
   const [userID, setUserID] = useState(null);
+  const [userName, setUserName] = useState("");
 
   const getRole = async () => {
     const role = await Storage.getData("ROLE");
     const userId = await Storage.getData("DATA");
+    const userNameFromStorage = await Storage.getData("USER");
     console.log(role);
     setROLE(role);
     setUserID(userId?.transid);
+    setUserName(userId?.name || userNameFromStorage || "");
 
   };
 
@@ -45,24 +48,31 @@ export default function UserDashboard({ navigation }) {
   return (
     <View className="flex-1 bg-neutral-50 p-5">
       <Text className="text-3xl font-bold text-gray-900 mb-4">
-        👋 Welcome {ROLE}
+        👋 Welcome {userName || "User"}
       </Text>
 
-      {/* My Profile Card */}
-      <View className="bg-white p-4 rounded-xl mb-4">
-        <Text className="text-lg text-emerald-500 mb-2">My Profile</Text>
-        <Text className="text-gray-500">
-          View or update your personal details.
-        </Text>
-      </View>
+    
 
-      {/* My Activity Card */}
-      <View className="bg-white p-4 rounded-xl mb-4">
-        <Text className="text-lg text-emerald-500 mb-2">My Activity</Text>
-        <Text className="text-gray-500">
-          See your usage history and stats.
-        </Text>
-      </View>
+      <TouchableOpacity
+        onPress={() => navigation.navigate("UserDetailsUpdateScreen")}
+        className="bg-white p-4 rounded-xl mb-4 flex-row items-center border-l-4 border-blue-500"
+        activeOpacity={0.8}
+      >
+        <Ionicons
+          name="create-outline"
+          size={24}
+          color="#2563EB"
+          className="mr-3"
+        />
+        <View>
+          <Text className="text-lg text-blue-600 mb-1">Update User Details</Text>
+          <Text className="text-gray-500">
+            Edit your contact and delivery information
+          </Text>
+        </View>
+      </TouchableOpacity>
+
+    
 
       {/* My Favorites Button */}
       <TouchableOpacity

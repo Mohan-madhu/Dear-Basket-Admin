@@ -52,6 +52,7 @@ import ViewPartnerOrderScreen from "../App/Screens/ViewPartnerOrderScreen";
 import GroceryOrdersDashboard from "../App/Screens/GroceryOrdersDashboard";
 import DailyMilk_Dashboard_Admin from "../App/Screens/DailyMilk_Dashboard_Admin";
 import ProductReturnAdminScreen from "../App/Screens/ProductReturnAdminScreen";
+import UserDetailsUpdateScreen from "../App/Screens/UserDetailsUpdateScreen";
 
 const StackNavigator = () => {
   const Stack = createNativeStackNavigator();
@@ -182,6 +183,7 @@ const StackNavigator = () => {
       <Stack.Screen name="DailyMilk_User_AccountsManage" component={DailyMilk_User_AccountsManage} />
       <Stack.Screen name="DailyMilkStatus_Admin" component={DailyMilkStatusScreen} />
       <Stack.Screen name="FavoritesScreen" component={FavoritesScreen} />
+      <Stack.Screen name="UserDetailsUpdateScreen" component={UserDetailsUpdateScreen} />
       <Stack.Screen name="DailyMilkPayment" component={DailyMilkPayment} />
       <Stack.Screen name="DailyMilkBirthdayList" component={DailyMilkBirthdayList} />
 

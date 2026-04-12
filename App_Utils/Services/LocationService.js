@@ -14,25 +14,50 @@ const LocationService = async ({
   inFlight = true;
 
   setLoading(true, "Fetching location…");
+  let isFinalized = false;
+  let hardTimeout = null;
+  let fallbackSubscription = null;
 
-  // 1️⃣ Request permission
-  const { status } = await Location.requestForegroundPermissionsAsync();
-  if (status !== "granted") {
+  const finalize = () => {
+    if (isFinalized) return;
+    isFinalized = true;
+    if (hardTimeout) clearTimeout(hardTimeout);
+    if (fallbackSubscription) {
+      try {
+        fallbackSubscription.remove();
+      } catch {
+        // ignore cleanup errors
+      }
+    }
     setLoading(false);
-    Alert.alert(
-      "Permission Denied",
-      "Please enable location permissions to automatically fill your coordinates."
-    );
     inFlight = false;
-    return;
-  }
+  };
+
+  // Hard stop: never keep UI blocked beyond 10 seconds
+  hardTimeout = setTimeout(() => {
+    finalize();
+    Alert.alert(
+      "Location taking too long",
+      "Could not get precise GPS in 10 seconds. You can continue and try again."
+    );
+  }, 10000);
 
   try {
+    // 1️⃣ Request permission
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission Denied",
+        "Please enable location permissions to automatically fill your coordinates."
+      );
+      return;
+    }
+
     // 2️⃣ One-shot high-accuracy fetch
     const loc = await Location.getCurrentPositionAsync({
-    //   accuracy: Location.Accuracy.BestForNavigation,
-    //   maximumAge: 0,
-    //   timeout: 2000,
+      accuracy: Location.Accuracy.High,
+      maximumAge: 3000,
+      timeout: 8000,
     });
     const { latitude, longitude } = loc.coords;
     setLatitude(latitude.toString());
@@ -57,20 +82,36 @@ const LocationService = async ({
   } catch (err) {
     console.warn("One-shot failed; falling back to watcher:", err);
 
+    // Quick fallback: use last known location first (usually instant)
+    try {
+      const lastKnown = await Location.getLastKnownPositionAsync();
+      if (lastKnown?.coords) {
+        const { latitude, longitude } = lastKnown.coords;
+        setLatitude(latitude.toString());
+        setLongitude(longitude.toString());
+      }
+    } catch (lastErr) {
+      console.warn("Last known location fetch failed:", lastErr);
+    }
+
     // 4️⃣ Fallback: watch until we get ≤50 m accuracy
-    const subscription = await Location.watchPositionAsync(
+    fallbackSubscription = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.High,
         distanceInterval: 10,
         timeInterval: 5000,
       },
       async (loc) => {
+        if (isFinalized) return;
         const { latitude, longitude, accuracy } = loc.coords;
         if (accuracy <= 50) {
           setLatitude(latitude.toString());
           setLongitude(longitude.toString());
           console.log("Location fetched (watch):", loc.coords);
-          subscription.remove();
+          if (fallbackSubscription) {
+            fallbackSubscription.remove();
+            fallbackSubscription = null;
+          }
 
           if (setAddress) {
             const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
@@ -86,12 +127,15 @@ const LocationService = async ({
             setAddress(humanAddr);
             console.log("Resolved address (watch):", humanAddr);
           }
+          finalize();
         }
       }
     );
   } finally {
-    setLoading(false);
-    inFlight = false;
+    // Keep watcher alive for a short period only; hard timeout/finalize will close it.
+    if (!fallbackSubscription) {
+      finalize();
+    }
   }
 };
 

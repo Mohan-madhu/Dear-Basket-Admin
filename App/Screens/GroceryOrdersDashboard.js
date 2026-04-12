@@ -1091,6 +1091,7 @@ const GroceryTabContent = ({ navigation, orderType, onSummaryChange }) => {
         orders: res?.orders || [],
       };
 
+ 
       setDashboardData(payload);
       onSummaryChange?.(payload.summary || {});
     } catch (err) {

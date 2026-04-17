@@ -1051,14 +1051,22 @@ const GroceryTabContent = ({ navigation, orderType, onSummaryChange }) => {
 
   const [selectedPartnerId, setSelectedPartnerId] = useState(null);
 
+  const visiblePartners = useMemo(() => {
+    const partners = dashboardData?.partners || [];
+
+    if (!selectedPartnerId) {
+      return partners;
+    }
+
+    return partners.filter(
+      (partner) => String(partner?.mappedpartnerid ?? "") === String(selectedPartnerId)
+    );
+  }, [dashboardData?.partners, selectedPartnerId]);
+
   const buildUrl = () => {
     const params = new URLSearchParams();
     params.append("orderType", orderType);
     params.append("filterType", filterType);
-
-    if (selectedPartnerId) {
-      params.append("mappedPartnerId", selectedPartnerId);
-    }
 
     if (filterType === "CUSTOM") {
       if (fromDate) params.append("fromDate", fromDate);
@@ -1108,7 +1116,7 @@ const GroceryTabContent = ({ navigation, orderType, onSummaryChange }) => {
   useFocusEffect(
     useCallback(() => {
       fetchDashboardData(true);
-    }, [orderType, filterType, fromDate, toDate, selectedPartnerId])
+    }, [orderType, filterType, fromDate, toDate])
   );
 
   const onRefresh = async () => {
@@ -1221,7 +1229,7 @@ const GroceryTabContent = ({ navigation, orderType, onSummaryChange }) => {
       />
 
       <PartnerWiseGroupedOrders
-        partners={dashboardData?.partners || []}
+        partners={visiblePartners}
         navigation={navigation}
       />
     </ScrollView>

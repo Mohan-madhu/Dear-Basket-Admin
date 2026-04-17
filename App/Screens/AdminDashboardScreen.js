@@ -401,6 +401,7 @@ const AdminDashboardScreen = () => {
     { id: 302, title: 'Daily Milk Orders', gradient: gradientPairs[16], screen: 'MyOrdersScreen_DAILYMILK', icon: 'clipboard-list' },
     { id: 303, title: 'All Orders', gradient: gradientPairs[17], screen: 'MyOrdersScreen', icon: 'truck-check-outline' },
     { id: 304, title: 'Order Analytics', gradient: gradientPairs[18], screen: 'GroceryOrdersDashboard', icon: 'chart-bar' },
+    { id: 306, title: 'Payout Analytics', gradient: ['#22c55e', '#16a34a'], screen: 'FastDeliveryPartnerPayoutDashboard', icon: 'chart-timeline-variant' },
     { id: 305, title: 'Return Orders', gradient: gradientPairs[19], screen: 'ProductReturnAdminScreen', icon: 'backup-restore' },
   ];
   const handleCardPress = (screenName) => {

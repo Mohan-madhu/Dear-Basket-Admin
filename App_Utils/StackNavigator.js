@@ -50,6 +50,7 @@ import DailyMilkActiveBookings from "../App/Screens/DailyMilkActiveBookings";
 import PartnerLanding from "../App/Screens/PartnerLanding";
 import ViewPartnerOrderScreen from "../App/Screens/ViewPartnerOrderScreen";
 import GroceryOrdersDashboard from "../App/Screens/GroceryOrdersDashboard";
+import FastDeliveryPartnerPayoutDashboard from "../App/Screens/FastDeliveryPartnerPayoutDashboard";
 import DailyMilk_Dashboard_Admin from "../App/Screens/DailyMilk_Dashboard_Admin";
 import ProductReturnAdminScreen from "../App/Screens/ProductReturnAdminScreen";
 import UserDetailsUpdateScreen from "../App/Screens/UserDetailsUpdateScreen";
@@ -238,6 +239,12 @@ const StackNavigator = () => {
         name="GroceryOrdersDashboard"
         component={GroceryOrdersDashboard}
         options={{ title: 'Grocery Orders Dashboard' }}
+      />
+
+      <Stack.Screen
+        name="FastDeliveryPartnerPayoutDashboard"
+        component={FastDeliveryPartnerPayoutDashboard}
+        options={{ title: "Fast Delivery Partner Payout Dashboard" }}
       />
 
       <Stack.Screen

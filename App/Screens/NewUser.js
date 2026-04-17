@@ -104,6 +104,7 @@ const Field = ({
   onChangeText,
   placeholder,
   keyboardType = "default",
+  maxLength,
   multiline = false,
   numberOfLines = 1,
   editable = true,
@@ -133,6 +134,7 @@ const Field = ({
         onChangeText={onChangeText}
         placeholder={placeholder}
         keyboardType={keyboardType}
+        maxLength={maxLength}
         editable={editable}
         multiline={multiline}
         numberOfLines={numberOfLines}
@@ -235,6 +237,11 @@ const NewUser = () => {
     }
 
     return true;
+  };
+
+  const handleMobileChange = (text) => {
+    const numericText = text.replace(/[^0-9]/g, "").slice(0, 10);
+    setMobile(numericText);
   };
 
   const handleSubmit = async () => {
@@ -443,11 +450,22 @@ const NewUser = () => {
           <Field
             label="Mobile Number *"
             value={mobile}
-            onChangeText={setMobile}
+            onChangeText={handleMobileChange}
             placeholder="Enter mobile number"
             keyboardType="phone-pad"
+            maxLength={10}
             leftIcon="call"
+            rightElement={
+              mobile.length > 0 ? (
+                <Text className="text-xs font-medium text-gray-500">
+                  {mobile.length}/10
+                </Text>
+              ) : null
+            }
           />
+          <Text className="text-xs text-gray-500 -mt-2 mb-1">
+            {mobile.length} typed, {10 - mobile.length} remaining
+          </Text>
         </Section>
 
         {/* Login details */}

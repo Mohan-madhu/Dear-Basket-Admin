@@ -7,7 +7,6 @@ import {
     TouchableOpacity,
     Alert,
 } from "react-native";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Picker } from "@react-native-picker/picker";
 import Storage from "../../App_Utils/Services/StorageService";
 import { API } from "../../App_Utils/Services/APIService";
@@ -41,7 +40,7 @@ const DailyMilkBooking = () => {
 
     // Product States
     const [products, setProducts] = useState([]);
-    const [activeIndex, setActiveIndex] = useState(0);
+    const [selectedProductId, setSelectedProductId] = useState(null);
     const [quantities, setQuantities] = useState({});
 
     // UI States
@@ -128,6 +127,7 @@ const DailyMilkBooking = () => {
             }
             // Pre-fill quantity
             if (booking?.productid && booking?.quantity) {
+                setSelectedProductId(booking.productid);
                 setQuantities((prev) => ({
                     ...prev,
                     [booking.productid]: booking.quantity
@@ -146,7 +146,11 @@ const DailyMilkBooking = () => {
             const { Response } = await API.GET("DailyMilkProducts");
             const safeProducts = Array.isArray(Response) ? Response : [];
             setProducts(safeProducts);
-            setActiveIndex(0);
+            setSelectedProductId((prev) =>
+                safeProducts.some((prod) => prod?.transid === prev)
+                    ? prev
+                    : (safeProducts[0]?.transid || null)
+            );
             const initialQtys = safeProducts.reduce((acc, prod) => {
                 if (prod?.transid) {
                     acc[prod.transid] = 0;
@@ -166,13 +170,13 @@ const DailyMilkBooking = () => {
     // ──────────────────────────────────────────────────────────
     // HANDLERS
     // ──────────────────────────────────────────────────────────
-    const handleProductChange = (index) => {
+    const handleProductChange = (productId) => {
         try {
             if (!Array.isArray(products) || products.length === 0) return;
-            if (index < 0 || index >= products.length) return;
+            if (!productId) return;
 
-            setActiveIndex(index);
-            // Reset quantities so only the visible product is active
+            setSelectedProductId(productId);
+            // Reset quantities so only the selected product stays active
             const resetQtys = products.reduce((acc, prod) => {
                 if (prod?.transid) {
                     acc[prod.transid] = 0;
@@ -244,9 +248,9 @@ const DailyMilkBooking = () => {
 
         try {
             isSubmittingRef.current = true;
-            const currentProd = products[activeIndex];
+            const currentProd = products.find((prod) => prod?.transid === selectedProductId);
             if (!currentProd?.transid) {
-                Alert.alert("Error", "Product is not ready. Please try again.");
+                Alert.alert("Error", "Please select a product.");
                 return;
             }
 
@@ -348,92 +352,98 @@ const DailyMilkBooking = () => {
         }
     };
 
-    const currentProduct = products[activeIndex];
+    const currentProduct = products.find((prod) => prod?.transid === selectedProductId) || null;
 
     return (
         <View className="flex-1 px-4 py-5 pt-10  bg-gray-800 ">
             <Text className="text-white text-center text-2xl my-2">
                 Renew Daily Milk Subscription
             </Text>
-            {/* ──────────────── PRODUCT CAROUSEL ──────────────── */}
-            <View className="items-center justify-center mb-4">
-                <View className="flex-row items-center justify-center w-full relative">
-                    {/* Left Navigation Button - Positioned absolutely */}
-                    <TouchableOpacity
-                        disabled={activeIndex === 0}
-                        onPress={() => handleProductChange(activeIndex - 1)}
-                        className={`absolute left-0 z-10 p-2 ${activeIndex === 0 ? 'opacity-30' : 'opacity-100'}`}
-                        style={{ elevation: 5 }}
-                    >
-                        <View className="w-12 h-12 rounded-full bg-white items-center justify-center shadow-lg border border-gray-200">
-                            <Icon name="chevron-left" size={30} color="#3b82f6" />
-                        </View>
-                    </TouchableOpacity>
+            {/* ──────────────── PRODUCT GRID ──────────────── */}
+            <View className="mb-4">
+                <Text className="text-white text-base font-bold mb-3">
+                    Select Product
+                </Text>
 
-                    {/* Product Card */}
-                    {currentProduct && (
-                        <View className="w-[220px] rounded-3xl bg-white p-6 items-center shadow-2xl border border-gray-100 mx-2">
-                            <Image
-                                source={{ uri: getImageUrl(currentProduct.image) }}
-                                className="w-[140px] h-[140px] rounded-xl"
-                                resizeMode="contain"
-                            />
-                            <Text className="mt-3 text-lg font-bold text-gray-800 text-center">{currentProduct.name}</Text>
-                            <Text className="text-sm text-gray-500 font-medium">₹ {currentProduct.price.toFixed(2)}</Text>
-
-                            <View className="flex-row items-center mt-4">
-                                <TouchableOpacity
-                                    className="w-10 h-10 rounded-full bg-red-500 justify-center items-center shadow-sm"
-                                    onPress={() => changeQuantity(currentProduct.transid, -currentProduct.increment)}
-                                >
-                                    <Text className="text-white text-xl font-bold">−</Text>
-                                </TouchableOpacity>
-                                <Text className="w-12 text-center text-xl font-bold text-gray-900">
-                                    {(quantities[currentProduct.transid] || 0).toFixed(1)}
-                                </Text>
-                                <TouchableOpacity
-                                    className="w-10 h-10 rounded-full bg-green-500 justify-center items-center shadow-sm"
-                                    onPress={() => changeQuantity(currentProduct.transid, currentProduct.increment)}
-                                >
-                                    <Text className="text-white text-xl font-bold">＋</Text>
-                                </TouchableOpacity>
-                            </View>
-                            <Text className="mt-3 text-[10px] text-blue-600 font-black tracking-widest uppercase">
-                                Total: ₹ {((quantities[currentProduct.transid] || 0) * currentProduct.price).toFixed(2)}
-                            </Text>
-                        </View>
-                    )}
-
-                    {/* Right Navigation Button - Positioned absolutely */}
-                    <TouchableOpacity
-                        disabled={activeIndex === products.length - 1}
-                        onPress={() => handleProductChange(activeIndex + 1)}
-                        className={`absolute right-0 z-10 p-2 ${activeIndex === products.length - 1 ? 'opacity-30' : 'opacity-100'}`}
-                        style={{ elevation: 5 }}
-                    >
-                        <View className="w-12 h-12 rounded-full bg-white items-center justify-center shadow-lg border border-gray-200">
-                            <Icon name="chevron-right" size={30} color="#3b82f6" />
-                        </View>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Dots Indicator */}
-                {products.length > 0 && (
-                    <View className="flex-row mt-6">
-                        {products.map((_, i) => (
+                <View className="flex-row flex-wrap justify-between">
+                    {products.map((product) => {
+                        const isSelected = product?.transid === selectedProductId;
+                        return (
                             <TouchableOpacity
-                                key={i}
-                                onPress={() => handleProductChange(i)}
-                                className="mx-1"
+                                key={product.transid}
+                                onPress={() => handleProductChange(product.transid)}
+                                activeOpacity={0.9}
+                                className={`w-[48%] rounded-2xl p-3 mb-3 border ${isSelected ? "bg-blue-50 border-blue-500" : "bg-white border-gray-200"}`}
                             >
-                                <View
-                                    className={`h-2 rounded-full ${i === activeIndex ? 'bg-blue-600 w-6' : 'bg-gray-300 w-2'}`}
+                                <Image
+                                    source={{ uri: getImageUrl(product.image) }}
+                                    className="w-full h-[100px] rounded-xl bg-gray-50"
+                                    resizeMode="contain"
                                 />
+                                <Text className={`mt-2 text-sm font-bold text-center ${isSelected ? "text-blue-700" : "text-gray-800"}`}>
+                                    {product.name}
+                                </Text>
+                                <Text className="text-xs text-gray-500 text-center mt-1">
+                                    ₹ {Number(product.price || 0).toFixed(2)}
+                                </Text>
+                                {isSelected && (
+                                    <Text className="text-[11px] text-blue-600 font-semibold text-center mt-2">
+                                        Selected
+                                    </Text>
+                                )}
                             </TouchableOpacity>
-                        ))}
-                    </View>
-                )}
+                        );
+                    })}
+                </View>
             </View>
+
+            {currentProduct && (
+                <View className="rounded-3xl bg-white p-5 items-center shadow-2xl border border-gray-100 mb-4">
+                    <Image
+                        source={{ uri: getImageUrl(currentProduct.image) }}
+                        className="w-[140px] h-[140px] rounded-xl"
+                        resizeMode="contain"
+                    />
+                    <Text className="mt-3 text-lg font-bold text-gray-800 text-center">
+                        {currentProduct.name}
+                    </Text>
+                    <Text className="text-sm text-gray-500 font-medium">
+                        ₹ {Number(currentProduct.price || 0).toFixed(2)}
+                    </Text>
+                    <Text className="mt-2 text-xs text-gray-500 text-center">
+                        Adjust quantity for the selected product
+                    </Text>
+
+                    <View className="flex-row items-center mt-4">
+                        <TouchableOpacity
+                            className="w-10 h-10 rounded-full bg-red-500 justify-center items-center shadow-sm"
+                            onPress={() => changeQuantity(currentProduct.transid, -Number(currentProduct.increment || 1))}
+                        >
+                            <Text className="text-white text-xl font-bold">−</Text>
+                        </TouchableOpacity>
+                        <Text className="w-12 text-center text-xl font-bold text-gray-900">
+                            {(quantities[currentProduct.transid] || 0).toFixed(1)}
+                        </Text>
+                        <TouchableOpacity
+                            className="w-10 h-10 rounded-full bg-green-500 justify-center items-center shadow-sm"
+                            onPress={() => changeQuantity(currentProduct.transid, Number(currentProduct.increment || 1))}
+                        >
+                            <Text className="text-white text-xl font-bold">＋</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <Text className="mt-3 text-[12px] text-blue-600 font-black tracking-widest uppercase">
+                        Total: ₹ {((quantities[currentProduct.transid] || 0) * Number(currentProduct.price || 0)).toFixed(2)}
+                    </Text>
+                </View>
+            )}
+
+            {!currentProduct && (
+                <View className="bg-white rounded-2xl border border-gray-200 p-4 mb-4">
+                    <Text className="text-gray-600 text-center">
+                        No product available right now.
+                    </Text>
+                </View>
+            )}
 
             {/* ──────────────── SLOT SELECTION ──────────────── */}
             <View className="flex-row justify-center my-4">

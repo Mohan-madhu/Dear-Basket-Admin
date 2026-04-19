@@ -51,6 +51,7 @@ import PartnerLanding from "../App/Screens/PartnerLanding";
 import ViewPartnerOrderScreen from "../App/Screens/ViewPartnerOrderScreen";
 import GroceryOrdersDashboard from "../App/Screens/GroceryOrdersDashboard";
 import FastDeliveryPartnerPayoutDashboard from "../App/Screens/FastDeliveryPartnerPayoutDashboard";
+import FastDeliveryPartnerPaymentApprovalScreen from "../App/Screens/FastDeliveryPartnerPaymentApprovalScreen";
 import DailyMilk_Dashboard_Admin from "../App/Screens/DailyMilk_Dashboard_Admin";
 import ProductReturnAdminScreen from "../App/Screens/ProductReturnAdminScreen";
 import UserDetailsUpdateScreen from "../App/Screens/UserDetailsUpdateScreen";
@@ -245,6 +246,12 @@ const StackNavigator = () => {
         name="FastDeliveryPartnerPayoutDashboard"
         component={FastDeliveryPartnerPayoutDashboard}
         options={{ title: "Fast Delivery Partner Payout Dashboard" }}
+      />
+
+      <Stack.Screen
+        name="FastDeliveryPartnerPaymentApprovalScreen"
+        component={FastDeliveryPartnerPaymentApprovalScreen}
+        options={{ title: "Fast Delivery Partner Payment Approval" }}
       />
 
       <Stack.Screen

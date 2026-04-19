@@ -15,7 +15,9 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { API } from '../../App_Utils/Services/APIService';
 import { createLogger } from '../../App_Utils/Utils/logger';
 import { useLoading } from '../../App_Utils/Contexts/LoadingContext';
+import Storage from '../../App_Utils/Services/StorageService';
 import OrderCard from '../Components_New/OrdersCard';
+import PartnerFastDeliveryPayoutAnalytics from './PartnerFastDeliveryPayoutAnalytics';
 
 const log = createLogger('PartnerLanding');
 
@@ -138,6 +140,9 @@ const PartnerLanding = () => {
   const { partnerid, partnername } = route.params || {};
   const { setLoading: setGlobalLoading } = useLoading();
   const globalLoadingRef = useRef(setGlobalLoading);
+  const [activeTab, setActiveTab] = useState('orders');
+  const [sessionPartnerId, setSessionPartnerId] = useState(null);
+  const [sessionPartnerName, setSessionPartnerName] = useState('');
 
   const [online, setOnline] = useState(true);
   const [mode, setMode] = useState('full');
@@ -162,6 +167,23 @@ const PartnerLanding = () => {
     globalLoadingRef.current = setGlobalLoading;
   }, [setGlobalLoading]);
 
+  useEffect(() => {
+    const loadPartnerSession = async () => {
+      try {
+        const data = await Storage.getData('DATA');
+        setSessionPartnerId(data?.transid || null);
+        setSessionPartnerName(data?.name || '');
+      } catch (error) {
+        log('Error loading partner session:', error);
+      }
+    };
+
+    loadPartnerSession();
+  }, []);
+
+  const effectivePartnerId = partnerid || sessionPartnerId;
+  const effectivePartnerName = partnername || sessionPartnerName;
+
   const istMinutes = useMemo(() => getISTMinutes(), [nowTick]);
   const morningActive = inRange(istMinutes, 7 * 60, 10 * 60);
   const eveningActive = inRange(istMinutes, 16 * 60, 21 * 60);
@@ -185,6 +207,8 @@ const PartnerLanding = () => {
   }, []);
 
   const fetchOrders = useCallback(async (showSpinner = false, force = false) => {
+    if (!effectivePartnerId) return;
+
     const now = Date.now();
     if (inFlightFetchRef.current && !force) return;
     if (!force && now - lastFetchAtRef.current < 2500) return;
@@ -202,7 +226,7 @@ const PartnerLanding = () => {
       const response = Array.isArray(res?.Response) ? res.Response : [];
 
       const scoped = response
-        .filter((order) => matchesPartnerOrderScope(order, partnerid))
+        .filter((order) => matchesPartnerOrderScope(order, effectivePartnerId))
         .map((order) => ({ ...order, type: getOrderType(order) }))
         .map((order) => normalizeMilkOrderDataForCard(order));
 
@@ -235,7 +259,7 @@ const PartnerLanding = () => {
       }
       setRefreshing(false);
     }
-  }, [partnerid]);
+  }, [effectivePartnerId]);
 
   useEffect(() => {
     fetchOrders(true, true);
@@ -344,173 +368,222 @@ const PartnerLanding = () => {
             <Icon name="arrow-back" size={20} color="#111827" />
           </TouchableOpacity>
           <View className="flex-1 px-3">
-            <Text className="text-base font-bold text-gray-900 text-center">{partnername || 'Partner Orders'}</Text>
+            <Text className="text-base font-bold text-gray-900 text-center">{effectivePartnerName || 'Partner Orders'}</Text>
           </View>
-          <TouchableOpacity onPress={onRefresh} className="w-9 h-9 rounded-xl bg-blue-50 items-center justify-center">
-            <Icon name="refresh" size={20} color="#2563EB" />
-          </TouchableOpacity>
+          {activeTab === 'orders' ? (
+            <TouchableOpacity onPress={onRefresh} className="w-9 h-9 rounded-xl bg-blue-50 items-center justify-center">
+              <Icon name="refresh" size={20} color="#2563EB" />
+            </TouchableOpacity>
+          ) : (
+            <View className="w-9 h-9" />
+          )}
         </View>
       </View>
 
-      <ScrollView
-        className="flex-1"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563EB']} />}
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="p-3">
-          <View className="bg-white rounded-2xl border border-gray-200 p-3">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-sm font-bold text-gray-900">Availability</Text>
-              <View className="flex-row items-center">
-                <Text className={`text-xs font-semibold mr-2 ${online ? 'text-green-700' : 'text-gray-500'}`}>
-                  {online ? 'Online' : 'Offline'}
+      {activeTab === 'orders' ? (
+        <ScrollView
+          className="flex-1"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563EB']} />}
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="p-3 pb-24">
+            <View className="bg-white rounded-2xl border border-gray-200 p-3">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-sm font-bold text-gray-900">Availability</Text>
+                <View className="flex-row items-center">
+                  <Text className={`text-xs font-semibold mr-2 ${online ? 'text-green-700' : 'text-gray-500'}`}>
+                    {online ? 'Online' : 'Offline'}
+                  </Text>
+                  <Switch value={online} onValueChange={setOnlineMode} />
+                </View>
+              </View>
+
+              <View className="mt-2 bg-gray-50 rounded-xl p-2 border border-gray-200">
+                <Text className="text-[11px] text-gray-600">
+                  {online
+                    ? (timingChosen ? 'Active and receiving orders now.' : 'Choose a valid slot to receive orders.')
+                    : 'Turn on Online mode to receive orders.'}
                 </Text>
-                <Switch value={online} onValueChange={setOnlineMode} />
+              </View>
+
+              {online ? (
+                <>
+                  <View className="flex-row mt-2">
+                    <Pressable
+                      onPress={() => {
+                        setMode('full');
+                        setPartSlot(null);
+                      }}
+                      className={`flex-1 mr-1.5 rounded-xl py-2 border ${mode === 'full' ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'}`}
+                    >
+                      <Text className={`text-center text-xs font-semibold ${mode === 'full' ? 'text-white' : 'text-gray-700'}`}>Full Time</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        if (!canUsePartNow) return;
+                        setMode('part');
+                        if (!partSlot) setPartSlot(morningActive ? 'morning' : 'evening');
+                      }}
+                      className={`flex-1 ml-1.5 rounded-xl py-2 border ${mode === 'part' ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'} ${!canUsePartNow ? 'opacity-50' : ''}`}
+                    >
+                      <Text className={`text-center text-xs font-semibold ${mode === 'part' ? 'text-white' : 'text-gray-700'}`}>Part Time</Text>
+                    </Pressable>
+                  </View>
+
+                  {mode === 'part' ? (
+                    <View className="flex-row mt-2">
+                      <Pressable
+                        disabled={!morningActive}
+                        onPress={() => setPartSlot('morning')}
+                        className={`flex-1 mr-1.5 rounded-xl py-2 border ${partSlot === 'morning' ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-300'} ${!morningActive ? 'opacity-50' : ''}`}
+                      >
+                        <Text className={`text-center text-[11px] font-semibold ${partSlot === 'morning' ? 'text-white' : 'text-gray-700'}`}>Morning 7-10</Text>
+                      </Pressable>
+                      <Pressable
+                        disabled={!eveningActive}
+                        onPress={() => setPartSlot('evening')}
+                        className={`flex-1 ml-1.5 rounded-xl py-2 border ${partSlot === 'evening' ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-300'} ${!eveningActive ? 'opacity-50' : ''}`}
+                      >
+                        <Text className={`text-center text-[11px] font-semibold ${partSlot === 'evening' ? 'text-white' : 'text-gray-700'}`}>Evening 4-9</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </>
+              ) : null}
+            </View>
+
+            <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
+              <View className="flex-row items-center bg-gray-100 rounded-xl px-2.5 py-1.5 border border-gray-200">
+                <Icon name="search" size={16} color="#6B7280" />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search order / name / phone / address..."
+                  placeholderTextColor="#9CA3AF"
+                  className="flex-1 ml-1.5 text-xs text-gray-900"
+                />
+                {searchQuery ? (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <Icon name="close" size={14} color="#6B7280" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
+                {STATUS_OPTIONS.map((status) => {
+                  const active = selectedStatus === status;
+                  return (
+                    <TouchableOpacity
+                      key={status}
+                      onPress={() => setSelectedStatus(status)}
+                      className={`mr-2 px-2.5 py-1 rounded-full border ${active ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'}`}
+                    >
+                      <Text className={`text-[11px] font-semibold ${active ? 'text-white' : 'text-gray-700'}`}>{status}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
+                {TYPE_OPTIONS.map((type) => {
+                  const active = selectedTypes.has(type);
+                  return (
+                    <TouchableOpacity
+                      key={type}
+                      onPress={() => toggleType(type)}
+                      className={`mr-2 px-2.5 py-1 rounded-full border ${active ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-300'}`}
+                    >
+                      <Text className={`text-[11px] font-semibold ${active ? 'text-white' : 'text-gray-700'}`}>{type}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <View className="mt-1.5 flex-row items-center justify-between">
+                <Text className="text-[11px] text-gray-600">{filteredOrders.length} orders shown</Text>
+                {(selectedStatus !== 'All' || selectedTypes.size > 0 || searchQuery) ? (
+                  <TouchableOpacity onPress={resetFilters}>
+                    <Text className="text-[11px] font-semibold text-blue-700">Clear Filters</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             </View>
 
-            <View className="mt-2 bg-gray-50 rounded-xl p-2 border border-gray-200">
-              <Text className="text-[11px] text-gray-600">
-                {online
-                  ? (timingChosen ? 'Active and receiving orders now.' : 'Choose a valid slot to receive orders.')
-                  : 'Turn on Online mode to receive orders.'}
-              </Text>
-            </View>
-
-            {online ? (
-              <>
-                <View className="flex-row mt-2">
-                  <Pressable
-                    onPress={() => {
-                      setMode('full');
-                      setPartSlot(null);
-                    }}
-                    className={`flex-1 mr-1.5 rounded-xl py-2 border ${mode === 'full' ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'}`}
-                  >
-                    <Text className={`text-center text-xs font-semibold ${mode === 'full' ? 'text-white' : 'text-gray-700'}`}>Full Time</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      if (!canUsePartNow) return;
-                      setMode('part');
-                      if (!partSlot) setPartSlot(morningActive ? 'morning' : 'evening');
-                    }}
-                    className={`flex-1 ml-1.5 rounded-xl py-2 border ${mode === 'part' ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'} ${!canUsePartNow ? 'opacity-50' : ''}`}
-                  >
-                    <Text className={`text-center text-xs font-semibold ${mode === 'part' ? 'text-white' : 'text-gray-700'}`}>Part Time</Text>
-                  </Pressable>
-                </View>
-
-                {mode === 'part' ? (
-                  <View className="flex-row mt-2">
-                    <Pressable
-                      disabled={!morningActive}
-                      onPress={() => setPartSlot('morning')}
-                      className={`flex-1 mr-1.5 rounded-xl py-2 border ${partSlot === 'morning' ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-300'} ${!morningActive ? 'opacity-50' : ''}`}
-                    >
-                      <Text className={`text-center text-[11px] font-semibold ${partSlot === 'morning' ? 'text-white' : 'text-gray-700'}`}>Morning 7-10</Text>
-                    </Pressable>
-                    <Pressable
-                      disabled={!eveningActive}
-                      onPress={() => setPartSlot('evening')}
-                      className={`flex-1 ml-1.5 rounded-xl py-2 border ${partSlot === 'evening' ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-300'} ${!eveningActive ? 'opacity-50' : ''}`}
-                    >
-                      <Text className={`text-center text-[11px] font-semibold ${partSlot === 'evening' ? 'text-white' : 'text-gray-700'}`}>Evening 4-9</Text>
-                    </Pressable>
+            {!showOrders ? (
+              <View className="bg-white rounded-2xl border border-gray-200 p-6 mt-2 items-center">
+                <Icon name="directions-bike" size={36} color="#9CA3AF" />
+                <Text className="text-sm font-semibold text-gray-800 mt-2">Not Receiving Orders</Text>
+                <Text className="text-xs text-gray-500 mt-1 text-center">
+                  Switch online and choose a valid slot to view available orders.
+                </Text>
+              </View>
+            ) : filteredOrders.length === 0 ? (
+              <View className="bg-white rounded-2xl border border-gray-200 p-6 mt-2 items-center">
+                <Icon name="inventory-2" size={36} color="#9CA3AF" />
+                <Text className="text-sm font-semibold text-gray-800 mt-2">No Orders Found</Text>
+                <Text className="text-xs text-gray-500 mt-1 text-center">
+                  Try changing status/type filters or search query.
+                </Text>
+              </View>
+            ) : (
+              <View className="mt-2 pb-2">
+                {filteredOrders.map((order, idx) => (
+                  <View key={order?.productorderid || `${order?.orderid || 'order'}-${idx}`} className="mb-2">
+                    <OrderCard
+                      order={order}
+                      onOrderUpdate={handleOrderUpdate}
+                      enableReturnOrder={false}
+                    />
                   </View>
-                ) : null}
-              </>
-            ) : null}
+                ))}
+              </View>
+            )}
           </View>
+        </ScrollView>
+      ) : (
+        <PartnerFastDeliveryPayoutAnalytics
+          partnerid={effectivePartnerId}
+          partnername={effectivePartnerName}
+        />
+      )}
 
-          <View className="bg-white rounded-2xl border border-gray-200 p-3 mt-2">
-            <View className="flex-row items-center bg-gray-100 rounded-xl px-2.5 py-1.5 border border-gray-200">
-              <Icon name="search" size={16} color="#6B7280" />
-              <TextInput
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Search order / name / phone / address..."
-                placeholderTextColor="#9CA3AF"
-                className="flex-1 ml-1.5 text-xs text-gray-900"
+      <View className="bg-white border-t border-gray-200 px-3 py-2">
+        <View className="flex-row">
+          <TouchableOpacity
+            onPress={() => setActiveTab('orders')}
+            className={`flex-1 mr-1.5 rounded-2xl py-3 border ${activeTab === 'orders' ? 'bg-blue-600 border-blue-600' : 'bg-gray-50 border-gray-200'}`}
+            activeOpacity={0.85}
+          >
+            <View className="flex-row items-center justify-center">
+              <Icon
+                name="local-shipping"
+                size={18}
+                color={activeTab === 'orders' ? '#FFFFFF' : '#4B5563'}
               />
-              {searchQuery ? (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Icon name="close" size={14} color="#6B7280" />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
-              {STATUS_OPTIONS.map((status) => {
-                const active = selectedStatus === status;
-                return (
-                  <TouchableOpacity
-                    key={status}
-                    onPress={() => setSelectedStatus(status)}
-                    className={`mr-2 px-2.5 py-1 rounded-full border ${active ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'}`}
-                  >
-                    <Text className={`text-[11px] font-semibold ${active ? 'text-white' : 'text-gray-700'}`}>{status}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
-              {TYPE_OPTIONS.map((type) => {
-                const active = selectedTypes.has(type);
-                return (
-                  <TouchableOpacity
-                    key={type}
-                    onPress={() => toggleType(type)}
-                    className={`mr-2 px-2.5 py-1 rounded-full border ${active ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-300'}`}
-                  >
-                    <Text className={`text-[11px] font-semibold ${active ? 'text-white' : 'text-gray-700'}`}>{type}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <View className="mt-1.5 flex-row items-center justify-between">
-              <Text className="text-[11px] text-gray-600">{filteredOrders.length} orders shown</Text>
-              {(selectedStatus !== 'All' || selectedTypes.size > 0 || searchQuery) ? (
-                <TouchableOpacity onPress={resetFilters}>
-                  <Text className="text-[11px] font-semibold text-blue-700">Clear Filters</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          </View>
-
-          {!showOrders ? (
-            <View className="bg-white rounded-2xl border border-gray-200 p-6 mt-2 items-center">
-              <Icon name="directions-bike" size={36} color="#9CA3AF" />
-              <Text className="text-sm font-semibold text-gray-800 mt-2">Not Receiving Orders</Text>
-              <Text className="text-xs text-gray-500 mt-1 text-center">
-                Switch online and choose a valid slot to view available orders.
+              <Text className={`ml-2 text-xs font-semibold ${activeTab === 'orders' ? 'text-white' : 'text-gray-700'}`}>
+                Current Orders
               </Text>
             </View>
-          ) : filteredOrders.length === 0 ? (
-            <View className="bg-white rounded-2xl border border-gray-200 p-6 mt-2 items-center">
-              <Icon name="inventory-2" size={36} color="#9CA3AF" />
-              <Text className="text-sm font-semibold text-gray-800 mt-2">No Orders Found</Text>
-              <Text className="text-xs text-gray-500 mt-1 text-center">
-                Try changing status/type filters or search query.
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setActiveTab('payout')}
+            className={`flex-1 ml-1.5 rounded-2xl py-3 border ${activeTab === 'payout' ? 'bg-green-600 border-green-600' : 'bg-gray-50 border-gray-200'}`}
+            activeOpacity={0.85}
+          >
+            <View className="flex-row items-center justify-center">
+              <Icon
+                name="payments"
+                size={18}
+                color={activeTab === 'payout' ? '#FFFFFF' : '#4B5563'}
+              />
+              <Text className={`ml-2 text-xs font-semibold ${activeTab === 'payout' ? 'text-white' : 'text-gray-700'}`}>
+                Payout
               </Text>
             </View>
-          ) : (
-            <View className="mt-2 pb-2">
-              {filteredOrders.map((order, idx) => (
-                <View key={order?.productorderid || `${order?.orderid || 'order'}-${idx}`} className="mb-2">
-                  <OrderCard
-                    order={order}
-                    onOrderUpdate={handleOrderUpdate}
-                    enableReturnOrder={false}
-                  />
-                </View>
-              ))}
-            </View>
-          )}
+          </TouchableOpacity>
         </View>
-      </ScrollView>
+      </View>
     </View>
   );
 };

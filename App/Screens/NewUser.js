@@ -463,9 +463,7 @@ const NewUser = () => {
               ) : null
             }
           />
-          <Text className="text-xs text-gray-500 -mt-2 mb-1">
-            {mobile.length} typed, {10 - mobile.length} remaining
-          </Text>
+         
         </Section>
 
         {/* Login details */}

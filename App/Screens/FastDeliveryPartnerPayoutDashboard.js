@@ -78,27 +78,41 @@ const getOrderPaymentMeta = (order) => {
       PAYOUT_PER_ORDER
   );
 
-  const rawPaidAmount = parseNumber(
-    order?.partnerpaymentpaidamount ??
-      order?.paidpartneramount ??
-      order?.partnerpaidamount ??
-      order?.orderpartnerpaidamount ??
-      order?.payoutpaidamount ??
-      order?.paymentpaidamount ??
-      0
-  );
+  const payoutPaidFlag = String(order?.partnerpayoutpaid ?? "0");
+  const isPaidFromBackend = payoutPaidFlag === "1";
+
+  const rawPaidAmount = isPaidFromBackend
+    ? totalPayout
+    : parseNumber(
+        order?.partnerpaymentpaidamount ??
+          order?.paidpartneramount ??
+          order?.partnerpaidamount ??
+          order?.orderpartnerpaidamount ??
+          order?.payoutpaidamount ??
+          order?.paymentpaidamount ??
+          0
+      );
 
   const paidAmount = clampAmount(rawPaidAmount, 0, totalPayout);
   const pendingAmount = Math.max(totalPayout - paidAmount, 0);
 
   const rawStatus = String(
+    order?.partnerpayoutapplicationstatus ??
     order?.partnerpaymentstatus ??
       order?.paymentstatus ??
       order?.partnerpayoutstatus ??
       ""
   ).toLowerCase();
 
+  const applicationStatusText = String(
+    order?.partnerpayoutapplicationstatus || ""
+  );
+  const hasAppliedForPayout =
+    applicationStatusText.trim().length > 0 &&
+    !applicationStatusText.toLowerCase().includes("not applied");
+
   const isExplicitlyProcessed =
+    isPaidFromBackend ||
     Boolean(order?.partnerpaymentprocessed) ||
     Boolean(order?.paymentprocessed) ||
     Boolean(order?.partnerpayoutprocessed) ||
@@ -111,7 +125,7 @@ const getOrderPaymentMeta = (order) => {
   const isPartial = paidAmount > 0 && pendingAmount > 0;
   const isProcessed = isExplicitlyProcessed || isPaid;
 
-  let label = "Pending";
+  let label = "Not Applied";
   let icon = "hourglass-top";
   let bg = "#fefce8";
   let text = "#a16207";
@@ -123,18 +137,12 @@ const getOrderPaymentMeta = (order) => {
     bg = "#ecfdf5";
     text = "#059669";
     border = "#a7f3d0";
-  } else if (isPartial) {
-    label = "Partially Paid";
-    icon = "payments";
+  } else if (hasAppliedForPayout || isPartial || isProcessed) {
+    label = "Applied";
+    icon = "assignment-turned-in";
     bg = "#eff6ff";
     text = "#2563eb";
     border = "#bfdbfe";
-  } else if (isProcessed) {
-    label = "Processed";
-    icon = "task-alt";
-    bg = "#f3f4f6";
-    text = "#4b5563";
-    border = "#d1d5db";
   }
 
   return {
@@ -150,10 +158,14 @@ const getOrderPaymentMeta = (order) => {
     text,
     border,
     rawStatus:
+      order?.partnerpayoutapplicationstatus ||
       order?.partnerpaymentstatus ||
       order?.paymentstatus ||
       order?.partnerpayoutstatus ||
       "",
+    applicationId:
+      order?.partnerpayoutapplicationid || "Partner Not Applied for Payout",
+    hasAppliedForPayout,
     processedAt:
       order?.partnerpaymentprocessedtime ||
       order?.paymentprocessedtime ||
@@ -726,7 +738,14 @@ const OrderDetailsCard = ({ order }) => {
               <Text
                 style={{ fontSize: 12, color: paymentMeta.text, marginTop: 4 }}
               >
-                Raw Status: {paymentMeta.rawStatus}
+                Backend Status: {paymentMeta.rawStatus}
+              </Text>
+            ) : null}
+            {paymentMeta.applicationId ? (
+              <Text
+                style={{ fontSize: 12, color: paymentMeta.text, marginTop: 4 }}
+              >
+                Application: {paymentMeta.applicationId}
               </Text>
             ) : null}
             {paymentMeta.processedAt ? (

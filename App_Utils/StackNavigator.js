@@ -55,6 +55,10 @@ import FastDeliveryPartnerPaymentApprovalScreen from "../App/Screens/FastDeliver
 import DailyMilk_Dashboard_Admin from "../App/Screens/DailyMilk_Dashboard_Admin";
 import ProductReturnAdminScreen from "../App/Screens/ProductReturnAdminScreen";
 import UserDetailsUpdateScreen from "../App/Screens/UserDetailsUpdateScreen";
+import DailyMilkProductsManageScreen from "../App/Screens/DailyMilkProductsManageScreen";
+import AddKitchenPartnerScreen from "../App/Screens/AddKitchenPartnerScreen";
+import ManageKitchenPartnersScreen from "../App/Screens/ManageKitchenPartnersScreen";
+import EditKitchenScreen from "../App/Screens/EditKitchenScreen";
 
 const StackNavigator = () => {
   const Stack = createNativeStackNavigator();
@@ -260,10 +264,34 @@ const StackNavigator = () => {
         options={{ title: 'Return Orders Dashboard' }}
       />
 
-        <Stack.Screen
+      <Stack.Screen
         name="DailyMilk_Dashboard_Admin"
         component={DailyMilk_Dashboard_Admin}
         options={{ title: 'Daily Milk Status Dashboard' }}
+      />
+
+      <Stack.Screen
+        name="DailyMilkProductsManageScreen"
+        component={DailyMilkProductsManageScreen}
+        options={{ title: 'Daily Milk Products' }}
+      />
+
+      <Stack.Screen
+        name="AddKitchenPartnerScreen"
+        component={AddKitchenPartnerScreen}
+        options={{ title: 'Add Kitchen Partner' }}
+      />
+
+      <Stack.Screen
+        name="ManageKitchenPartnersScreen"
+        component={ManageKitchenPartnersScreen}
+        options={{ title: 'Manage Kitchen Partners' }}
+      />
+
+      <Stack.Screen
+        name="EditKitchenScreen"
+        component={EditKitchenScreen}
+        options={{ title: 'Edit Kitchen' }}
       />
 
     </Stack.Navigator>

@@ -394,6 +394,7 @@ const AdminDashboardScreen = () => {
     { id: 207, title: 'Product Offers', gradient: gradientPairs[12], screen: 'OfferViewScreen', icon: 'tag' },
     { id: 208, title: 'Daily Milk Accounts', gradient: gradientPairs[13], screen: 'DailyMilk_AccountsManage', icon: 'tag' },
     { id: 209, title: 'Daily Milk Active Bookings', gradient: gradientPairs[14], screen: 'DailyMilkActiveBookingScreen', icon: 'tag' },
+    { id: 210, title: 'Manage Milk Products', gradient: gradientPairs[15], screen: 'DailyMilkProductsManageScreen', icon: 'bottle-tonic-plus' },
   ];
 
   const deliveryOrdersCards = [
@@ -405,6 +406,12 @@ const AdminDashboardScreen = () => {
     { id: 307, title: 'Payment Approval', gradient: ['#0ea5e9', '#0284c7'], screen: 'FastDeliveryPartnerPaymentApprovalScreen', icon: 'clipboard-check-outline' },
     { id: 305, title: 'Return Orders', gradient: gradientPairs[19], screen: 'ProductReturnAdminScreen', icon: 'backup-restore' },
   ];
+
+  const kitchenCards = [
+    { id: 401, title: 'Add Kitchen Partner', gradient: gradientPairs[20], screen: 'AddKitchenPartnerScreen', icon: 'chef-hat' },
+    { id: 402, title: 'Manage Kitchen Partners', gradient: gradientPairs[21], screen: 'ManageKitchenPartnersScreen', icon: 'storefront-outline' },
+  ];
+
   const handleCardPress = (screenName) => {
     try {
       if (screenName === 'MyOrdersScreen') {
@@ -480,6 +487,17 @@ const AdminDashboardScreen = () => {
     </ScrollView>
   );
 
+  const KitchenTab = () => (
+    <ScrollView className="flex-1 p-4 bg-gray-50">
+      <Text className="text-xl text-gray-800 font-bold mb-4">Kitchen Management</Text>
+      <View className="flex-row flex-wrap justify-between">
+        {kitchenCards.map((card, index) => (
+          <DashboardCard key={getCardKey(card, index)} card={card} index={index} />
+        ))}
+      </View>
+    </ScrollView>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: 'white' }}>
       <Header />
@@ -511,6 +529,13 @@ const AdminDashboardScreen = () => {
           component={DeliveryOrdersTab}
           options={{
             tabBarIcon: ({ color }) => <MaterialCommunityIcons name="truck-delivery" size={20} color={color} />,
+          }}
+        />
+        <Tab.Screen
+          name="Kitchen"
+          component={KitchenTab}
+          options={{
+            tabBarIcon: ({ color }) => <MaterialCommunityIcons name="chef-hat" size={20} color={color} />,
           }}
         />
       </Tab.Navigator>

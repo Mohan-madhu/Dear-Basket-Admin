@@ -9,6 +9,8 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
+  SafeAreaView,
+  useWindowDimensions,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { API } from "../../App_Utils/Services/APIService";
@@ -19,6 +21,10 @@ const STATUS_OPTIONS = ["All", "Applied", "Approved", "Paid", "Verified", "Rejec
 
 const parseNumber = (value) => Number(value || 0);
 const formatCurrency = (value) => `₹${parseNumber(value).toFixed(2)}`;
+const formatShortApplicationId = (value) => {
+  const id = String(value || "").trim();
+  return id ? `#${id.slice(0, 5).toUpperCase()}` : "-";
+};
 
 const formatDateTime = (value) => {
   if (!value) return "-";
@@ -48,7 +54,9 @@ const statusMeta = (status) => {
 
 const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
   const { setLoading } = useLoading();
+  const { height } = useWindowDimensions();
   const loadingRef = useRef(setLoading);
+  const detailScrollMaxHeight = Math.max(220, height * 0.52);
 
   const [adminId, setAdminId] = useState("");
   const [adminName, setAdminName] = useState("");
@@ -145,11 +153,13 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
     if (!q) return rows;
     return rows.filter((row) => {
       const id = String(row?.payoutapplicationid || "").toLowerCase();
+      const shortId = formatShortApplicationId(row?.payoutapplicationid).toLowerCase();
       const partnerid = String(row?.partnerid || "").toLowerCase();
       const partnername = String(row?.partnername || "").toLowerCase();
       const status = String(normalizeStatus(row) || "").toLowerCase();
       return (
         id.includes(q) ||
+        shortId.includes(q) ||
         partnerid.includes(q) ||
         partnername.includes(q) ||
         status.includes(q)
@@ -285,36 +295,58 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
     const status = normalizeStatus(row).toLowerCase();
     if (status === "applied") {
       return (
-        <View style={{ flexDirection: "row", marginTop: 10 }}>
+        <View style={{ marginTop: 10 }}>
+          <View style={{ flexDirection: "row" }}>
+            <TouchableOpacity
+              disabled={actionLoading}
+              onPress={() => onApprove(row)}
+              style={{ flex: 1, backgroundColor: actionLoading ? "#93c5fd" : "#2563eb", borderRadius: 10, paddingVertical: 9, marginRight: 5 }}
+            >
+              <Text style={{ color: "white", textAlign: "center", fontWeight: "800", fontSize: 12 }}>Approve</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={actionLoading}
+              onPress={() => openReject(row)}
+              style={{ flex: 1, backgroundColor: actionLoading ? "#fca5a5" : "#ef4444", borderRadius: 10, paddingVertical: 9, marginLeft: 5 }}
+            >
+              <Text style={{ color: "white", textAlign: "center", fontWeight: "800", fontSize: 12 }}>Reject</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
-            onPress={() => onApprove(row)}
-            style={{ flex: 1, backgroundColor: "#2563eb", borderRadius: 10, paddingVertical: 9, marginRight: 5 }}
+            disabled={actionLoading}
+            onPress={() => onCancel(row)}
+            style={{ backgroundColor: actionLoading ? "#d1d5db" : "#4b5563", borderRadius: 10, paddingVertical: 9, marginTop: 8 }}
           >
-            <Text style={{ color: "white", textAlign: "center", fontWeight: "800", fontSize: 12 }}>Approve</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => openReject(row)}
-            style={{ flex: 1, backgroundColor: "#ef4444", borderRadius: 10, paddingVertical: 9, marginLeft: 5 }}
-          >
-            <Text style={{ color: "white", textAlign: "center", fontWeight: "800", fontSize: 12 }}>Reject</Text>
+            <Text style={{ color: "white", textAlign: "center", fontWeight: "800", fontSize: 12 }}>Cancel</Text>
           </TouchableOpacity>
         </View>
       );
     }
     if (status === "approved") {
       return (
-        <View style={{ flexDirection: "row", marginTop: 10 }}>
+        <View style={{ marginTop: 10 }}>
+          <View style={{ flexDirection: "row" }}>
+            <TouchableOpacity
+              disabled={actionLoading}
+              onPress={() => onMarkPaid(row)}
+              style={{ flex: 1, backgroundColor: actionLoading ? "#5eead4" : "#0d9488", borderRadius: 10, paddingVertical: 9, marginRight: 5 }}
+            >
+              <Text style={{ color: "white", textAlign: "center", fontWeight: "800", fontSize: 12 }}>Mark Paid</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={actionLoading}
+              onPress={() => openReject(row)}
+              style={{ flex: 1, backgroundColor: actionLoading ? "#fca5a5" : "#ef4444", borderRadius: 10, paddingVertical: 9, marginLeft: 5 }}
+            >
+              <Text style={{ color: "white", textAlign: "center", fontWeight: "800", fontSize: 12 }}>Reject</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
-            onPress={() => onMarkPaid(row)}
-            style={{ flex: 1, backgroundColor: "#0d9488", borderRadius: 10, paddingVertical: 9, marginRight: 5 }}
+            disabled={actionLoading}
+            onPress={() => onCancel(row)}
+            style={{ backgroundColor: actionLoading ? "#d1d5db" : "#4b5563", borderRadius: 10, paddingVertical: 9, marginTop: 8 }}
           >
-            <Text style={{ color: "white", textAlign: "center", fontWeight: "800", fontSize: 12 }}>Mark Paid</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => openReject(row)}
-            style={{ flex: 1, backgroundColor: "#ef4444", borderRadius: 10, paddingVertical: 9, marginLeft: 5 }}
-          >
-            <Text style={{ color: "white", textAlign: "center", fontWeight: "800", fontSize: 12 }}>Reject</Text>
+            <Text style={{ color: "white", textAlign: "center", fontWeight: "800", fontSize: 12 }}>Cancel</Text>
           </TouchableOpacity>
         </View>
       );
@@ -529,7 +561,7 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
                               <View style={{ flex: 1, paddingRight: 10 }}>
                                 <Text style={{ fontSize: 12, color: "#6b7280" }}>App ID</Text>
                                 <Text style={{ fontSize: 12, fontWeight: "800", color: "#111827", marginTop: 1 }}>
-                                  {row?.payoutapplicationid || "-"}
+                                  {formatShortApplicationId(row?.payoutapplicationid)}
                                 </Text>
                               </View>
                               <View
@@ -574,15 +606,20 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
 
       <Modal visible={showDetailModal} transparent animationType="slide" onRequestClose={() => setShowDetailModal(false)}>
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}>
-          <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 14, maxHeight: "88%" }}>
+          <SafeAreaView style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "88%" }}>
+          <View style={{ padding: 14, paddingBottom: 8 }}>
             <Text style={{ fontSize: 18, fontWeight: "900", color: "#111827" }}>Payout Application</Text>
 
             {selectedApplication ? (
-              <ScrollView style={{ marginTop: 8 }}>
+              <ScrollView
+                style={{ marginTop: 8, maxHeight: detailScrollMaxHeight }}
+                contentContainerStyle={{ paddingBottom: 14 }}
+                showsVerticalScrollIndicator={false}
+              >
                 <View style={{ backgroundColor: "#f9fafb", borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 14, padding: 12 }}>
                   <Text style={{ fontSize: 11, color: "#6b7280" }}>Application ID</Text>
                   <Text style={{ fontSize: 13, color: "#111827", fontWeight: "800", marginTop: 2 }}>
-                    {selectedApplication?.payoutapplicationid || "-"}
+                    {formatShortApplicationId(selectedApplication?.payoutapplicationid)}
                   </Text>
                   <Text style={{ fontSize: 22, color: "#111827", fontWeight: "900", marginTop: 10 }}>
                     {formatCurrency(selectedApplication?.totalamount)}
@@ -628,8 +665,13 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
                   <Text style={{ fontSize: 12, color: "#374151", marginTop: 5 }}>IFSC: {selectedApplication?.payoutifsc || "-"}</Text>
                 </View>
 
-                {renderActions(selectedApplication)}
               </ScrollView>
+            ) : null}
+
+            {selectedApplication ? (
+              <View style={{ paddingTop: 4 }}>
+                {renderActions(selectedApplication)}
+              </View>
             ) : null}
 
             <TouchableOpacity
@@ -639,6 +681,7 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
               <Text style={{ textAlign: "center", color: "#1f2937", fontWeight: "800" }}>Close</Text>
             </TouchableOpacity>
           </View>
+          </SafeAreaView>
         </View>
       </Modal>
 

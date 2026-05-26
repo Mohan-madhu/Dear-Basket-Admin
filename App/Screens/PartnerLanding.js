@@ -519,7 +519,7 @@ const PartnerLanding = () => {
               </View>
             ) : filteredOrders.length === 0 ? (
               <View className="bg-white rounded-2xl border border-gray-200 p-6 mt-2 items-center">
-                <Icon name="inventory-2" size={36} color="#9CA3AF" />
+                  
                 <Text className="text-sm font-semibold text-gray-800 mt-2">No Orders Found</Text>
                 <Text className="text-xs text-gray-500 mt-1 text-center">
                   Try changing status/type filters or search query.

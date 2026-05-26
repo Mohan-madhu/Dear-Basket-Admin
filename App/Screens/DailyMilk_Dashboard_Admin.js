@@ -37,13 +37,14 @@ const toNumber = (value) => {
 
 const getRegularQty = (row) => toNumber(row?.regular_quantity ?? row?.quantity);
 const getExtraQty = (row) => toNumber(row?.extra_quantity ?? row?.extra);
+const getPregnancyQty = (row) => toNumber(row?.pregnancy_quantity);
 const getCancelledQty = (row) => toNumber(row?.cancelled_quantity);
 const getTotalQty = (row) => {
   const total = toNumber(row?.total_quantity);
   if (total > 0 || getCancelledQty(row) > 0 || Number(row?.cancelled) === 1) {
     return total;
   }
-  return getRegularQty(row) + getExtraQty(row);
+  return getRegularQty(row) + getExtraQty(row) + getPregnancyQty(row);
 };
 const getUnitPrice = (row) => {
   const regularQty = getRegularQty(row);
@@ -54,13 +55,21 @@ const getEffectiveAmount = (row) => getUnitPrice(row) * getTotalQty(row);
 const getQtyByFilter = (row, filterType) => {
   if (filterType === "daily") return isCancelledRow(row) ? 0 : getRegularQty(row);
   if (filterType === "extra") return isCancelledRow(row) ? 0 : getExtraQty(row);
+  if (filterType === "pregnancy") return isCancelledRow(row) ? 0 : getPregnancyQty(row);
   if (filterType === "cancelled") return getCancelledQty(row);
   return getTotalQty(row);
 };
-const getAmountByFilter = (row, filterType) => getUnitPrice(row) * getQtyByFilter(row, filterType);
+const getAmountByFilter = (row, filterType) => {
+  if (filterType === "pregnancy") return 0;
+  if (filterType === "all") {
+    return getUnitPrice(row) * (getRegularQty(row) + getExtraQty(row));
+  }
+  return getUnitPrice(row) * getQtyByFilter(row, filterType);
+};
 
 const isCancelledRow = (row) => Number(row?.cancelled) === 1 || getCancelledQty(row) > 0;
 const hasExtraQty = (row) => getExtraQty(row) > 0;
+const hasPregnancyQty = (row) => getPregnancyQty(row) > 0;
 const hasRegularQty = (row) => getRegularQty(row) > 0;
 
 const getDateRangeByType = (type) => {
@@ -99,8 +108,24 @@ const matchesEntryFilter = (row, filterType) => {
   if (filterType === "all") return true;
   if (filterType === "cancelled") return isCancelledRow(row);
   if (filterType === "extra") return !isCancelledRow(row) && hasExtraQty(row);
+  if (filterType === "pregnancy") return !isCancelledRow(row) && hasPregnancyQty(row);
   if (filterType === "daily") return !isCancelledRow(row) && hasRegularQty(row);
   return true;
+};
+
+const normalizeDeliveryType = (value) =>
+  `${value || ""}`.trim().toLowerCase().replace(/[\s_-]+/g, "");
+
+const matchesSessionFilter = (row, filterType) => {
+  if (filterType === "all") return true;
+
+  const deliveryType = normalizeDeliveryType(row?.milkdeliverytype);
+
+  if (filterType === "other") {
+    return deliveryType === "other";
+  }
+
+  return deliveryType === filterType;
 };
 
 const getStatusMetaByType = (entryType) => {
@@ -124,6 +149,16 @@ const getStatusMetaByType = (entryType) => {
     };
   }
 
+  if (entryType === "pregnancy") {
+    return {
+      text: "Pregnancy Free",
+      wrap: "bg-pink-50 border-pink-100",
+      textColor: "text-pink-700",
+      icon: "favorite",
+      iconColor: "#ec4899",
+    };
+  }
+
   return {
     text: "Daily Milk",
     wrap: "bg-emerald-50 border-emerald-100",
@@ -137,6 +172,7 @@ const splitRowToEntries = (row) => {
   const entries = [];
   const regularQty = getRegularQty(row);
   const extraQty = getExtraQty(row);
+  const pregnancyQty = getPregnancyQty(row);
   const cancelledQty = getCancelledQty(row);
   const unitPrice = getUnitPrice(row);
 
@@ -170,6 +206,15 @@ const splitRowToEntries = (row) => {
     });
   }
 
+  if (pregnancyQty > 0) {
+    entries.push({
+      ...row,
+      entryType: "pregnancy",
+      displayQuantity: pregnancyQty,
+      displayAmount: 0,
+    });
+  }
+
   if (!entries.length) {
     entries.push({
       ...row,
@@ -196,7 +241,15 @@ const ENTRY_FILTERS = [
   { key: "all", label: "All", icon: "apps" },
   { key: "daily", label: "Daily", icon: "local-drink" },
   { key: "extra", label: "Extra", icon: "add-circle" },
+  { key: "pregnancy", label: "Pregnancy", icon: "favorite" },
   { key: "cancelled", label: "Cancelled", icon: "cancel" },
+];
+
+const SESSION_FILTERS = [
+  { key: "all", label: "All", icon: "apps" },
+  { key: "morning", label: "Morning", icon: "wb-sunny" },
+  { key: "evening", label: "Evening", icon: "nights-stay" },
+  { key: "other", label: "Other", icon: "more-horiz" },
 ];
 
 const QuickDateFilters = ({ selectedFilter, onChange }) => {
@@ -281,7 +334,7 @@ const EntryTypeFilters = ({ selectedFilter, onChange }) => {
 
 const CompactStatCard = ({ title, value, subValue, icon, tint }) => {
   return (
-    <View className="flex-1 bg-white border border-gray-200 rounded-2xl px-3 py-3 mr-2">
+    <View className="flex-1 bg-white border border-gray-200 rounded-2xl px-3 py-3">
       <View className="flex-row items-center justify-between mb-2">
         <Text className="text-[11px] text-gray-500 font-medium">{title}</Text>
         <Icon name={icon} size={15} color={tint} />
@@ -292,38 +345,47 @@ const CompactStatCard = ({ title, value, subValue, icon, tint }) => {
   );
 };
 
-const DashboardSummary = ({ data, rangeLabel, fromDate, toDate }) => {
+const DashboardSummary = ({ data, entryFilter, rangeLabel, fromDate, toDate }) => {
   const summary = useMemo(() => {
-    const dailyRows = data.filter(
-      (x) => !isCancelledRow(x) && getRegularQty(x) > 0
-    );
-    const extraRows = data.filter(
-      (x) => !isCancelledRow(x) && getExtraQty(x) > 0
-    );
-    const cancelledRows = data.filter((x) => isCancelledRow(x));
+    const visibleEntries = (data || [])
+      .flatMap((row) => splitRowToEntries(row))
+      .filter((entry) => entryFilter === "all" || entry.entryType === entryFilter);
 
-    const uniqueCount = (rows) => new Set(rows.map((x) => x.userid)).size;
-    const sumQty = (rows, getQtyFn) => rows.reduce((sum, row) => sum + getQtyFn(row), 0);
+    const entriesByType = (entryType) =>
+      visibleEntries.filter((entry) => entry.entryType === entryType);
 
-    const dailyMilkUsers = uniqueCount(dailyRows);
-    const extraMilkUsers = uniqueCount(extraRows);
-    const cancelledUsers = uniqueCount(cancelledRows);
+    const uniqueCount = (entries) => new Set(entries.map((x) => x.userid)).size;
+    const sumQty = (entries) =>
+      entries.reduce((sum, entry) => sum + toNumber(entry.displayQuantity), 0);
 
-    const dailyMilkLitres = sumQty(data, (row) => (isCancelledRow(row) ? 0 : getRegularQty(row)));
-    const extraMilkLitres = sumQty(data, (row) => (isCancelledRow(row) ? 0 : getExtraQty(row)));
-    const cancelledLitres = sumQty(data, getCancelledQty);
-    const totalFinalLitres = sumQty(data, getTotalQty);
+    const dailyEntries = entriesByType("daily");
+    const extraEntries = entriesByType("extra");
+    const pregnancyEntries = entriesByType("pregnancy");
+    const cancelledEntries = entriesByType("cancelled");
+
+    const dailyMilkUsers = uniqueCount(dailyEntries);
+    const extraMilkUsers = uniqueCount(extraEntries);
+    const pregnancyMilkUsers = uniqueCount(pregnancyEntries);
+    const cancelledUsers = uniqueCount(cancelledEntries);
+
+    const dailyMilkLitres = sumQty(dailyEntries);
+    const extraMilkLitres = sumQty(extraEntries);
+    const pregnancyMilkLitres = sumQty(pregnancyEntries);
+    const cancelledLitres = sumQty(cancelledEntries);
+    const totalFinalLitres = sumQty(visibleEntries);
 
     return {
       dailyMilkUsers,
       extraMilkUsers,
+      pregnancyMilkUsers,
       cancelledUsers,
       dailyMilkLitres,
       extraMilkLitres,
+      pregnancyMilkLitres,
       cancelledLitres,
       totalFinalLitres,
     };
-  }, [data]);
+  }, [data, entryFilter]);
 
   return (
     <View className="px-4 pt-2 pb-2">
@@ -347,20 +409,36 @@ const DashboardSummary = ({ data, rangeLabel, fromDate, toDate }) => {
         </View>
 
         <View className="flex-row mb-2">
-          <CompactStatCard
-            title="Daily"
-            value={summary.dailyMilkUsers}
-            subValue={litresText(summary.dailyMilkLitres)}
-            icon="local-drink"
-            tint="#10b981"
-          />
-          <CompactStatCard
-            title="Extra"
-            value={summary.extraMilkUsers}
-            subValue={litresText(summary.extraMilkLitres)}
-            icon="add-circle"
-            tint="#f59e0b"
-          />
+          <View className="flex-1 mr-2">
+            <CompactStatCard
+              title="Daily"
+              value={summary.dailyMilkUsers}
+              subValue={litresText(summary.dailyMilkLitres)}
+              icon="local-drink"
+              tint="#10b981"
+            />
+          </View>
+          <View className="flex-1">
+            <CompactStatCard
+              title="Extra"
+              value={summary.extraMilkUsers}
+              subValue={litresText(summary.extraMilkLitres)}
+              icon="add-circle"
+              tint="#f59e0b"
+            />
+          </View>
+        </View>
+
+        <View className="flex-row">
+          <View className="flex-1 mr-2">
+            <CompactStatCard
+              title="Pregnancy"
+              value={summary.pregnancyMilkUsers}
+              subValue={`${litresText(summary.pregnancyMilkLitres)} free`}
+              icon="favorite"
+              tint="#ec4899"
+            />
+          </View>
           <View className="flex-1">
             <CompactStatCard
               title="Cancelled"
@@ -373,6 +451,45 @@ const DashboardSummary = ({ data, rangeLabel, fromDate, toDate }) => {
         </View>
       </View>
     </View>
+  );
+};
+
+const SessionFilters = ({ selectedFilter, onChange }) => {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      className="px-4 pt-0 pb-3"
+      contentContainerStyle={{ paddingRight: 16 }}
+    >
+      {SESSION_FILTERS.map((item) => {
+        const isActive = selectedFilter === item.key;
+
+        return (
+          <TouchableOpacity
+            key={item.key}
+            activeOpacity={0.85}
+            onPress={() => onChange(item.key)}
+            className={`mr-2 rounded-full border flex-row items-center ${isActive
+              ? "bg-indigo-600 border-indigo-600 px-4 py-2.5"
+              : "bg-white border-gray-200 px-4 py-2.5"
+              }`}
+          >
+            <Icon
+              name={item.icon}
+              size={14}
+              color={isActive ? "#fff" : "#6b7280"}
+            />
+            <Text
+              className={`ml-2 text-xs font-semibold ${isActive ? "text-white" : "text-gray-700"
+                }`}
+            >
+              {item.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
   );
 };
 
@@ -420,7 +537,9 @@ const DailyEntryCard = ({ entry, showMeta = true }) => {
           Qty <Text className="font-bold text-gray-900">{litresText(entry.displayQuantity)}</Text>
         </Text>
         <Text className="text-[11px] text-gray-600">
-          Amt <Text className="font-bold text-gray-900">{amountText(entry.displayAmount)}</Text>
+          Amt <Text className={`font-bold ${entry.entryType === "pregnancy" ? "text-pink-700" : "text-gray-900"}`}>
+            {entry.entryType === "pregnancy" ? "Free" : amountText(entry.displayAmount)}
+          </Text>
         </Text>
       </View>
     </Animated.View>
@@ -445,6 +564,10 @@ const UserDetailsCard = ({ userData, entryFilter }) => {
       .filter((x) => x.entryType === "extra")
       .reduce((sum, x) => sum + toNumber(x.displayQuantity), 0);
 
+    const pregnancyLitres = filteredEntries
+      .filter((x) => x.entryType === "pregnancy")
+      .reduce((sum, x) => sum + toNumber(x.displayQuantity), 0);
+
     const cancelledLitres = filteredEntries
       .filter((x) => x.entryType === "cancelled")
       .reduce((sum, x) => sum + toNumber(x.displayQuantity), 0);
@@ -457,6 +580,7 @@ const UserDetailsCard = ({ userData, entryFilter }) => {
     return {
       regularLitres,
       extraLitres,
+      pregnancyLitres,
       cancelledLitres,
       totalAmount,
     };
@@ -496,12 +620,15 @@ const UserDetailsCard = ({ userData, entryFilter }) => {
           </Text>
         </View>
 
-        <View className="flex-row items-center mb-2">
+        <View className="flex-row flex-wrap items-center mb-2">
           <View className="bg-emerald-50 px-2 py-1 rounded-full mr-1.5">
             <Text className="text-[10px] font-semibold text-emerald-700">D {litresText(summary.regularLitres)}</Text>
           </View>
           <View className="bg-amber-50 px-2 py-1 rounded-full mr-1.5">
             <Text className="text-[10px] font-semibold text-amber-700">E {litresText(summary.extraLitres)}</Text>
+          </View>
+          <View className="bg-pink-50 px-2 py-1 rounded-full mr-1.5">
+            <Text className="text-[10px] font-semibold text-pink-700">P {litresText(summary.pregnancyLitres)}</Text>
           </View>
           <View className="bg-red-50 px-2 py-1 rounded-full">
             <Text className="text-[10px] font-semibold text-red-700">C {litresText(summary.cancelledLitres)}</Text>
@@ -706,6 +833,13 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
         return sum + userExtra;
       }, 0);
 
+      const partnerPregnancyLitres = users.reduce((sum, u) => {
+        const userPregnancy = (u.rows || [])
+          .reduce((innerSum, row) => innerSum + (isCancelledRow(row) ? 0 : getPregnancyQty(row)), 0);
+
+        return sum + userPregnancy;
+      }, 0);
+
       const partnerCancelledLitres = users.reduce((sum, u) => {
         const userCancelled = (u.rows || [])
           .reduce((innerSum, row) => innerSum + getCancelledQty(row), 0);
@@ -726,12 +860,13 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
         users,
         partnerDailyLitres,
         partnerExtraLitres,
+        partnerPregnancyLitres,
         partnerCancelledLitres,
         partnerTotalLitres,
         partnerTotalAmount,
       };
     });
-  }, [filteredRows]);
+  }, [filteredRows, entryFilter]);
 
   const onTogglePartner = (partnerId) => {
     if (expandedPartner === partnerId) {
@@ -817,7 +952,7 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
                     />
                   </View>
 
-                  <View className="flex-row">
+                  <View className="flex-row flex-wrap justify-end">
                     <View className="bg-emerald-50 px-2.5 py-1 rounded-full mr-1.5">
                       <Text className="text-[10px] font-semibold text-emerald-700">
                         D {litresText(partner.partnerDailyLitres)}
@@ -827,6 +962,12 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
                     <View className="bg-amber-50 px-2.5 py-1 rounded-full mr-1.5">
                       <Text className="text-[10px] font-semibold text-amber-700">
                         E {litresText(partner.partnerExtraLitres)}
+                      </Text>
+                    </View>
+
+                    <View className="bg-pink-50 px-2.5 py-1 rounded-full mr-1.5">
+                      <Text className="text-[10px] font-semibold text-pink-700">
+                        P {litresText(partner.partnerPregnancyLitres)}
                       </Text>
                     </View>
 
@@ -918,6 +1059,7 @@ const DailyMilk_Dashboard_Admin = () => {
   const [dashboardRows, setDashboardRows] = useState([]);
   const [selectedDateFilter, setSelectedDateFilter] = useState("today");
   const [selectedEntryFilter, setSelectedEntryFilter] = useState("all");
+  const [selectedSessionFilter, setSelectedSessionFilter] = useState("all");
   const [selectedRange, setSelectedRange] = useState(getDateRangeByType("today"));
   const { setLoading } = useLoading();
 
@@ -928,6 +1070,7 @@ const DailyMilk_Dashboard_Admin = () => {
 
       setLoading(true, `Fetching dashboard (${range.label})...`);
 
+      console.log(  `DailyMilkStatus/Dashboard?from=${range.from}&to=${range.to}`)
       const res = await API.GET(
         `DailyMilkStatus/Dashboard?from=${range.from}&to=${range.to}`
       );
@@ -950,9 +1093,11 @@ const DailyMilk_Dashboard_Admin = () => {
     fetchDashboardData(filterType);
   };
 
-  const filteredSummaryRows = useMemo(() => {
-    return dashboardRows || [];
-  }, [dashboardRows]);
+  const sessionFilteredRows = useMemo(() => {
+    return (dashboardRows || []).filter((row) =>
+      matchesSessionFilter(row, selectedSessionFilter)
+    );
+  }, [dashboardRows, selectedSessionFilter]);
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -987,7 +1132,8 @@ const DailyMilk_Dashboard_Admin = () => {
 
         {/* Summary */}
         <DashboardSummary
-          data={filteredSummaryRows}
+          data={sessionFilteredRows}
+          entryFilter={selectedEntryFilter}
           rangeLabel={selectedRange.label}
           fromDate={selectedRange.from}
           toDate={selectedRange.to}
@@ -999,9 +1145,15 @@ const DailyMilk_Dashboard_Admin = () => {
           onChange={setSelectedEntryFilter}
         />
 
+        {/* Session Filter */}
+        <SessionFilters
+          selectedFilter={selectedSessionFilter}
+          onChange={setSelectedSessionFilter}
+        />
+
         {/* Grouped Content */}
         <PartnerWiseDashboardList
-          rows={dashboardRows}
+          rows={sessionFilteredRows}
           entryFilter={selectedEntryFilter}
         />
       </ScrollView>

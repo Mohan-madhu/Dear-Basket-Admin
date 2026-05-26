@@ -9,6 +9,7 @@ export const Config = {
   // API endpoint
    API_URL: "https://dev.dine360.ca/backend/API/DearBasket",
 //  API_URL: "http://82.25.105.135:15000/API/DearBasket",
+   DEAR_KITCHEN_API_URL: "https://dev.dine360.ca/backend/API/DearBasket/DearKitchen",
    FAST_DELIVERY_PARTNER_PAYOUT_PER_ORDER: 50,
 };
 

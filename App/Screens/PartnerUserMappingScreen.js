@@ -16,11 +16,21 @@ import Animated, { FadeIn, FadeOut, Layout } from "react-native-reanimated";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { Image } from "expo-image";
 
+const DELIVERY_TYPES = ["Morning", "Evening"];
+
+const normalizeDeliveryType = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "morning") return "Morning";
+  if (normalized === "evening") return "Evening";
+  return "";
+};
+
 const PartnerUserMappingScreen = () => {
   const [allusers, setAllUsers] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [selectedPartner, setSelectedPartner] = useState(null);
   const [selectedCustomers, setSelectedCustomers] = useState([]);
+  const [deliveryTypes, setDeliveryTypes] = useState({});
   const { setLoading } = useLoading();
 
   const userMap = useMemo(() => {
@@ -30,12 +40,18 @@ const PartnerUserMappingScreen = () => {
   }, [allusers]);
 
   const partners = useMemo(
-    () => allusers.filter((user) => user.usertype.toLowerCase() === "partner"),
+    () =>
+      allusers.filter(
+        (user) => String(user?.usertype || "").toLowerCase() === "partner"
+      ),
     [allusers]
   );
 
   const users = useMemo(
-    () => allusers.filter((user) => user.usertype.toLowerCase() === "user"),
+    () =>
+      allusers.filter(
+        (user) => String(user?.usertype || "").toLowerCase() === "user"
+      ),
     [allusers]
   );
 
@@ -45,7 +61,7 @@ const PartnerUserMappingScreen = () => {
     try {
       setLoading(true, "Fetching partners...");
       const res = await API.GET("User");
-      setAllUsers(res.Response);
+      setAllUsers(res?.Response || []);
     } catch (err) {
       Alert.alert("Error", "Failed to fetch partners");
       console.error(err);
@@ -54,11 +70,11 @@ const PartnerUserMappingScreen = () => {
     }
   };
 
-  const fetchPartnerCustomers = async (partnerId) => {
+  const fetchPartnerCustomers = async () => {
     try {
       setLoading(true, "Fetching customers...");
       const res = await API.GET("DailyMilkRegistration");
-      setCustomers(res.Response);
+      setCustomers(res?.Response || []);
     } catch (err) {
       Alert.alert("Error", "Failed to fetch customers");
       console.error(err);
@@ -71,10 +87,18 @@ const PartnerUserMappingScreen = () => {
     return users.filter((user) => user.mappedpartnerid === partnerid).length;
   };
 
+  const getSelectedDeliveryType = (customerId) => {
+    return (
+      deliveryTypes[customerId] ||
+      normalizeDeliveryType(GetUserData(customerId)?.milkdeliverytype)
+    );
+  };
+
   const handlePartnerSelect = async (partner) => {
     setSelectedPartner(partner);
     setSelectedCustomers([]);
-    await fetchPartnerCustomers(partner.transid);
+    setDeliveryTypes({});
+    await fetchPartnerCustomers();
   };
 
   const toggleCustomerSelect = (customerId) => {
@@ -83,6 +107,13 @@ const PartnerUserMappingScreen = () => {
         ? prev.filter((id) => id !== customerId)
         : [...prev, customerId]
     );
+  };
+
+  const setCustomerDeliveryType = (customerId, deliveryType) => {
+    setDeliveryTypes((prev) => ({
+      ...prev,
+      [customerId]: deliveryType,
+    }));
   };
 
   const openMaps = (latitude, longitude) => {
@@ -99,12 +130,27 @@ const PartnerUserMappingScreen = () => {
   };
 
   const handleSaveCustomers = async () => {
+    if (!selectedPartner) {
+      Alert.alert("Error", "Please select a partner first");
+      return;
+    }
+
     if (selectedCustomers.length === 0) {
       Alert.alert("Info", "Please select at least one customer");
       return;
     }
 
+    const customersMissingDeliveryType = selectedCustomers.filter(
+      (customerId) => !getSelectedDeliveryType(customerId)
+    );
 
+    if (customersMissingDeliveryType.length > 0) {
+      Alert.alert(
+        "Info",
+        "Please select Morning or Evening delivery type for all selected customers"
+      );
+      return;
+    }
 
     Alert.alert(
       "Confirm",
@@ -114,14 +160,35 @@ const PartnerUserMappingScreen = () => {
         {
           text: "Confirm",
           onPress: async () => {
-            const res = await API.PUT("User/partner-user-mapping", {
-              partnerid: selectedPartner.transid,
-              userids: selectedCustomers,
-            });
-            Alert.alert("Success", "Customers assigned successfully");
-            setSelectedPartner(null);
-            setSelectedCustomers([]);
-            fetchPartners();
+            try {
+              setLoading(true, "Saving customer mapping...");
+              await API.PUT("User/partner-user-mapping", {
+                partnerid: selectedPartner.transid,
+                userids: selectedCustomers,
+              });
+
+              await Promise.all(
+                selectedCustomers.map((userid) => {
+                  const milkdeliverytype = getSelectedDeliveryType(userid);
+
+                  return API.PUT("User", {
+                    transid: userid,
+                    milkdeliverytype,
+                  });
+                })
+              );
+
+              Alert.alert("Success", "Customers assigned successfully");
+              setSelectedPartner(null);
+              setSelectedCustomers([]);
+              setDeliveryTypes({});
+              fetchPartners();
+            } catch (err) {
+              Alert.alert("Error", "Failed to save customer mapping");
+              console.error(err);
+            } finally {
+              setLoading(false);
+            }
           },
         },
       ]
@@ -133,6 +200,8 @@ const PartnerUserMappingScreen = () => {
   }, []);
 
   useEffect(() => {
+    if (!selectedPartner) return;
+
     const newSelected = customers
       .filter(
         (c) =>
@@ -144,7 +213,22 @@ const PartnerUserMappingScreen = () => {
     if (newSelected.length > 0) {
       setSelectedCustomers((prev) => [...prev, ...newSelected]);
     }
-  }, [customers, selectedPartner]);
+
+    const existingDeliveryTypes = {};
+    customers.forEach((customer) => {
+      const deliveryType = normalizeDeliveryType(
+        GetUserData(customer.userid)?.milkdeliverytype
+      );
+      if (deliveryType) {
+        existingDeliveryTypes[customer.userid] = deliveryType;
+      }
+    });
+
+    setDeliveryTypes((prev) => ({
+      ...existingDeliveryTypes,
+      ...prev,
+    }));
+  }, [customers, selectedPartner, selectedCustomers, userMap]);
 
   const renderProfileImage = (profile) => {
     if (!profile || profile === "No File Uploaded") {
@@ -186,6 +270,39 @@ const PartnerUserMappingScreen = () => {
     >
       {value && <Icon name="check" size={16} color="white" />}
     </Pressable>
+  );
+
+  const DeliveryTypeSelector = ({ value, onChange, disabled }) => (
+    <View className="mt-3">
+      <Text className="text-[11px] text-gray-500 font-semibold mb-1.5">
+        Delivery Type
+      </Text>
+      <View className="flex-row">
+        {DELIVERY_TYPES.map((type) => {
+          const isActive = value === type;
+
+          return (
+            <TouchableOpacity
+              key={type}
+              disabled={disabled}
+              activeOpacity={0.85}
+              onPress={() => onChange(type)}
+              className={`flex-1 px-3 py-2 rounded-lg border mr-2 ${isActive
+                ? "bg-blue-500 border-blue-500"
+                : "bg-white border-gray-200"
+                } ${disabled ? "opacity-50" : ""}`}
+            >
+              <Text
+                className={`text-center text-xs font-semibold ${isActive ? "text-white" : "text-gray-700"
+                  }`}
+              >
+                {type}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
   );
 
   return (
@@ -251,8 +368,8 @@ const PartnerUserMappingScreen = () => {
                         </View>
                         <Text
                           className={`text-xs px-2.5 py-1 rounded-full font-medium ${partner.status === 1
-                              ? "bg-green-50 text-green-700 border border-green-100"
-                              : "bg-red-50 text-red-700 border border-red-100"
+                            ? "bg-green-50 text-green-700 border border-green-100"
+                            : "bg-red-50 text-red-700 border border-red-100"
                             }`}
                         >
                           {partner.status === 1 ? "Active" : "Inactive"}
@@ -306,7 +423,7 @@ const PartnerUserMappingScreen = () => {
                   No customers found
                 </Text>
                 <Text className="text-gray-400 mt-1 text-center">
-                  This partner has no assigned customers
+                  No daily milk customers are available to assign
                 </Text>
               </View>
             ) : (
@@ -316,16 +433,12 @@ const PartnerUserMappingScreen = () => {
                   const isMappedToOther =
                     userData?.mappedpartnerid &&
                     userData.mappedpartnerid !== selectedPartner?.transid;
+                  const isSelected = selectedCustomers.includes(customer.userid);
 
                   return (
-                    <Pressable
+                    <View
                       key={customer.transid}
                       className="bg-gray-50 p-3 rounded-lg border border-gray-200"
-                      onPress={
-                        isMappedToOther
-                          ? null
-                          : () => toggleCustomerSelect(customer.userid)
-                      }
                     >
                       <View className="flex-row items-center justify-between">
                         <View className="flex-1">
@@ -357,9 +470,18 @@ const PartnerUserMappingScreen = () => {
 
                       {isMappedToOther && (
                         <Text className="text-red-400">
-                          Already Mapped To ghjkl-{" "}
+                          Already Mapped To -{" "}
                           {GetUserData(userData?.mappedpartnerid)?.name}
                         </Text>
+                      )}
+                      {isSelected && !isMappedToOther && (
+                        <DeliveryTypeSelector
+                          value={getSelectedDeliveryType(customer.userid)}
+                          onChange={(type) =>
+                            setCustomerDeliveryType(customer.userid, type)
+                          }
+                          disabled={false}
+                        />
                       )}
 
                       {customer.latitude && customer.longitude && (
@@ -375,7 +497,7 @@ const PartnerUserMappingScreen = () => {
                           </Text>
                         </TouchableOpacity>
                       )}
-                    </Pressable>
+                    </View>
                   );
                 })}
               </View>

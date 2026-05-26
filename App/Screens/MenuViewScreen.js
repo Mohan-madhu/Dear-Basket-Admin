@@ -4,6 +4,10 @@ import SectionComponent from "../Components/SectionComponent";
 import DailyMilkRegistrationScreen from "./DailyMilkRegistrationScreen";
 import Storage from "../../App_Utils/Services/StorageService";
 import ViewDailyMilkRegistration from "./ViewDailyMilkRegistration";
+import DearFoodieScreen from "./DearKitchen/DearFoodieScreen.js";
+
+const DAILY_MILK_MENU_ID = "376A5632-41F7-489C-9522-D6293A61D1E0";
+const DEAR_FOODIE_MENU_ID = "7B7A4417-266F-4D2B-88CB-F1BD590BF799";
 
 const log = (val = "", msg = "") => {
   console.log(`[MENU VIEW SCREEN] ${msg}`, val);
@@ -44,7 +48,11 @@ export default function MenuViewScreen({ MENU }) {
     };
   }, []);
 
-  if (ROLE && MENU && MENU.id === "376A5632-41F7-489C-9522-D6293A61D1E0") {
+  if (MENU && MENU.id === DEAR_FOODIE_MENU_ID) {
+    return <DearFoodieScreen />;
+  }
+
+  if (ROLE && MENU && MENU.id === DAILY_MILK_MENU_ID) {
     if (ROLE === "ADMIN") {
       return <ViewDailyMilkRegistration />;
     } else {

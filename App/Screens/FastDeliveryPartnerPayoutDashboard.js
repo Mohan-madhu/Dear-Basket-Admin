@@ -1457,7 +1457,7 @@ const FastDeliveryPartnerPayoutDashboard = () => {
       if (toDate) params.append("toDate", toDate);
     }
 
-    return `ProductOrder/GroceryOrdersDashboard?${params.toString()}`;
+    return `ProductOrder/PayoutOrdersDashboard?${params.toString()}`;
   };
 
   const fetchDashboardData = async (showLoader = true) => {

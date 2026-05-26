@@ -23,6 +23,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  Easing,
 } from "react-native-reanimated";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
@@ -43,6 +44,21 @@ const ADDNEWMENU = {
   name: "Add\nNew",
   colors: ["#cccccc", "#999999"],
   icon: "add-circle",
+  image: require("../../assets/addnewcategory.webp"),
+};
+
+const normalizeRole = (role) => String(role || "").trim().toUpperCase();
+const SPECIAL_MENU_IDS_WITH_OWN_CART = new Set([
+  "376A5632-41F7-489C-9522-D6293A61D1E0",
+  "7B7A4417-266F-4D2B-88CB-F1BD590BF799",
+]);
+const DAILY_MILK_MENU_ID = "376A5632-41F7-489C-9522-D6293A61D1E0";
+const DEAR_FOODIE_MENU_ID = "7B7A4417-266F-4D2B-88CB-F1BD590BF799";
+
+const getBrandTitle = (selectedMenuId) => {
+  if (selectedMenuId === DAILY_MILK_MENU_ID) return "Dear Milk";
+  if (selectedMenuId === DEAR_FOODIE_MENU_ID) return "Dear Foodie";
+  return "Dear Basket";
 };
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -109,6 +125,8 @@ export default function HomeScreen() {
   const [tabLayouts, setTabLayouts] = useState([]);
   const scrollViewRef = useRef(null);
   const progress = useSharedValue(1);
+  const titleProgress = useSharedValue(1);
+  const titleShineProgress = useSharedValue(1);
 
   // Temporary color state for ColorPicker
   const [tempColor, setTempColor] = useState(newCat.startColor);
@@ -135,11 +153,7 @@ export default function HomeScreen() {
   const getRole = async () => {
     try {
       const role = await Storage.getData("ROLE");
-      setROLE(role);
-
-      if (role == "ADMIN") {
-        menusData.push(ADDNEWMENU);
-      }
+      setROLE(normalizeRole(role));
     } catch (error) {
       showError(error, "Failed to get user role");
     }
@@ -162,7 +176,7 @@ export default function HomeScreen() {
         sections: item.sections,
       }));
 
-      if (ROLE == "ADMIN") {
+      if (ROLE === "ADMIN") {
         ordered.push(ADDNEWMENU);
       }
 
@@ -209,6 +223,36 @@ export default function HomeScreen() {
 
   const prevStyle = useAnimatedStyle(() => ({ opacity: 1 - progress.value }));
   const nextStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
+  const titleStyle = useAnimatedStyle(() => ({
+    opacity: titleProgress.value,
+    transform: [
+      { translateY: (1 - titleProgress.value) * 14 },
+      { scale: 0.94 + titleProgress.value * 0.06 },
+    ],
+  }));
+  const titleShineStyle = useAnimatedStyle(() => ({
+    opacity:
+      titleShineProgress.value < 0.08 || titleShineProgress.value > 0.92
+        ? 0
+        : 0.95,
+    transform: [
+      { translateX: -96 + titleShineProgress.value * 260 },
+      { rotate: "-18deg" },
+    ],
+  }));
+
+  useEffect(() => {
+    titleProgress.value = 0;
+    titleShineProgress.value = 0;
+    titleProgress.value = withTiming(1, {
+      duration: 1050,
+      easing: Easing.out(Easing.cubic),
+    });
+    titleShineProgress.value = withTiming(1, {
+      duration: 1450,
+      easing: Easing.inOut(Easing.cubic),
+    });
+  }, [selected]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Document Picker
@@ -376,7 +420,23 @@ export default function HomeScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: activeColor }]}>Dear Basket</Text>
+        <View style={styles.titleReveal}>
+          <Animated.Text style={[styles.title, { color: activeColor }, titleStyle]}>
+            {getBrandTitle(selected)}
+          </Animated.Text>
+          <AnimatedGradient
+            pointerEvents="none"
+            colors={[
+              "rgba(255,255,255,0)",
+              "rgba(255,255,255,0.92)",
+              "rgba(251,191,36,0.72)",
+              "rgba(255,255,255,0)",
+            ]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={[styles.titleShine, titleShineStyle]}
+          />
+        </View>
         <View className="flex-row items-center justify-between border-black h-0  mb-2" >
 
         </View>
@@ -419,13 +479,21 @@ export default function HomeScreen() {
                   selected === cat?.id && styles.tabItemActive,
                 ]}
               >
-                <Ionicons
-                  name={
-                    selected === cat?.id ? cat?.icon : `${cat?.icon}-outline`
-                  }
-                  size={24}
-                  color={selected === cat?.id ? activeColor : idleColor}
-                />
+                {cat?.id === "add_new" ? (
+                  <Image
+                    source={cat.image}
+                    style={styles.addMenuImage}
+                    contentFit="contain"
+                  />
+                ) : (
+                  <Ionicons
+                    name={
+                      selected === cat?.id ? cat?.icon : `${cat?.icon}-outline`
+                    }
+                    size={24}
+                    color={selected === cat?.id ? activeColor : idleColor}
+                  />
+                )}
                 <Text
                   style={[
                     styles.tabLabel,
@@ -438,7 +506,7 @@ export default function HomeScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {cat?.id !== "add_new" && ROLE == "ADMIN" && (
+              {cat?.id !== "add_new" && ROLE === "ADMIN" && (
                 <TouchableOpacity
                   onPress={() => {
                     try {
@@ -669,7 +737,7 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {total === 0 || selected === "376A5632-41F7-489C-9522-D6293A61D1E0" ? null : (
+      {total === 0 || SPECIAL_MENU_IDS_WITH_OWN_CART.has(selected) ? null : (
         <Pressable
           className="bg-[#00A877] w-[90%] p-3 mx-auto mb-1 absolute left-5 bottom-1 rounded-lg"
         >
@@ -705,7 +773,21 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   header: { paddingHorizontal: 16 },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 8 },
+  titleReveal: {
+    width: 210,
+    minHeight: 31,
+    overflow: "hidden",
+    paddingRight: 16,
+    marginBottom: 8,
+    justifyContent: "center",
+  },
+  title: { fontSize: 24, fontWeight: "bold", marginBottom: 0 },
+  titleShine: {
+    position: "absolute",
+    top: -14,
+    bottom: -10,
+    width: 64,
+  },
   searchBox: {
     backgroundColor: "#fff",
     borderRadius: 12,
@@ -729,6 +811,11 @@ const styles = StyleSheet.create({
   },
   tabLabelActive: {
     fontWeight: "bold",
+  },
+  addMenuImage: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
   },
   editIcon: {
     position: "absolute",

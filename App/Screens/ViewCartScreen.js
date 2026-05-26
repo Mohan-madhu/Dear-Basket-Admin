@@ -43,6 +43,69 @@ import Animated from "react-native-reanimated";
 import { addToFavorites, removeFromFavorites } from "../Redux/FavouriteReducer";
 import NowInIST from "../../App_Utils/Services/DateService";
 
+const DELIVERY_TYPE = {
+    MORNING: "Morning",
+    EVENING: "Evening",
+};
+
+const DAILY_MILK_DELIVERY_SCHEDULE = {
+    [DELIVERY_TYPE.MORNING]: {
+        startHour: 7,
+        endHour: 9,
+        cutoffHour: 6,
+    },
+    [DELIVERY_TYPE.EVENING]: {
+        startHour: 17,
+        endHour: 19,
+        cutoffHour: 16,
+    },
+};
+
+const pad2 = (value) => String(value).padStart(2, "0");
+
+const formatDateForApi = (date) => {
+    const year = date.getUTCFullYear();
+    const month = pad2(date.getUTCMonth() + 1);
+    const day = pad2(date.getUTCDate());
+    return `${year}-${month}-${day}`;
+};
+
+const formatDateKey = (date) => formatDateForApi(date).replace(/-/g, "");
+
+const normalizeDeliveryType = (deliveryType) => {
+    const normalized = String(deliveryType || "").trim().toLowerCase();
+
+    if (normalized === "evening") return DELIVERY_TYPE.EVENING;
+    return DELIVERY_TYPE.MORNING;
+};
+
+const getDailyMilkOrderDate = (deliveryType) => {
+    const normalizedDeliveryType = normalizeDeliveryType(deliveryType);
+    const schedule = DAILY_MILK_DELIVERY_SCHEDULE[normalizedDeliveryType];
+    const date = NowInIST();
+    const hour = date.getUTCHours();
+
+    if (hour >= schedule.cutoffHour) {
+        date.setUTCDate(date.getUTCDate() + 1);
+    }
+
+    return {
+        date,
+        hour,
+        orderdate: formatDateForApi(date),
+        orderDateKey: formatDateKey(date),
+        deliveryType: normalizedDeliveryType,
+        schedule,
+    };
+};
+
+const getPartnerLetter = (mappedpartnerid) => {
+    if (!mappedpartnerid || typeof mappedpartnerid !== "string") return null;
+
+    const parts = mappedpartnerid.split("-").filter(Boolean);
+    return parts[1] || parts[0] || null;
+};
+
 const ViewCartScreen = () => {
     const route = useRoute();
     const navigation = useNavigation();
@@ -246,7 +309,7 @@ const ViewCartScreen = () => {
 
 
 
-        if (!userData.transid) return;
+        if (!userData?.transid) return;
 
 
         setLoading(true, "Checking User Registration Status and Fetching Location…");
@@ -290,125 +353,127 @@ const ViewCartScreen = () => {
             return;
         }
 
-        setIsPlacingOrder(true);
-        log("Proceeding to Payment");
+        try {
+            setIsPlacingOrder(true);
+            log("Proceeding to Payment");
 
-
-        // Validate all fields before proceeding
-        if (!address) {
-            Toaster.errortop("Address is missing");
-            return;
-        }
-        if (!city) {
-            Toaster.errortop("City is missing");
-            return;
-        }
-        if (!state) {
-            Toaster.errortop("State is missing");
-            return;
-        }
-        if (!postalcode) {
-            Toaster.errortop("Postal Code is missing");
-            return;
-        }
-        if (!latitude) {
-            Toaster.errortop("Latitude is missing. Please turn on the Location.");
-            return;
-        }
-        if (!longitude) {
-            Toaster.errortop("Longitude is missing. Please turn on the Location.");
-            return;
-        }
-
-        log("All Requirements Met");
-
-
-
-
-        // const ProductOrderid = uuidv4();
-
-        let ProductOrderid = uuidv4();
-
-
-        // if (deliveryOption === 2) {
-        //     const date = NowInIST()
-        //     console.log("Current Date (IST):", date);
-
-        //     date.setDate(date.getDate() + 1);
-        //     const mappedpartnerid = userData?.mappedpartnerid;
-        //     const orderdate = date.toISOString().split('T')[0];
-        //     const orderidnumberres = await API.POST("ProductOrder/get_orderid_partner_date", { mappedpartnerid, orderdate })
-        //     const newOrderNumber = orderidnumberres.Response[0].newordernumber;
-
-        //     const partnerLetter = mappedpartnerid.split("-")[1];
-        //     const formattedOrderNumber = String(newOrderNumber).padStart(2, "0");
-
-
-        //     const orderdatestringfororderid = date.toISOString().split('T')[0].replace(/-/g, "");
-        //     console.log("Order Date String for Order ID:", orderdatestringfororderid);
-        //     const orderId = `369DO-${partnerLetter}-${orderdatestringfororderid}-${formattedOrderNumber}`;
-        //     ProductOrderid = orderId
-        // } else {
-        //     ProductOrderid = uuidv4();
-        // }
-
-        // console.log("Generated Product Order ID:", ProductOrderid);
-
-
-        console.log("Delivery Option Selected:", deliveryOption === 1 ? "Fast Delivery" : "With Daily Milk");
-        if (deliveryOption === 2) {
-            console.log("Daily Milk User - Generating Order ID with Partner Letter...");
-            // Get IST time correctly
-            const now = new Date();
-
-            // Convert current UTC time → IST
-            const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000)); // IST is UTC+5:30
-
-
-
-            // If AFTER 3PM IST → use tomorrow
-            // If BEFORE 3PM IST → use today
-            const date = new Date(istTime);
-
-            console.log("Current Date (IST):", date);
-            const hourString = date.toISOString().slice(11, 13);
-            const hour = parseInt(hourString);
-
-            console.log("Current IST Hour:", hourString);
-            if (hour >= 16) {
-                console.log("It's after 3PM IST, using tomorrow's date for order ID");
-                date.setDate(date.getDate() + 1);
+            if (!userData?.transid || !userData?.name) {
+                Toaster.errortop("User details are still loading. Please try again.");
+                return;
+            }
+            if (!address) {
+                Toaster.errortop("Address is missing");
+                return;
+            }
+            if (!city) {
+                Toaster.errortop("City is missing");
+                return;
+            }
+            if (!state) {
+                Toaster.errortop("State is missing");
+                return;
+            }
+            if (!postalcode) {
+                Toaster.errortop("Postal Code is missing");
+                return;
+            }
+            if (!latitude) {
+                Toaster.errortop("Latitude is missing. Please turn on the Location.");
+                return;
+            }
+            if (!longitude) {
+                Toaster.errortop("Longitude is missing. Please turn on the Location.");
+                return;
             }
 
+            log("All Requirements Met");
 
+            let ProductOrderid = uuidv4();
+            let selectedDeliveryType = null;
+            let selectedOrderDate = null;
 
-            const mappedpartnerid = userData?.mappedpartnerid;
-            const orderdate = date.toISOString().split("T")[0];
+            console.log("Delivery Option Selected:", deliveryOption === 1 ? "Fast Delivery" : "With Daily Milk");
+            if (deliveryOption === 2) {
+                console.log("Daily Milk User - Generating Order ID with Partner Letter...");
 
-            const orderidnumberres = await API.POST(
-                "ProductOrder/get_orderid_partner_date",
-                { mappedpartnerid, orderdate }
-            );
+                const mappedpartnerid = userData?.mappedpartnerid;
+                const partnerLetter = getPartnerLetter(mappedpartnerid);
 
-            const newOrderNumber = orderidnumberres.Response[0].newordernumber;
-            const partnerLetter = mappedpartnerid.split("-")[1];
-            const formattedOrderNumber = String(newOrderNumber).padStart(2, "0");
+                if (!mappedpartnerid || !partnerLetter) {
+                    Toaster.errortop("Daily Milk partner mapping is missing. Please contact support.");
+                    log("Missing or invalid mappedpartnerid for Daily Milk order", "ERROR");
+                    return;
+                }
 
-            const orderdatestringfororderid = orderdate.replace(/-/g, "");
-            const orderId = `369DO-${partnerLetter}-${orderdatestringfororderid}-${formattedOrderNumber}`;
+                selectedDeliveryType = normalizeDeliveryType(
+                    userData?.milkdeliverytype || userData?.deliverytype
+                );
+                const { date, hour, orderdate, orderDateKey, schedule } = getDailyMilkOrderDate(selectedDeliveryType);
+                selectedOrderDate = orderdate;
+                console.log("Current Date (IST):", date);
+                console.log("Current IST Hour:", pad2(hour));
+                console.log(
+                    "Daily Milk Delivery Type:",
+                    `${selectedDeliveryType} (${pad2(schedule.startHour)}:00-${pad2(schedule.endHour)}:00, cutoff ${pad2(schedule.cutoffHour)}:00)`
+                );
 
-            ProductOrderid = orderId;
-        } else {
-            ProductOrderid = uuidv4();
-        }
+                const orderidnumberres = await API.POST(
+                    "ProductOrder/get_orderid_partner_date",
+                    { mappedpartnerid, orderdate, deliverytype: selectedDeliveryType }
+                );
 
-        console.log("Final Product Order ID:", ProductOrderid);
+                const newOrderNumber = orderidnumberres?.Response?.[0]?.newordernumber;
+                if (!newOrderNumber) {
+                    Toaster.errortop("Unable to generate order number. Please try again.");
+                    log("Missing newordernumber from get_orderid_partner_date", "ERROR");
+                    return;
+                }
 
-        try {
+                const formattedOrderNumber = String(newOrderNumber).padStart(2, "0");
+                ProductOrderid = `369DO-${partnerLetter}-${orderDateKey}-${formattedOrderNumber}`;
+            }
+
+            console.log("Final Product Order ID:", ProductOrderid);
+
+            const deliveryfeeValue = deliveryfee === "FREE" ? 0 : 50;
+            const data = {
+                "productorderid": ProductOrderid,
+                "userid": userData?.transid,
+                "name": userData?.name,
+                "isdailymilkuser": deliveryOption === 2 ? 1 : 0,
+                "mappedpartnerid": deliveryOption === 2 ? userData?.mappedpartnerid : null,
+                "deliverytype": selectedDeliveryType,
+                "orderdate": selectedOrderDate,
+                "itemtotal": total,
+                "deliverycharge": deliveryfeeValue,
+                "tax": (taxpercentage * total) / 100,
+                "deliveryaddress": address,
+                "deliverycity": city,
+                "deliverystate": state || "TAMIL NADU",
+                "deliverypincode": postalcode,
+                "latitude": latitude.toString(),
+                "longitude": longitude.toString(),
+                "orderstatus": "Order Placed by " + userData.name,
+                "orderplaced": 1,
+                "orderplacedby": userData.name,
+                "rcu": userData.name,
+                "orderdata": JSON.stringify(cart)
+            }
+
+            log("Creating Order ...")
+            const orderRes = await API.POST("ProductOrder", data);
+            const orderMsg = orderRes.message || orderRes.Response;
+            log("Product Order Response :", orderMsg);
+
+            if (orderMsg !== "Product order created successfully.") {
+                Toaster.infotop(orderMsg);
+                log(orderMsg, "ERROR");
+                return;
+            }
+
             setLoading(true, "Adding up the Cart Items to an Order...");
             log("Adding up the Cart Items to an Order...");
 
-            // Create all order details
             for (let index = 0; index < cart.length; index++) {
                 const cartitem = cart[index];
                 setLoading(true, `Adding ${index + 1}. ${cartitem.productname + "(" + cartitem?.variantname + ")"} of ${cart.length} items to order...`);
@@ -447,43 +512,9 @@ const ViewCartScreen = () => {
                 log("Product Order Details Response :", msg);
             }
 
-            const deliveryfeeValue = deliveryfee === "FREE" ? 0 : 50;
-            const data = {
-                "productorderid": ProductOrderid,
-                "userid": userData?.transid,
-                "name": userData?.name,
-                "isdailymilkuser": deliveryOption === 2 ? 1 : 0,
-                "mappedpartnerid": deliveryOption === 2 ?    userData?.mappedpartnerid : null,
-                "itemtotal": total,
-                "deliverycharge": deliveryfeeValue,
-                "tax": (taxpercentage * total) / 100,
-                "deliveryaddress": address,
-                "deliverycity": city,
-                "deliverystate": state || "TAMIL NADU",
-                "deliverypincode": postalcode,
-                "latitude": latitude.toString(),
-                "longitude": longitude.toString(),
-                "orderstatus": "Order Placed by " + userData.name,
-                "orderplaced": 1,
-                "orderplacedby": userData.name,
-                "rcu": userData.name,
-                "orderdata": JSON.stringify(cart)
-            }
-
-            log("Creating Order ...")
-            const res = await API.POST("ProductOrder", data);
-            var msg = res.message || res.Response;
-            log("Product Order Response :", msg);
-
-            if (msg === "Product order created successfully.") {
-                Toaster.successtop("Order Created Successfully");
-                dispatch(clearCart());
-                navigation.navigate("MyOrdersScreen");
-            } else {
-                Toaster.infotop(msg);
-                log(msg, "ERROR");
-                return;
-            }
+            Toaster.successtop("Order Created Successfully");
+            dispatch(clearCart());
+            navigation.navigate("MyOrdersScreen");
         } catch (error) {
             log(error.message, "ERROR");
             Toaster.errortop("Error creating order");

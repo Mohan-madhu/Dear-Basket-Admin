@@ -1,0 +1,74 @@
+PORT=15000
+
+# common host/port
+# DB_HOST=61.2.79.154
+DB_HOST=72.62.169.43
+# DB_HOST=82.25.105.135
+DB_MYSQL_HOST=82.25.95.117
+DB_PORT=1433
+DB_MYSQL_PORT=3306
+
+# Client A – DiaryProducts
+DB_DIARY_USER=db_diaryproductsapi
+
+
+DB_DIARY_PASS=DiaryProductsAPI.
+DB_DIARY_NAME=db_diaryproductsapi
+
+# Client B – EemanShop
+DB_EEMAN_USER=db_eemanshop
+DB_EEMAN_PASS=eemanshop@123.
+DB_EEMAN_NAME=db_eemanshop
+
+# Client C – Construction
+DB_CONSTR_USER=db_construction
+DB_CONSTR_PASS=admin@123.
+DB_CONSTR_NAME=db_construction_delivery
+
+# Client D – Uutru
+DB_UUTRU_USER=sa
+DB_UUTRU_PASS=Infinity0.
+DB_UUTRU_NAME=db_uutru
+
+# Client E – DearBasket
+DB_DEAR_USER=db_dearbasket1
+DB_DEAR_PASS=dearbasket@123.
+DB_DEAR_NAME=db_dearbasket
+
+DB_NLA_USER=db_nasc_late_attendance
+DB_NLA_PASS=Admin@123.
+DB_NLA_NAME=db_nasc_late_attendance
+
+DB_NLA_USER=sa
+DB_NLA_PASS=Nasc@123.
+DB_NLA_NAME=db_nasc_late_attendance
+
+DB_BUILDMATE_USER=sa
+DB_BUILDMATE_PASS=Infinity.
+DB_BUILDMATE_NAME=db_construction_delivery
+# --errir
+DB_HARRY_CLINTON_USER=db_harry_clinton
+DB_HARRY_CLINTON_PASS=HarryClinton@123.
+DB_HARRY_CLINTON_NAME=db_harry_clinton
+
+
+
+
+# SMTP Configurations
+
+C_HARRY_CLINTON_SMTP_HOST=smtp.gmail.com
+C_HARRY_CLINTON_SMTP_PORT=587
+C_HARRY_CLINTON_SMTP_SECURE=false
+
+C_HARRY_CLINTON_SMTP_USER=otp.harryclinton@gmail.com
+C_HARRY_CLINTON_SMTP_PASS=fvhh izqg hqkp mhgi
+
+
+
+
+
+
+#MYSQL CLIENTS
+MYSQL_P_HIGHBEAM_USER=user_db_highbeam
+MYSQL_P_HIGHBEAM_PASSWORD=HighBeam@2026
+MYSQL_P_HIGHBEAM_NAME=user_db_highbeam

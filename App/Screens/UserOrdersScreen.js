@@ -125,6 +125,17 @@ const applyDateFilterWithResolver = (list, filterKey, tsResolver) => {
 const applyDateFilter = (list, filterKey) =>
   applyDateFilterWithResolver(list, filterKey, getOrderTimestamp);
 
+const getOrderTypeCode = (order) => Number(order?.isdailymilkuser);
+
+const isFastDeliveryOrder = (order) => getOrderTypeCode(order) === 0;
+
+const isDailyMilkOrder = (order) => [1, 2, 3].includes(getOrderTypeCode(order));
+
+const isKitchenOrder = (order) =>
+  getOrderTypeCode(order) === 4 ||
+  String(order?.order_type || "").toLowerCase() === "kitchen_order" ||
+  String(order?.ordertype || "").toLowerCase() === "kitchen_order";
+
 const getReturnTimestamp = (item) => {
   const candidates = [
     item?.requestedtime,
@@ -195,6 +206,7 @@ const MyOrdersScreen = () => {
 
    if (ordertype === 'fast') return 'Fast Delivery Orders';
     if (ordertype === 'dailymilk') return 'Daily Milk Orders';
+    if (ordertype === 'kitchen') return 'Kitchen Orders';
     if (isallorders) return 'All Orders';
 
     return 'My Orders';
@@ -260,9 +272,9 @@ const MyOrdersScreen = () => {
       const userData = await Storage.getData('DATA');
       const userId = userData?.transid;
 
-      let endpoint = 'ProductOrder';
+      let endpoint = 'ProductOrder/all-combined';
       if (!isallorders) {
-        endpoint = `ProductOrder/user_orders_history/${userId}`;
+        endpoint = `ProductOrder/all-combined/user/${userId}`;
       }
 
       const res = await API.GET(endpoint);
@@ -415,9 +427,11 @@ const MyOrdersScreen = () => {
     let filtered = orders;
 
     if (ordertype === 'fast') {
-      filtered = filtered.filter((order) => !order.isdailymilkuser);
+      filtered = filtered.filter(isFastDeliveryOrder);
     } else if (ordertype === 'dailymilk') {
-      filtered = filtered.filter((order) => order.isdailymilkuser);
+      filtered = filtered.filter(isDailyMilkOrder);
+    } else if (ordertype === 'kitchen') {
+      filtered = filtered.filter(isKitchenOrder);
     }
 
     filtered = applyDateFilter(filtered, selectedDateFilter);
@@ -494,6 +508,13 @@ const MyOrdersScreen = () => {
       return {
         title: 'No Daily Milk Orders',
         subtitle: 'No daily milk orders found for the selected period.',
+      };
+    }
+
+    if (ordertype === 'kitchen') {
+      return {
+        title: 'No Kitchen Orders',
+        subtitle: 'No Dear Kitchen orders found for the selected period.',
       };
     }
 

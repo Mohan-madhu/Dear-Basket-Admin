@@ -400,6 +400,7 @@ const AdminDashboardScreen = () => {
   const deliveryOrdersCards = [
     { id: 301, title: 'Fast Delivery Orders', gradient: gradientPairs[15], screen: 'MyOrdersScreen_FAST', icon: 'truck-fast' },
     { id: 302, title: 'Daily Milk Orders', gradient: gradientPairs[16], screen: 'MyOrdersScreen_DAILYMILK', icon: 'clipboard-list' },
+    { id: 308, title: 'Kitchen Orders', gradient: ['#f472b6', '#db2777'], screen: 'MyOrdersScreen_KITCHEN', icon: 'silverware-fork-knife' },
     { id: 303, title: 'All Orders', gradient: gradientPairs[17], screen: 'MyOrdersScreen', icon: 'truck-check-outline' },
     { id: 304, title: 'Order Analytics', gradient: gradientPairs[18], screen: 'GroceryOrdersDashboard', icon: 'chart-bar' },
     { id: 306, title: 'Payout Analytics', gradient: ['#22c55e', '#16a34a'], screen: 'FastDeliveryPartnerPayoutDashboard', icon: 'chart-timeline-variant' },
@@ -424,6 +425,10 @@ const AdminDashboardScreen = () => {
       }
       if (screenName === 'MyOrdersScreen_DAILYMILK') {
         navigation.navigate('MyOrdersScreen', { allorder: true, ordertype: 'dailymilk' });
+        return;
+      }
+      if (screenName === 'MyOrdersScreen_KITCHEN') {
+        navigation.navigate('MyOrdersScreen', { allorder: true, ordertype: 'kitchen' });
         return;
       }
       navigation.navigate(screenName);

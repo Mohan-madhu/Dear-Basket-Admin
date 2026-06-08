@@ -57,7 +57,7 @@ const DEAR_FOODIE_MENU_ID = "7B7A4417-266F-4D2B-88CB-F1BD590BF799";
 
 const getBrandTitle = (selectedMenuId) => {
   if (selectedMenuId === DAILY_MILK_MENU_ID) return "Dear Milk";
-  if (selectedMenuId === DEAR_FOODIE_MENU_ID) return "Dear Foodie";
+  if (selectedMenuId === DEAR_FOODIE_MENU_ID) return "Dear Kitchen";
   return "Dear Basket";
 };
 

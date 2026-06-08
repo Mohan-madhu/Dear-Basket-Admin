@@ -252,6 +252,47 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     return getImageUrl(imagePath);
   };
 
+  const normalizeOrderItem = (item, index) => {
+    const product = item?.product || {};
+    const quantity = Number(item?.orderquantity ?? item?.quantity ?? 1) || 1;
+    const price = Number(item?.price ?? item?.sellingprice ?? product?.price ?? product?.sellingprice ?? 0) || 0;
+    const amount = Number(item?.lineamount ?? item?.amount ?? item?.totalamount);
+
+    return {
+      ...item,
+      id: item?.id || item?.itemid || item?.productid || item?.variantid || `${order?.productorderid || 'order'}-${index}`,
+      productname:
+        item?.productname ||
+        item?.itemname ||
+        item?.name ||
+        product?.productname ||
+        product?.itemname ||
+        product?.name ||
+        'Item',
+      variantname:
+        item?.variantname ||
+        item?.mealtypename ||
+        item?.categoryname ||
+        product?.variantname ||
+        product?.unit ||
+        product?.categoryname ||
+        '',
+      orderquantity: quantity,
+      price,
+      amount: Number.isFinite(amount) ? amount : price * quantity,
+      imageurl:
+        item?.imageurl ||
+        item?.image ||
+        product?.imageurl ||
+        product?.image ||
+        null,
+      product: {
+        ...product,
+        imageurl: product?.imageurl || product?.image || item?.imageurl || item?.image || null,
+      },
+    };
+  };
+
   const parseOrderData = () => {
     try {
       let parsedOrderData = order?.orderdata;
@@ -261,7 +302,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
       }
 
       if (Array.isArray(parsedOrderData) && parsedOrderData.length > 0) {
-        return parsedOrderData;
+        return parsedOrderData.map(normalizeOrderItem);
       }
 
       const isDailyMilkType = [1, 2, 3].includes(Number(order?.isdailymilkuser));
@@ -288,7 +329,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
         const amount = Number(row?.finalamount ?? row?.totalamount ?? row?.effectiveamount) ||
           (unitPrice * (effectiveQty > 0 ? effectiveQty : unitPriceBase));
 
-        return {
+        return normalizeOrderItem({
           id: row?.id || row?.transid || `${order?.productorderid || 'milk'}-${idx}`,
           productname: row?.productname || row?.milkname || 'Daily Milk',
           variantname: row?.date
@@ -303,7 +344,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
           cancelled_quantity: cancelledQty,
           total_quantity: totalQty,
           imageurl: row?.imageurl || null,
-        };
+        }, idx);
       });
     } catch (error) {
       return [];
@@ -591,11 +632,11 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
       label: 'Fast Order',
     },
     'Food Delivery': {
-      bgColor: '#fff7ed',
-      textColor: '#c2410c',
-      borderColor: '#fed7aa',
-      icon: 'food',
-      label: 'Food Order',
+      bgColor: '#fdf2f8',
+      textColor: '#be185d',
+      borderColor: '#fbcfe8',
+      icon: 'silverware-fork-knife',
+      label: 'Kitchen Order',
     },
     'Milk': {
       bgColor: '#fef3c7',
@@ -698,7 +739,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   
   let type = '';
 
-  switch (order.isdailymilkuser) {
+  switch (Number(order?.isdailymilkuser)) {
     case 1:
       type = 'Daily Milk';
       break;
@@ -711,6 +752,9 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     case 3:
       type = 'Milk'; // Pure Daily Milk
       break;
+    case 4:
+      type = 'Food Delivery';
+      break;
     default:
       type = 'Unknown';
   }
@@ -718,6 +762,9 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   const style = getOrderColor(type);
   const statusStyle = getStatusStyle();
   const isMilkTypeOrder = [1, 2, 3].includes(Number(order?.isdailymilkuser || 0));
+  const isKitchenTypeOrder =
+    Number(order?.isdailymilkuser || 0) === 4 ||
+    String(order?.order_type || order?.ordertype || '').toLowerCase() === 'kitchen_order';
   const pregnancyBenefitMl = Number(
     order?.milkamountml ??
     order?.pregnancy_milkamountml ??
@@ -740,8 +787,10 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   const itemSubtotal = isMilkTypeOrder && computedItemSubtotal > 0
     ? computedItemSubtotal
     : Number(order?.itemtotal || 0);
-  const totalAmount =
-    Number(itemSubtotal || 0) + Number(order?.deliverycharge || 0) + Number(order?.tax || 0);
+  const explicitOrderTotal = Number(order?.totalamount);
+  const totalAmount = Number.isFinite(explicitOrderTotal) && explicitOrderTotal > 0
+    ? explicitOrderTotal
+    : Number(itemSubtotal || 0) + Number(order?.deliverycharge || 0) + Number(order?.tax || 0);
 
   const orderDisplayId =
     order?.dailymilkorderid ||
@@ -1098,7 +1147,9 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                         </Text>
 
                         {item.variantname ? (
-                          <Text className="text-xs text-gray-500 mt-0.5">Variant: {item.variantname}</Text>
+                          <Text className="text-xs text-gray-500 mt-0.5">
+                            {isKitchenTypeOrder ? 'Details' : 'Variant'}: {item.variantname}
+                          </Text>
                         ) : null}
 
                         <View className="flex-row justify-between items-center mt-2">

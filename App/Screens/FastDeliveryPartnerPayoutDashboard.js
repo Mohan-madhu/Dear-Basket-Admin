@@ -60,9 +60,11 @@ const safeParseOrderData = (orderdata) => {
   }
 };
 
+const isFastDeliveryOrder = (order) => Number(order?.isdailymilkuser) === 0;
+
 const isDeliveredOrder = (order) => {
   const status = String(order?.orderstatus || "").toLowerCase();
-  return Boolean(order?.orderdelivered) || status.includes("delivered");
+  return isFastDeliveryOrder(order) && (Boolean(order?.orderdelivered) || status.includes("delivered"));
 };
 
 const clampAmount = (value, min, max) =>

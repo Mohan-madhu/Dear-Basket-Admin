@@ -21,7 +21,7 @@ import PartnerFastDeliveryPayoutAnalytics from './PartnerFastDeliveryPayoutAnaly
 
 const log = createLogger('PartnerLanding');
 
-const TYPE_OPTIONS = ['Daily Milk', 'Fast Grocery Delivery', 'Demo Daily Milk', 'Milk'];
+const TYPE_OPTIONS = ['Daily Milk', 'Fast Grocery Delivery', 'Demo Daily Milk', 'Milk', 'Kitchen Order'];
 const STATUS_OPTIONS = ['All', 'Order Placed', 'Confirmed', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'];
 
 const getISTMinutes = () => {
@@ -43,6 +43,8 @@ const getOrderType = (order) => {
       return 'Demo Daily Milk';
     case 3:
       return 'Milk';
+    case 4:
+      return 'Kitchen Order';
     default:
       return 'Unknown';
   }

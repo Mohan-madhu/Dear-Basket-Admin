@@ -28,6 +28,7 @@ import { createLogger } from "../../App_Utils/Utils/logger";
 import Toaster from "../../App_Utils/Services/ToastService";
 import OrderCard from "../Components_New/OrdersCard";
 import { useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 
 const OVERLAY_Z = 9999;
 
@@ -97,6 +98,44 @@ const RadioRow = ({ selected, onPress, label }) => (
     </View>
     <Text className="text-white">{label}</Text>
   </Pressable>
+);
+
+const ActionTile = ({
+  icon,
+  title,
+  subtitle,
+  badge,
+  accentColor,
+  iconBg,
+  onPress,
+}) => (
+  <TouchableOpacity
+    onPress={onPress}
+    activeOpacity={0.88}
+    className="w-full bg-white rounded-xl px-4 py-4 mb-3 flex-row items-center shadow border border-gray-100"
+    style={{ borderLeftWidth: 5, borderLeftColor: accentColor }}
+  >
+    <View
+      className="w-12 h-12 rounded-full items-center justify-center mr-4"
+      style={{ backgroundColor: iconBg }}
+    >
+      <Ionicons name={icon} size={24} color={accentColor} />
+    </View>
+
+    <View className="flex-1 pr-3">
+      {badge ? (
+        <Text className="text-[11px] font-bold uppercase tracking-wide mb-1" style={{ color: accentColor }}>
+          {badge}
+        </Text>
+      ) : null}
+      <Text className="text-gray-900 text-base font-bold">{title}</Text>
+      <Text className="text-gray-500 text-xs mt-1 leading-4">{subtitle}</Text>
+    </View>
+
+    <View className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center">
+      <Ionicons name="chevron-forward" size={18} color="#374151" />
+    </View>
+  </TouchableOpacity>
 );
 
 const DailyMilkBookingScreen = ({
@@ -839,18 +878,41 @@ const DailyMilkBookingScreen = ({
         <View className="flex-1 bg-gray-800 px-4 py-6">
           {!showBookingUI && (
             <View>
-              <Text className="text-white text-center text-lg">
-                Choose how you'd like to proceed.
+              <Text className="text-white text-center text-2xl font-bold">
+                Daily Milk Service
+              </Text>
+              <Text className="text-gray-300 text-center text-sm mt-2 mb-5">
+                Choose the next step for your subscription.
               </Text>
 
-              <PrimaryButton title="Ask for Demo Daily Milk" onPress={openDemo} />
-              <GhostButton title="Book for Daily Milk" onPress={openBooking} />
+              <ActionTile
+                icon="flask-outline"
+                title="Ask for Demo Daily Milk"
+                subtitle="Request a free 0.5L sample for morning or evening delivery."
+                badge="Free sample"
+                accentColor="#16a34a"
+                iconBg="#dcfce7"
+                onPress={openDemo}
+              />
 
-              {/* NEW: Daily Milk Payment Button */}
-              <GhostButton
+              <ActionTile
+                icon="calendar-number-outline"
+                title="Book for Daily Milk"
+                subtitle="Start a monthly milk plan with your preferred product and date."
+                badge="New booking"
+                accentColor="#2563eb"
+                iconBg="#dbeafe"
+                onPress={openBooking}
+              />
+
+              <ActionTile
+                icon="card-outline"
                 title="Daily Milk Payment"
+                subtitle="Review pending balances and complete your payment."
+                badge="Payments"
+                accentColor="#ea580c"
+                iconBg="#ffedd5"
                 onPress={() => navigation.navigate("DailyMilkPayment")}
-
               />
 
               <View style={{ flex: 1, zIndex: 0, elevation: 0 }}>

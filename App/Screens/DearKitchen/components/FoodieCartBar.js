@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 
-export default function FoodieCartBar({ count, total }) {
+export default function FoodieCartBar({ count, total, onReview }) {
   if (count <= 0) return null;
 
   return (
@@ -14,7 +14,7 @@ export default function FoodieCartBar({ count, total }) {
           Estimated total: Rs. {total}
         </Text>
       </View>
-      <TouchableOpacity className="rounded-lg bg-orange-500 px-4 py-2.5">
+      <TouchableOpacity onPress={onReview} className="rounded-lg bg-orange-500 px-4 py-2.5">
         <Text className="font-extrabold text-white">Review</Text>
       </TouchableOpacity>
     </View>

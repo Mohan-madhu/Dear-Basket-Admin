@@ -36,6 +36,8 @@ const getOrderType = (order) => {
       return "Demo Daily Milk";
     case 3:
       return "Milk";
+    case 4:
+      return "Kitchen Order";
     default:
       return "Unknown";
   }

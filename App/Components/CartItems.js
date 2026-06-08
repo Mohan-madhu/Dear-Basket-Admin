@@ -117,9 +117,10 @@ export default function CartScreen({ cart, favorites, onToggleFavorite }) {
                         key={index}
                         className="bg-white p-2 rounded-lg shadow-sm mb-2 flex-row border border-gray-100"
                         onPress={() => {
-
-                            nav.navigate("ProductAndVariantScreen", { prod: item.product, selectedvariantid: item.variantid });
-                        }}
+                            if (item.source !== "dearkitchen" && item.product && item.variantid) {
+                                    nav.navigate("ProductAndVariantScreen", { prod: item.product, selectedvariantid: item.variantid });
+                                }
+                            }}
 
 
                     >
@@ -183,7 +184,7 @@ export default function CartScreen({ cart, favorites, onToggleFavorite }) {
                             {/* Name & Price */}
                             <View className="flex-row justify-between">
                                 <Text className="text-sm font-semibold flex-1" numberOfLines={2}>
-                                    {item.variantname}
+                                    {item.variantname || item.name || item.productname || "Item"}
                                 </Text>
                                 <Text className="text-sm font-bold text-green-600 ml-1">
                                     ₹{pricePerItem.toFixed(2)}

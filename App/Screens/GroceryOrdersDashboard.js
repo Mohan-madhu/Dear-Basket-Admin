@@ -846,15 +846,21 @@ const PartnerWiseGroupedOrders = ({ partners, navigation }) => {
                           </View>
 
                           <View style={{ alignItems: "flex-end" }}>
+                            {(() => {
+                              const orderTypeCode = Number(user?.isdailymilkuser);
+                              const isKitchenOrder = orderTypeCode === 4 || String(user?.order_type || "").toLowerCase() === "kitchen_order";
+                              const isDailyMilkOrder = [1, 2, 3].includes(orderTypeCode);
+                              const badgeBg = isKitchenOrder ? "#fdf2f8" : isDailyMilkOrder ? "#ecfdf5" : "#eff6ff";
+                              const badgeBorder = isKitchenOrder ? "#fbcfe8" : isDailyMilkOrder ? "#a7f3d0" : "#bfdbfe";
+                              const badgeText = isKitchenOrder ? "#be185d" : isDailyMilkOrder ? "#059669" : "#2563eb";
+                              const badgeLabel = isKitchenOrder ? "Kitchen Order" : isDailyMilkOrder ? "Daily Milk" : "Fast Delivery";
+
+                              return (
                             <View
                               style={{
-                                backgroundColor: user?.isdailymilkuser
-                                  ? "#ecfdf5"
-                                  : "#eff6ff",
+                                backgroundColor: badgeBg,
                                 borderWidth: 1,
-                                borderColor: user?.isdailymilkuser
-                                  ? "#a7f3d0"
-                                  : "#bfdbfe",
+                                borderColor: badgeBorder,
                                 borderRadius: 999,
                                 paddingHorizontal: 10,
                                 paddingVertical: 5,
@@ -864,14 +870,14 @@ const PartnerWiseGroupedOrders = ({ partners, navigation }) => {
                                 style={{
                                   fontSize: 11,
                                   fontWeight: "800",
-                                  color: user?.isdailymilkuser
-                                    ? "#059669"
-                                    : "#2563eb",
+                                  color: badgeText,
                                 }}
                               >
-                                {user?.isdailymilkuser ? "Daily Milk" : "Fast Delivery"}
+                                {badgeLabel}
                               </Text>
                             </View>
+                              );
+                            })()}
 
                             <Text
                               style={{

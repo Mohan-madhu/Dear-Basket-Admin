@@ -93,7 +93,7 @@ const kitchenApiRequest = async (endpoint, method = "GET", body = null) => {
   }
 
   try {
-    console.log("DearKitchen Endpoint : ", `${DEAR_KITCHEN_BASE_URL}/${endpoint}`, options);
+    //console.log("DearKitchen Endpoint : ", `${DEAR_KITCHEN_BASE_URL}/${endpoint}`, options);
     return await fetchWithTimeout(`${DEAR_KITCHEN_BASE_URL}/${endpoint}`, options, 15000);
   } catch (error) {
     const enrichedMessage = `DearKitchen API ${method} ${DEAR_KITCHEN_BASE_URL}/${endpoint} failed: ${error?.message || "Unknown error"}`;

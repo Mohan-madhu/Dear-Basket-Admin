@@ -1,0 +1,345 @@
+/* sp_dk_GetKitchenById */
+-- ------------------------------------------------------------
+-- SP 3: Get single kitchen detail
+-- ------------------------------------------------------------
+CREATE   PROCEDURE sp_dk_GetKitchenById
+    @kitchenid  VARCHAR(36)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        k.*,
+        u.name      AS ownername,
+        u.mobile    AS ownermobile
+    FROM tbl_dk_kitchens k
+    JOIN tbl_user u ON k.partneruserid = u.transid
+    WHERE k.kitchenid = @kitchenid;
+END;
+
+--------------------------------------------------
+/* sp_dk_GetKitchenImages */
+
+-- ------------------------------------------------------------
+-- SP 4: Get kitchen images
+-- ------------------------------------------------------------
+CREATE   PROCEDURE sp_dk_GetKitchenImages
+    @kitchenid  VARCHAR(36)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        imageid,
+        imageurl,
+        imagetype,
+        imagedesc,
+        sortorder
+    FROM tbl_dk_kitchenimages
+    WHERE kitchenid = @kitchenid
+      AND isactive  = 1
+    ORDER BY sortorder ASC;
+END;
+
+--------------------------------------------------
+/* sp_dk_GetKitchenTimeslots */
+--        Optional filter by mealtypeid
+-- ------------------------------------------------------------
+CREATE   PROCEDURE sp_dk_GetKitchenTimeslots
+    @kitchenid  VARCHAR(36),
+    @mealtypeid VARCHAR(36) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        t.slotid,
+        t.slottime,
+        t.mealtypeid,
+        m.mealtypename
+    FROM tbl_dk_timeslots t
+    JOIN tbl_dk_mealtypes m ON t.mealtypeid = m.mealtypeid
+    WHERE t.kitchenid  = @kitchenid
+      AND t.isactive   = 1
+      AND (@mealtypeid IS NULL OR t.mealtypeid = @mealtypeid)
+    ORDER BY m.sortorder ASC, t.slottime ASC;
+END;
+
+--------------------------------------------------
+/* sp_dk_GetKitchenMenu */
+
+	-- ------------------------------------------------------------  
+-- SP 6: Get full menu for a kitchen  
+--        Grouped: mealtype → categories → items  
+--        Optional filter by mealtypeid  
+-- ------------------------------------------------------------  
+CREATE   PROCEDURE sp_dk_GetKitchenMenu  
+    @kitchenid  VARCHAR(36),  
+    @mealtypeid VARCHAR(36) = NULL  
+AS  
+BEGIN  
+    SET NOCOUNT ON;  
+  
+    -- Categories  
+    SELECT  
+		c.isactive,
+        c.categoryid,  
+        c.categoryname,  
+        c.sortorder,  
+        c.mealtypeid,  
+        m.mealtypename  
+    FROM tbl_dk_menucategories c  
+    JOIN tbl_dk_mealtypes m ON c.mealtypeid = m.mealtypeid  
+    WHERE c.kitchenid  = @kitchenid  
+      AND c.isactive   = 1  
+      AND (@mealtypeid IS NULL OR c.mealtypeid = @mealtypeid)  
+    ORDER BY m.sortorder ASC, c.sortorder ASC;  
+  
+    -- Items  
+    SELECT  
+        i.itemid,  
+        i.categoryid,  
+        i.itemname,  
+        i.description,  
+        i.price,  
+        i.imageurl,  
+        i.isveg,  
+        i.isavailable,  
+        i.isnew  
+    FROM tbl_dk_menuitems i  
+    JOIN tbl_dk_menucategories c ON i.categoryid = c.categoryid  
+    WHERE i.kitchenid  = @kitchenid  
+      AND i.isavailable = 1  
+      AND (@mealtypeid  IS NULL OR c.mealtypeid = @mealtypeid)  
+    ORDER BY c.sortorder ASC;  
+END;  
+--------------------------------------------------
+/* sp_dk_GetOrdersByUser */
+-- ------------------------------------------------------------
+CREATE   PROCEDURE sp_dk_GetOrdersByUser
+    @userid     VARCHAR(36)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        o.orderid,
+        o.orderstatus,
+        o.mealtypeid,
+        m.mealtypename,
+        o.deliverydate,
+        o.totalamount,
+        o.paymentmode,
+        o.paymentstatus,
+        o.rcm           AS orderedat,
+        k.kitchenname,
+        k.profileimage,
+        (SELECT COUNT(*) FROM tbl_dk_orderitems WHERE orderid = o.orderid) AS itemcount
+    FROM tbl_dk_orders o
+    JOIN tbl_dk_kitchens  k ON o.kitchenid  = k.kitchenid
+    JOIN tbl_dk_mealtypes m ON o.mealtypeid = m.mealtypeid
+    WHERE o.userid = @userid
+    ORDER BY o.rcm DESC;
+END;
+
+--------------------------------------------------
+/* sp_dk_GetOrderDetail */
+-- ------------------------------------------------------------
+CREATE   PROCEDURE sp_dk_GetOrderDetail
+    @orderid    VARCHAR(36)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Order header
+    SELECT
+        o.*,
+        m.mealtypename,
+        k.kitchenname,
+        k.profileimage,
+        k.addressline1  AS kitchenaddress,
+        k.latitude      AS kitchenlat,
+        k.longitude     AS kitchenlng,
+        s.slottime
+    FROM tbl_dk_orders o
+    JOIN tbl_dk_kitchens  k ON o.kitchenid  = k.kitchenid
+    JOIN tbl_dk_mealtypes m ON o.mealtypeid = m.mealtypeid
+    LEFT JOIN tbl_dk_timeslots s ON o.slotid = s.slotid
+    WHERE o.orderid = @orderid;
+
+    -- Order items
+    SELECT
+        orderitemid,
+        itemid,
+        itemname,
+        price,
+        quantity,
+        isveg,
+        (price * quantity) AS linetotal
+    FROM tbl_dk_orderitems
+    WHERE orderid = @orderid;
+END;
+
+--------------------------------------------------
+/* sp_dk_GetOrdersByKitchen */
+--        Optional filter by orderstatus
+-- ------------------------------------------------------------
+CREATE   PROCEDURE sp_dk_GetOrdersByKitchen
+    @kitchenid      VARCHAR(36),
+    @orderstatus    VARCHAR(50) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        o.orderid,
+        o.orderstatus,
+        o.deliverydate,
+        o.totalamount,
+        o.paymentmode,
+        o.specialinstructions,
+        o.rcm           AS orderedat,
+        m.mealtypename,
+        s.slottime,
+        u.name          AS username,
+        u.mobile        AS usermobile,
+        (SELECT COUNT(*) FROM tbl_dk_orderitems WHERE orderid = o.orderid) AS itemcount
+    FROM tbl_dk_orders o
+    JOIN tbl_dk_mealtypes m ON o.mealtypeid = m.mealtypeid
+    JOIN tbl_user u         ON o.userid     = u.transid
+    LEFT JOIN tbl_dk_timeslots s ON o.slotid = s.slotid
+    WHERE o.kitchenid   = @kitchenid
+      AND (@orderstatus IS NULL OR o.orderstatus = @orderstatus)
+    ORDER BY o.deliverydate ASC, s.slottime ASC;
+END;
+
+--------------------------------------------------
+/* sp_dk_GetOrdersByPartner */
+CREATE   PROCEDURE sp_dk_GetOrdersByPartner
+    @mappedpartnerid    VARCHAR(36)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        o.orderid,
+        o.orderstatus,
+        o.deliverydate,
+        o.deliveryaddress,
+        o.deliverycity,
+        o.latitude,
+        o.longitude,
+        o.totalamount,
+        o.rcm           AS orderedat,
+        m.mealtypename,
+        s.slottime,
+        k.kitchenname,
+        k.addressline1  AS kitchenaddress,
+        k.latitude      AS kitchenlat,
+        k.longitude     AS kitchenlng,
+        u.name          AS username,
+        u.mobile        AS usermobile
+    FROM tbl_dk_orders o
+    JOIN tbl_dk_kitchens  k ON o.kitchenid          = k.kitchenid
+    JOIN tbl_dk_mealtypes m ON o.mealtypeid          = m.mealtypeid
+    JOIN tbl_user u         ON o.userid              = u.transid
+    LEFT JOIN tbl_dk_timeslots s ON o.slotid         = s.slotid
+    WHERE o.mappedpartnerid = @mappedpartnerid
+      AND o.orderstatus IN ('Accepted', 'Preparing', 'Ready', 'Picked')
+    ORDER BY o.deliverydate ASC, s.slottime ASC;
+END;
+
+--------------------------------------------------
+/* sp_dk_AdminGetKitchens */
+-- ------------------------------------------------------------
+CREATE   PROCEDURE sp_dk_AdminGetKitchens
+    @isapproved INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        k.*,
+        u.name      AS ownername,
+        u.mobile    AS ownermobile
+    FROM tbl_dk_kitchens k
+    JOIN tbl_user u ON k.partneruserid = u.transid
+    WHERE (@isapproved IS NULL OR k.isapproved = @isapproved)
+    ORDER BY k.rcm DESC;
+END;
+
+--------------------------------------------------
+/* sp_dk_GetKitchenRatings */
+-- ------------------------------------------------------------
+CREATE   PROCEDURE sp_dk_GetKitchenRatings
+    @kitchenid  VARCHAR(36)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        r.ratingid,
+        r.rating,
+        r.review,
+        r.rcm       AS ratedat,
+        u.name      AS username
+    FROM tbl_dk_ratings r
+    JOIN tbl_user u ON r.userid = u.transid
+    WHERE r.kitchenid = @kitchenid
+    ORDER BY r.rcm DESC;
+END;
+
+--------------------------------------------------
+/* sp_dk_GetMealTypes */
+-- SP 1: Get all active meal types
+-- ------------------------------------------------------------
+CREATE   PROCEDURE sp_dk_GetMealTypes
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        mealtypeid,
+        mealtypename,
+        sortorder
+    FROM tbl_dk_mealtypes
+    WHERE isactive = 1
+    ORDER BY sortorder ASC;
+END;
+
+--------------------------------------------------
+/* sp_dk_GetKitchens */
+
+-- ------------------------------------------------------------
+-- SP 2: Get all approved + active kitchens
+--        Optional filters: mealtypeid, ispureveg, ishalal
+-- ------------------------------------------------------------
+CREATE   PROCEDURE sp_dk_GetKitchens
+    @mealtypeid     VARCHAR(36) = NULL,
+    @ispureveg      INT         = NULL,
+    @ishalal        INT         = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        k.kitchenid,
+        k.kitchenname,
+        k.description,
+        k.cuisinetype,
+        k.profileimage,
+        k.coverimage,
+        k.city,
+        k.pincode,
+        k.latitude,
+        k.longitude,
+        k.ishalal,
+        k.ispureveg,
+        k.rating,
+        k.totalorders
+    FROM tbl_dk_kitchens k
+    WHERE k.isactive  = 1
+      AND k.isapproved = 1
+      AND (@ispureveg  IS NULL OR k.ispureveg = @ispureveg)
+      AND (@ishalal    IS NULL OR k.ishalal   = @ishalal)
+      AND (
+            @mealtypeid IS NULL
+            OR EXISTS (
+                SELECT 1 FROM tbl_dk_timeslots
+                WHERE kitchenid  = k.kitchenid
+                  AND mealtypeid = @mealtypeid
+                  AND isactive   = 1
+            )
+          )
+    ORDER BY k.rating DESC;
+END;

@@ -1,50 +1,102 @@
 import React, { useMemo } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import FoodieCartBar from "./FoodieCartBar";
-import FoodieProductRow from "./FoodieProductRow";
-import { getKitchenGroupsForCategory } from "../data/foodieData";
+import { DEAR_KITCHEN_CATEGORY_ID } from "../data/liveDearKitchen";
+
+const normalizeText = (value) => String(value || "").trim();
+
+const StatusPill = ({ label, tone = "slate" }) => {
+  const styles = {
+    green: "bg-emerald-50 border-emerald-100 text-emerald-700",
+    orange: "bg-orange-50 border-orange-100 text-orange-700",
+    red: "bg-red-50 border-red-100 text-red-700",
+    slate: "bg-slate-50 border-slate-100 text-slate-600",
+  };
+
+  return (
+    <View className={`mr-2 mt-2 rounded-full border px-2.5 py-1 ${styles[tone]}`}>
+      <Text className={`text-[11px] font-extrabold ${styles[tone].split(" ").pop()}`}>
+        {label}
+      </Text>
+    </View>
+  );
+};
+
+const KitchenImage = ({ uri, className }) => {
+  if (!uri) {
+    return (
+      <View className={`${className} items-center justify-center bg-orange-50`}>
+        <Ionicons name="restaurant-outline" size={24} color="#f97316" />
+      </View>
+    );
+  }
+
+  return <Image source={{ uri }} className={className} resizeMode="cover" />;
+};
 
 export default function FoodieCategoryProductsScreen({
   category,
   query,
-  cart,
+  kitchens,
+  loadingKitchens,
+  kitchenError,
+  onRefreshKitchens,
   onBack,
-  onQuantityChange,
 }) {
+  const navigation = useNavigation();
   const normalizedQuery = query.trim().toLowerCase();
+  const isDearKitchen = category?.id === DEAR_KITCHEN_CATEGORY_ID;
 
-  const kitchenGroups = useMemo(() => {
-    return getKitchenGroupsForCategory(category)
-      .map((partner) => ({
-        ...partner,
-        products: partner.products.filter((product) => {
-          if (!normalizedQuery) return true;
-          return (
-            product.name.toLowerCase().includes(normalizedQuery) ||
-            product.description.toLowerCase().includes(normalizedQuery) ||
-            partner.name.toLowerCase().includes(normalizedQuery) ||
-            partner.location.toLowerCase().includes(normalizedQuery)
-          );
-        }),
-      }))
-      .filter((partner) => partner.products.length > 0);
-  }, [category, normalizedQuery]);
+  const visibleKitchens = useMemo(() => {
+    if (!isDearKitchen) return [];
+    return (kitchens || []).filter((kitchen) => {
+      if (!normalizedQuery) return true;
+      return [
+        kitchen.name,
+        kitchen.description,
+        kitchen.cuisine,
+        kitchen.location,
+        kitchen.addressText,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+    });
+  }, [isDearKitchen, kitchens, normalizedQuery]);
 
-  const cartSummary = useMemo(() => {
-    return getKitchenGroupsForCategory(category)
-      .flatMap((partner) => partner.products)
-      .reduce(
-        (summary, product) => {
-          const qty = cart[product.id] || 0;
-          return {
-            count: summary.count + qty,
-            total: summary.total + qty * product.price,
-          };
-        },
-        { count: 0, total: 0 }
-      );
-  }, [cart, category]);
+  const openMap = async (kitchen) => {
+    const latitude = normalizeText(kitchen.latitude);
+    const longitude = normalizeText(kitchen.longitude);
+    if (!latitude || !longitude) {
+      Alert.alert("Location", "Location is not available for this kitchen yet.");
+      return;
+    }
+
+    const url = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+    const supported = await Linking.canOpenURL(url);
+    if (supported) {
+      Linking.openURL(url);
+    } else {
+      Alert.alert("Error", "Could not open maps.");
+    }
+  };
+
+  const openKitchen = (kitchen) => {
+    navigation.navigate("DearKitchenDetailScreen", {
+      kitchenid: kitchen.kitchenid,
+      kitchen,
+    });
+  };
 
   return (
     <View className="flex-1 bg-slate-50">
@@ -71,61 +123,135 @@ export default function FoodieCategoryProductsScreen({
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 16, paddingBottom: 104 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={!!loadingKitchens}
+            onRefresh={onRefreshKitchens}
+          />
+        }
+        contentContainerStyle={{ padding: 16, paddingBottom: 28 }}
       >
-        {kitchenGroups.map((partner) => (
-          <View key={partner.id} className="mb-5">
-            <View className="mb-3 rounded-xl border border-slate-200 bg-white p-3.5">
-              <View className="flex-row items-start justify-between">
-                <View className="flex-1 pr-3">
-                  <Text className="text-[16px] font-black text-slate-950">
-                    {partner.name}
-                  </Text>
-                  <Text className="mt-1 text-[12px] font-semibold text-slate-500">
-                    {partner.location} - {partner.distance}
-                  </Text>
-                </View>
-                <View className="flex-row items-center rounded-full bg-orange-50 px-2.5 py-1">
-                  <Ionicons name="star" size={13} color="#f97316" />
-                  <Text className="ml-1 text-[12px] font-black text-orange-700">
-                    {partner.rating}
-                  </Text>
-                </View>
-              </View>
-              <View className="mt-2 flex-row items-center">
-                <Ionicons name="time-outline" size={14} color="#64748b" />
-                <Text className="ml-1.5 text-[12px] font-semibold text-slate-500">
-                  {partner.timing}
-                </Text>
-              </View>
-            </View>
-
-            {partner.products.map((product) => (
-              <FoodieProductRow
-                key={product.id}
-                product={product}
-                quantity={cart[product.id] || 0}
-                onDecrement={() => onQuantityChange(product.id, -1)}
-                onIncrement={() => onQuantityChange(product.id, 1)}
-              />
-            ))}
+        {!isDearKitchen ? (
+          <View className="items-center rounded-xl border border-slate-200 bg-white px-5 py-14">
+            <Ionicons name="albums-outline" size={30} color="#94a3b8" />
+            <Text className="mt-3 text-[17px] font-extrabold text-slate-800">
+              Coming soon
+            </Text>
+            <Text className="mt-1 text-center text-slate-500">
+              This category will be connected after backend category mapping is ready.
+            </Text>
           </View>
-        ))}
+        ) : null}
 
-        {kitchenGroups.length === 0 ? (
+        {isDearKitchen && loadingKitchens && visibleKitchens.length === 0 ? (
+          <View className="items-center py-14">
+            <ActivityIndicator color="#f97316" />
+            <Text className="mt-3 font-semibold text-slate-500">
+              Loading kitchens...
+            </Text>
+          </View>
+        ) : null}
+
+        {isDearKitchen && !!kitchenError && visibleKitchens.length === 0 ? (
+          <View className="items-center rounded-xl border border-red-100 bg-red-50 px-5 py-10">
+            <Ionicons name="alert-circle-outline" size={28} color="#dc2626" />
+            <Text className="mt-2 text-center font-semibold text-red-700">
+              {kitchenError}
+            </Text>
+          </View>
+        ) : null}
+
+        {isDearKitchen &&
+          visibleKitchens.map((kitchen) => (
+            <View
+              key={kitchen.kitchenid}
+              className="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-white"
+            >
+              <TouchableOpacity activeOpacity={0.9} onPress={() => openKitchen(kitchen)}>
+                <KitchenImage
+                  uri={kitchen.coverImageUrl || kitchen.profileImageUrl}
+                  className="h-32 w-full bg-slate-100"
+                />
+                <View className="p-3.5">
+                  <View className="flex-row items-start">
+                    <KitchenImage
+                      uri={kitchen.profileImageUrl}
+                      className="-mt-10 h-16 w-16 rounded-xl border-2 border-white bg-slate-100"
+                    />
+                    <View className="ml-3 flex-1">
+                      <View className="flex-row items-start justify-between">
+                        <View className="flex-1 pr-2">
+                          <Text className="text-[17px] font-black text-slate-950">
+                            {kitchen.name}
+                          </Text>
+                          <Text className="mt-0.5 text-[12px] font-semibold text-slate-500">
+                            {kitchen.cuisine || "Home kitchen"} - {kitchen.location || "Nearby"}
+                          </Text>
+                        </View>
+                        <View className="flex-row items-center rounded-full bg-orange-50 px-2.5 py-1">
+                          <Ionicons name="star" size={13} color="#f97316" />
+                          <Text className="ml-1 text-[12px] font-black text-orange-700">
+                            {kitchen.ratingValue.toFixed(1)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+
+                  {kitchen.description ? (
+                    <Text className="mt-3 text-[13px] leading-5 text-slate-600" numberOfLines={2}>
+                      {kitchen.description}
+                    </Text>
+                  ) : null}
+
+                  <View className="mt-2 flex-row flex-wrap">
+                    <StatusPill
+                      label={kitchen.isOpen ? "Open now" : "Closed"}
+                      tone={kitchen.isOpen ? "green" : "red"}
+                    />
+                    {kitchen.allowsPrebooking ? (
+                      <StatusPill label="Prebooking" tone="orange" />
+                    ) : null}
+                    {kitchen.isPureVeg ? <StatusPill label="Pure veg" tone="green" /> : null}
+                    {kitchen.isHalal ? <StatusPill label="Halal" tone="slate" /> : null}
+                  </View>
+
+                  <View className="mt-3 flex-row items-center justify-between border-t border-slate-100 pt-3">
+                    <Text className="flex-1 pr-3 text-[12px] font-semibold text-slate-500" numberOfLines={1}>
+                      {kitchen.addressText || "Address not updated"}
+                    </Text>
+                    <TouchableOpacity
+                      className="mr-2 h-9 w-9 items-center justify-center rounded-lg bg-slate-100"
+                      onPress={() => openMap(kitchen)}
+                    >
+                      <Ionicons name="navigate-outline" size={17} color="#0f172a" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      className="rounded-lg bg-orange-500 px-3.5 py-2.5"
+                      onPress={() => openKitchen(kitchen)}
+                    >
+                      <Text className="text-[12px] font-extrabold text-white">
+                        View full menu
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            </View>
+          ))}
+
+        {isDearKitchen && !loadingKitchens && visibleKitchens.length === 0 ? (
           <View className="items-center py-14">
             <Ionicons name="search" size={28} color="#94a3b8" />
             <Text className="mt-2.5 text-[17px] font-extrabold text-slate-700">
-              No products found
+              No kitchens found
             </Text>
             <Text className="mt-1 text-center text-slate-500">
-              Try another item, shop, or location.
+              Approved Dear Kitchen partners will appear here.
             </Text>
           </View>
         ) : null}
       </ScrollView>
-
-      <FoodieCartBar count={cartSummary.count} total={cartSummary.total} />
     </View>
   );
 }

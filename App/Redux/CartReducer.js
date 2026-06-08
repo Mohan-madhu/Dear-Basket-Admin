@@ -144,6 +144,7 @@ export const CartSlice = createSlice({
       const itemPresent = state.cart.find(
         (item) => item.variantid === action.payload.variantid
       );
+      if (!itemPresent) return;
       itemPresent.orderquantity++;
       saveCartToStorage(state.cart);
     },
@@ -152,6 +153,7 @@ export const CartSlice = createSlice({
       const itemPresent = state.cart.find(
         (item) => item.variantid === action.payload.variantid
       );
+      if (!itemPresent) return;
       if (itemPresent.orderquantity === 1) {
         const removeItem = state.cart.filter(
           (item) => item.variantid !== action.payload.variantid
@@ -187,6 +189,7 @@ export const CartSlice = createSlice({
     setCartItemQuantity: (state, action) => {
       const { material, orderquantity } = action.payload;
       const itemPresent = state.cart.find((item) => item.variantid === material.variantid);
+      if (!itemPresent) return;
       itemPresent.orderquantity = orderquantity;
       saveCartToStorage(state.cart);
     },

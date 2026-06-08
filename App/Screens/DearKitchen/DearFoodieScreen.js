@@ -1,18 +1,46 @@
-import React, { useMemo, useState } from "react";
-import { View, Text, ScrollView } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { Alert, RefreshControl, View, Text, ScrollView } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import DearFoodieHeader from "./components/DearFoodieHeader";
 import FoodieCategoryCard from "./components/FoodieCategoryCard";
-import FoodieCartBar from "./components/FoodieCartBar";
 import FoodieCategoryProductsScreen from "./components/FoodieCategoryProductsScreen";
-import { FOODIE_CATEGORIES, FOODIE_GROUPS, getKitchenGroupsForCategory } from "./data/foodieData";
+import { FOODIE_GROUPS } from "./data/foodieData";
+import {
+  DEAR_KITCHEN_CATEGORY_ID,
+  fetchVisibleKitchens,
+} from "./data/liveDearKitchen";
 
 export default function DearFoodieScreen() {
   const [query, setQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [cart, setCart] = useState({});
+  const [kitchens, setKitchens] = useState([]);
+  const [loadingKitchens, setLoadingKitchens] = useState(false);
+  const [kitchenError, setKitchenError] = useState("");
 
   const normalizedQuery = query.trim().toLowerCase();
+
+  const loadKitchens = useCallback(async () => {
+    try {
+      setLoadingKitchens(true);
+      setKitchenError("");
+      const rows = await fetchVisibleKitchens();
+      setKitchens(rows);
+    } catch (error) {
+      console.error("Dear Kitchen list error:", error);
+      setKitchenError(error?.message || "Failed to load kitchens.");
+      Alert.alert("Error", "Failed to load Dear Kitchen data.");
+    } finally {
+      setLoadingKitchens(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadKitchens();
+    }, [loadKitchens])
+  );
 
   const visibleGroups = useMemo(() => {
     if (!normalizedQuery) return FOODIE_GROUPS;
@@ -23,30 +51,25 @@ export default function DearFoodieScreen() {
         const categoryMatch = category.name
           .toLowerCase()
           .includes(normalizedQuery);
-        const productMatch = category.products.some((product) =>
-          product.name.toLowerCase().includes(normalizedQuery)
-        );
-        return categoryMatch || productMatch;
+        const kitchenMatch =
+          category.id === DEAR_KITCHEN_CATEGORY_ID &&
+          kitchens.some((kitchen) =>
+            [
+              kitchen.name,
+              kitchen.description,
+              kitchen.cuisine,
+              kitchen.location,
+              kitchen.addressText,
+            ]
+              .filter(Boolean)
+              .some((value) =>
+                String(value).toLowerCase().includes(normalizedQuery)
+              )
+          );
+        return categoryMatch || kitchenMatch;
       }),
     })).filter((group) => group.data.length > 0);
-  }, [normalizedQuery]);
-
-  const cartSummary = useMemo(() => {
-    const products = FOODIE_CATEGORIES.flatMap((category) =>
-      getKitchenGroupsForCategory(category).flatMap((partner) => partner.products)
-    );
-
-    return products.reduce(
-      (summary, product) => {
-        const qty = cart[product.id] || 0;
-        return {
-          count: summary.count + qty,
-          total: summary.total + qty * product.price,
-        };
-      },
-      { count: 0, total: 0 }
-    );
-  }, [cart]);
+  }, [kitchens, normalizedQuery]);
 
   const updateQuantity = (productId, delta) => {
     setCart((prev) => {
@@ -61,6 +84,10 @@ export default function DearFoodieScreen() {
         category={selectedCategory}
         query={query}
         cart={cart}
+        kitchens={kitchens}
+        loadingKitchens={loadingKitchens}
+        kitchenError={kitchenError}
+        onRefreshKitchens={loadKitchens}
         onBack={() => setSelectedCategory(null)}
         onQuantityChange={updateQuantity}
       />
@@ -71,7 +98,13 @@ export default function DearFoodieScreen() {
     <View className="flex-1 bg-white">
       <DearFoodieHeader query={query} setQuery={setQuery} />
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={loadingKitchens} onRefresh={loadKitchens} />
+        }
+      >
         <View className="p-4 pb-24">
           {visibleGroups.map((group) => (
             <View key={group.title} className="mb-[22px]">
@@ -94,17 +127,15 @@ export default function DearFoodieScreen() {
             <View className="items-center py-12">
               <Ionicons name="search" size={28} color="#94a3b8" />
               <Text className="mt-2.5 text-[17px] font-extrabold text-slate-700">
-                No foodie matches
+                No matches found
               </Text>
               <Text className="mt-1 text-slate-500">
-                Try another homemade item or category.
+                Try another kitchen, item, or category.
               </Text>
             </View>
           ) : null}
         </View>
       </ScrollView>
-
-      <FoodieCartBar count={cartSummary.count} total={cartSummary.total} />
     </View>
   );
 }

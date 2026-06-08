@@ -565,7 +565,7 @@ const ViewCartScreen = () => {
 
 
             {/* Section 1: Ordered Product Details */}
-            {currentSection === 1 && (
+            {( currentSection === 1) && (
                 <ScrollView className="flex-1">
                     <View className="p-3 flex-row items-center">
                         <Ionicons
@@ -652,39 +652,92 @@ const ViewCartScreen = () => {
 
                             {/* Delivery Options Section */}
                             <View className="mt-6">
-                                <Text className="text-lg font-bold mb-3">
+                                <Text className="text-lg font-bold mb-1">
                                     Select Delivery Option
                                 </Text>
+                                <Text className="text-xs text-gray-500 mb-3">
+                                    Choose how this cart should reach you.
+                                </Text>
 
-                                {isdailymilkuser && (
-                                    <View className="flex-row justify-center mb-3">
-                                        <View className="flex-row bg-gray-100 rounded-lg p-1">
-                                            <TouchableOpacity
-                                                className={`px-6 py-2 rounded-lg mx-1 bg-white shadow-sm ${deliveryOption === 1 ? 'shadow-md' : ''}`}
-                                                onPress={() => {
+                                {isdailymilkuser || true  && (
+                                    <View className="mb-3">
+                                        <TouchableOpacity
+                                            className={`rounded-xl p-4 mb-3 border-2 ${deliveryOption === 1 ? "bg-blue-50 border-blue-500" : "bg-white border-gray-200"}`}
+                                            activeOpacity={0.88}
+                                            onPress={() => {
+                                                setDeliveryOption(1);
+                                                setdeliveryfee(50);
+                                            }}
+                                        >
+                                            <View className="flex-row items-center">
+                                                <View className={`w-12 h-12 rounded-full items-center justify-center mr-3 ${deliveryOption === 1 ? "bg-blue-600" : "bg-blue-100"}`}>
+                                                    <Ionicons
+                                                        name="flash-outline"
+                                                        size={24}
+                                                        color={deliveryOption === 1 ? "#ffffff" : "#2563eb"}
+                                                    />
+                                                </View>
 
-                                                    setDeliveryOption(1);
-                                                    setdeliveryfee(50);
-                                                }}
-                                            >
-                                                <Text className={`font-medium ${deliveryOption === 1 ? "text-blue-600" : "text-gray-600"}`}>
-                                                    Fast Delivery
-                                                </Text>
-                                            </TouchableOpacity>
+                                                <View className="flex-1">
+                                                    <View className="flex-row items-center justify-between">
+                                                        <Text className="text-base font-bold text-gray-900">
+                                                            Fast Delivery
+                                                        </Text>
+                                                        <Text className="text-sm font-bold text-blue-600">
+                                                            ₹50
+                                                        </Text>
+                                                    </View>
+                                                    <Text className="text-xs text-gray-500 mt-1">
+                                                        Send this order separately with faster delivery.
+                                                    </Text>
+                                                </View>
 
-                                            <TouchableOpacity
-                                                className={`px-6 py-2 rounded-lg mx-1 bg-white shadow-sm ${deliveryOption === 2 ? 'shadow-md' : ''}`}
-                                                onPress={() => {
+                                                <View className={`w-6 h-6 rounded-full ml-3 items-center justify-center border ${deliveryOption === 1 ? "bg-blue-600 border-blue-600" : "border-gray-300"}`}>
+                                                    {deliveryOption === 1 && (
+                                                        <Ionicons name="checkmark" size={15} color="#ffffff" />
+                                                    )}
+                                                </View>
+                                            </View>
+                                        </TouchableOpacity>
 
-                                                    setDeliveryOption(2);
-                                                    setdeliveryfee("FREE");
-                                                }}
-                                            >
-                                                <Text className={`font-medium ${deliveryOption === 2 ? "text-green-600" : "text-gray-600"}`}>
-                                                    With Daily Milk
-                                                </Text>
-                                            </TouchableOpacity>
-                                        </View>
+                                        <TouchableOpacity
+                                            className={`rounded-xl p-4 border-2 ${deliveryOption === 2 ? "bg-green-50 border-green-500" : "bg-white border-gray-200"}`}
+                                            activeOpacity={0.88}
+                                            onPress={() => {
+                                                setDeliveryOption(2);
+                                                setdeliveryfee("FREE");
+                                            }}
+                                        >
+                                            <View className="flex-row items-center">
+                                                <View className={`w-12 h-12 rounded-full items-center justify-center mr-3 ${deliveryOption === 2 ? "bg-green-600" : "bg-green-100"}`}>
+                                                    <Ionicons
+                                                        name="leaf-outline"
+                                                        size={24}
+                                                        color={deliveryOption === 2 ? "#ffffff" : "#16a34a"}
+                                                    />
+                                                </View>
+
+                                                <View className="flex-1">
+                                                    <View className="flex-row items-center justify-between">
+                                                        <Text className="text-base font-bold text-gray-900">
+                                                            With Daily Milk
+                                                        </Text>
+                                                        <Text className="text-sm font-bold text-green-600">
+                                                            FREE
+                                                        </Text>
+                                                    </View>
+                                                    <Text className="text-xs text-gray-500 mt-1">
+                                                        Combine this order with your daily milk delivery route.
+                                                    </Text>
+                                                </View>
+
+                                                <View className={`w-6 h-6 rounded-full ml-3 items-center justify-center border ${deliveryOption === 2 ? "bg-green-600 border-green-600" : "border-gray-300"}`}>
+                                                    {deliveryOption === 2 && (
+                                                        <Ionicons name="checkmark" size={15} color="#ffffff" />
+                                                    )}
+                                                </View>
+                                            </View>
+                                        </TouchableOpacity>
                                     </View>
                                 )}
 

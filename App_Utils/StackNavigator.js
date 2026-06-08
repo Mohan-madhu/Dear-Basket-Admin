@@ -59,6 +59,8 @@ import DailyMilkProductsManageScreen from "../App/Screens/DailyMilkProductsManag
 import AddKitchenPartnerScreen from "../App/Screens/AddKitchenPartnerScreen";
 import ManageKitchenPartnersScreen from "../App/Screens/ManageKitchenPartnersScreen";
 import EditKitchenScreen from "../App/Screens/EditKitchenScreen";
+import DearKitchenDetailScreen from "../App/Screens/DearKitchen/DearKitchenDetailScreen";
+import DearKitchenCheckoutScreen from "../App/Screens/DearKitchen/DearKitchenCheckoutScreen";
 
 const StackNavigator = () => {
   const Stack = createNativeStackNavigator();
@@ -292,6 +294,18 @@ const StackNavigator = () => {
         name="EditKitchenScreen"
         component={EditKitchenScreen}
         options={{ title: 'Edit Kitchen' }}
+      />
+
+      <Stack.Screen
+        name="DearKitchenDetailScreen"
+        component={DearKitchenDetailScreen}
+        options={{ title: 'Dear Kitchen' }}
+      />
+
+      <Stack.Screen
+        name="DearKitchenCheckoutScreen"
+        component={DearKitchenCheckoutScreen}
+        options={{ title: 'Dear Kitchen Checkout' }}
       />
 
     </Stack.Navigator>

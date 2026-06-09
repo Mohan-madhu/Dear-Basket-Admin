@@ -28,6 +28,8 @@ const DATE_FILTERS = [
   { key: 'all', label: 'All' },
 ];
 
+const ORDER_PAGE_SIZE = 10;
+
 const parseTimestamp = (value) => {
   if (!value) return 0;
   if (value instanceof Date) return value.getTime();
@@ -136,6 +138,14 @@ const isKitchenOrder = (order) =>
   String(order?.order_type || "").toLowerCase() === "kitchen_order" ||
   String(order?.ordertype || "").toLowerCase() === "kitchen_order";
 
+const hasOrdersForType = (list, type) => {
+  if (!Array.isArray(list) || list.length === 0) return false;
+  if (type === 'fast') return list.some(isFastDeliveryOrder);
+  if (type === 'dailymilk') return list.some(isDailyMilkOrder);
+  if (type === 'kitchen') return list.some(isKitchenOrder);
+  return list.length > 0;
+};
+
 const getReturnTimestamp = (item) => {
   const candidates = [
     item?.requestedtime,
@@ -189,6 +199,7 @@ const MyOrdersScreen = () => {
   const [title, setTitle] = useState('My Orders');
   const [selectedDateFilter, setSelectedDateFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [visibleOrderLimit, setVisibleOrderLimit] = useState(ORDER_PAGE_SIZE);
   const [cacheLoaded, setCacheLoaded] = useState(false);
   const [returnOrders, setReturnOrders] = useState([]);
   const [isReturnServiceUnavailable, setIsReturnServiceUnavailable] = useState(false);
@@ -233,10 +244,12 @@ const MyOrdersScreen = () => {
       const cachedOrders = Array.isArray(cached?.orders) ? cached.orders : [];
       if (cachedOrders.length > 0) {
         setOrders(cachedOrders);
+        return cachedOrders;
       }
     } catch (error) {
       log('Cache load error:', error);
     }
+    return [];
   };
 
   const getReturnCacheKey = async () => {
@@ -356,18 +369,22 @@ const MyOrdersScreen = () => {
   useEffect(() => {
     const bootstrap = async () => {
       setTitle(getScreenTitle());
-      await Promise.all([loadOrdersFromCache(), loadReturnsFromCache()]);
+      const [cachedOrders] = await Promise.all([loadOrdersFromCache(), loadReturnsFromCache()]);
       setCacheLoaded(true);
-      setLoading(false);
+      setLoading(!hasOrdersForType(cachedOrders, ordertype));
     };
     bootstrap();
   }, []);
 
   useEffect(() => {
     if (!cacheLoaded) return;
-    fetchOrders(orders.length === 0);
+    fetchOrders(!hasOrdersForType(orders, ordertype));
     fetchReturnOrders();
   }, [cacheLoaded]);
+
+  useEffect(() => {
+    setVisibleOrderLimit(ORDER_PAGE_SIZE);
+  }, [ordertype, selectedDateFilter, searchQuery]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -472,6 +489,17 @@ const MyOrdersScreen = () => {
       totalAmount,
     };
   }, [visibleOrders]);
+
+  const displayedOrders = useMemo(
+    () => visibleOrders.slice(0, visibleOrderLimit),
+    [visibleOrders, visibleOrderLimit]
+  );
+
+  const hasMoreOrders = displayedOrders.length < visibleOrders.length;
+
+  const handleLoadMoreOrders = () => {
+    setVisibleOrderLimit((current) => current + ORDER_PAGE_SIZE);
+  };
 
   const visibleReturnOrders = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -725,7 +753,7 @@ const MyOrdersScreen = () => {
           </Animated.View>
         ) : (
           <View className="pb-4">
-            {visibleOrders.map((order, index) => (
+            {displayedOrders.map((order, index) => (
               <Animated.View
                 key={order.productorderid + index || order.orderid + index || index}
                 entering={FadeIn.delay(index * 60)}
@@ -739,6 +767,22 @@ const MyOrdersScreen = () => {
                 />
               </Animated.View>
             ))}
+
+            {hasMoreOrders ? (
+              <TouchableOpacity
+                onPress={handleLoadMoreOrders}
+                activeOpacity={0.85}
+                className="mt-2 mb-4 bg-white border border-blue-200 rounded-2xl py-3 px-4 flex-row items-center justify-center"
+              >
+                <Icon name="expand-more" size={20} color="#2563EB" />
+                <Text className="text-blue-700 font-bold ml-1">
+                  Load More
+                </Text>
+                <Text className="text-gray-500 text-xs ml-2">
+                  {displayedOrders.length}/{visibleOrders.length}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         )}
       </Animated.ScrollView>

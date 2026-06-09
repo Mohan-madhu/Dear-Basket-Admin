@@ -6,6 +6,17 @@ const initialState = {
   cart: [],
 };
 
+const isDearKitchenItem = (item) => item?.source === "dearkitchen";
+const matchesCartItem = (item, payload = {}) => {
+  if (item?.variantid !== payload?.variantid) return false;
+
+  if (payload?.source) {
+    return item?.source === payload.source;
+  }
+
+  return !isDearKitchenItem(item);
+};
+
 const loadCartFromStorage = async () => {
   try {
     const cart = await AsyncStorage.getItem('cart');
@@ -122,7 +133,7 @@ export const CartSlice = createSlice({
     addToCart: (state, action) => {
       console.log("Adding to cart with min quantity:", JSON.stringify(action.payload,null,3));
       const itemPresent = state.cart.find(
-        (item) => item.variantid === action.payload.variantid
+        (item) => matchesCartItem(item, action.payload)
       );
       if (itemPresent) {
         itemPresent.orderquantity++;
@@ -134,7 +145,7 @@ export const CartSlice = createSlice({
 
     removeFromCart: (state, action) => {
       const removeItem = state.cart.filter(
-        (item) => item.variantid !== action.payload.variantid
+        (item) => !matchesCartItem(item, action.payload)
       );
       state.cart = removeItem;
       saveCartToStorage(state.cart);
@@ -142,7 +153,7 @@ export const CartSlice = createSlice({
 
     incrementQuantity: (state, action) => {
       const itemPresent = state.cart.find(
-        (item) => item.variantid === action.payload.variantid
+        (item) => matchesCartItem(item, action.payload)
       );
       if (!itemPresent) return;
       itemPresent.orderquantity++;
@@ -151,12 +162,12 @@ export const CartSlice = createSlice({
 
     decrementQuantity: (state, action) => {
       const itemPresent = state.cart.find(
-        (item) => item.variantid === action.payload.variantid
+        (item) => matchesCartItem(item, action.payload)
       );
       if (!itemPresent) return;
       if (itemPresent.orderquantity === 1) {
         const removeItem = state.cart.filter(
-          (item) => item.variantid !== action.payload.variantid
+          (item) => !matchesCartItem(item, action.payload)
         );
         state.cart = removeItem;
       } else {
@@ -170,10 +181,23 @@ export const CartSlice = createSlice({
       saveCartToStorage(state.cart);
     },
 
+    clearCartBySource: (state, action) => {
+      const source = action.payload?.source;
+      if (!source) return;
+
+      state.cart = state.cart.filter((item) => item?.source !== source);
+      saveCartToStorage(state.cart);
+    },
+
+    clearNormalCart: (state) => {
+      state.cart = state.cart.filter(isDearKitchenItem);
+      saveCartToStorage(state.cart);
+    },
+
     addToCartWithMinQuantity: (state, action) => {
       console.log("Adding to cart with min quantity:", action.payload);
       const itemPresent = state.cart.find(
-        (item) => item.variantid === action.payload.variantid
+        (item) => matchesCartItem(item, action.payload)
       );
       if (itemPresent) {
         itemPresent.orderquantity++;
@@ -188,7 +212,7 @@ export const CartSlice = createSlice({
 
     setCartItemQuantity: (state, action) => {
       const { material, orderquantity } = action.payload;
-      const itemPresent = state.cart.find((item) => item.variantid === material.variantid);
+      const itemPresent = state.cart.find((item) => matchesCartItem(item, material));
       if (!itemPresent) return;
       itemPresent.orderquantity = orderquantity;
       saveCartToStorage(state.cart);
@@ -207,6 +231,8 @@ export const {
   incrementQuantity,
   decrementQuantity,
   clearCart,
+  clearCartBySource,
+  clearNormalCart,
   addToCartWithMinQuantity,
   setCartItemQuantity,
   setCart,  // Export the new action

@@ -411,6 +411,7 @@ const AdminDashboardScreen = () => {
   const kitchenCards = [
     { id: 401, title: 'Add Kitchen Partner', gradient: gradientPairs[20], screen: 'AddKitchenPartnerScreen', icon: 'chef-hat' },
     { id: 402, title: 'Manage Kitchen Partners', gradient: gradientPairs[21], screen: 'ManageKitchenPartnersScreen', icon: 'storefront-outline' },
+    { id: 403, title: 'Kitchen Orders', gradient: ['#f472b6', '#db2777'], screen: 'MyOrdersScreen_KITCHEN', icon: 'silverware-fork-knife' },
   ];
 
   const handleCardPress = (screenName) => {

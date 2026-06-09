@@ -1,5 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { getImageUrl } from "../../config";
 import {
   View,
@@ -60,7 +60,11 @@ const ProductCard = ({ product, setrefresh }) => {
   );
 
   // Get cart state
-  const { cart } = useSelector((state) => state.cart);
+  const allCart = useSelector((state) => state.cart.cart || []);
+  const cart = useMemo(
+    () => allCart.filter((item) => item?.source !== "dearkitchen"),
+    [allCart]
+  );
 
   // Set default selected variant
   useEffect(() => {

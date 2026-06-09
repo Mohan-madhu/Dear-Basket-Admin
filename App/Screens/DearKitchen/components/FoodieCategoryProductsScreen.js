@@ -11,8 +11,11 @@ import {
   View,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { useSelector } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
+import FoodieCartBar from "./FoodieCartBar";
 import { DEAR_KITCHEN_CATEGORY_ID } from "../data/liveDearKitchen";
+import { getDearKitchenOrderTotals } from "../data/checkoutAdapter";
 
 const normalizeText = (value) => String(value || "").trim();
 
@@ -55,8 +58,10 @@ export default function FoodieCategoryProductsScreen({
   onBack,
 }) {
   const navigation = useNavigation();
+  const reduxCart = useSelector((state) => state.cart.cart || []);
   const normalizedQuery = query.trim().toLowerCase();
   const isDearKitchen = category?.id === DEAR_KITCHEN_CATEGORY_ID;
+  const cartSummary = useMemo(() => getDearKitchenOrderTotals(reduxCart), [reduxCart]);
 
   const visibleKitchens = useMemo(() => {
     if (!isDearKitchen) return [];
@@ -129,7 +134,7 @@ export default function FoodieCategoryProductsScreen({
             onRefresh={onRefreshKitchens}
           />
         }
-        contentContainerStyle={{ padding: 16, paddingBottom: 28 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 112 }}
       >
         {!isDearKitchen ? (
           <View className="items-center rounded-xl border border-slate-200 bg-white px-5 py-14">
@@ -252,6 +257,12 @@ export default function FoodieCategoryProductsScreen({
           </View>
         ) : null}
       </ScrollView>
+
+      <FoodieCartBar
+        count={cartSummary.count}
+        total={cartSummary.itemTotal}
+        onReview={() => navigation.navigate("DearKitchenCheckoutScreen")}
+      />
     </View>
   );
 }

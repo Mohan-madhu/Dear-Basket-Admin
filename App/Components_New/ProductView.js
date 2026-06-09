@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { getImageUrl } from '../../config';
 import { View, Text, ScrollView, TouchableOpacity, FlatList, Modal, Dimensions, Alert, StyleSheet, Button, Pressable } from 'react-native';
 import ProductVariantCard from './ProductVariantCard';
@@ -30,7 +30,11 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-na
 const ProductView = ({ product, variants, selectedvariantid }) => {
 
 
-    const cart = useSelector((state) => state.cart.cart);
+    const allCart = useSelector((state) => state.cart.cart || []);
+    const cart = useMemo(
+        () => allCart.filter((item) => item?.source !== "dearkitchen"),
+        [allCart]
+    );
 
     const total = cart
         .map((item) => item.price * item.orderquantity)

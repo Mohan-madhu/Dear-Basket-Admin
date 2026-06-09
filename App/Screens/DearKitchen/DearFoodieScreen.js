@@ -1,8 +1,10 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Alert, RefreshControl, View, Text, ScrollView } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useSelector } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import DearFoodieHeader from "./components/DearFoodieHeader";
+import FoodieCartBar from "./components/FoodieCartBar";
 import FoodieCategoryCard from "./components/FoodieCategoryCard";
 import FoodieCategoryProductsScreen from "./components/FoodieCategoryProductsScreen";
 import { FOODIE_GROUPS } from "./data/foodieData";
@@ -10,16 +12,20 @@ import {
   DEAR_KITCHEN_CATEGORY_ID,
   fetchVisibleKitchens,
 } from "./data/liveDearKitchen";
+import { getDearKitchenOrderTotals } from "./data/checkoutAdapter";
 
 export default function DearFoodieScreen() {
+  const navigation = useNavigation();
   const [query, setQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [cart, setCart] = useState({});
+  const reduxCart = useSelector((state) => state.cart.cart || []);
   const [kitchens, setKitchens] = useState([]);
   const [loadingKitchens, setLoadingKitchens] = useState(false);
   const [kitchenError, setKitchenError] = useState("");
 
   const normalizedQuery = query.trim().toLowerCase();
+  const cartSummary = useMemo(() => getDearKitchenOrderTotals(reduxCart), [reduxCart]);
 
   const loadKitchens = useCallback(async () => {
     try {
@@ -136,6 +142,12 @@ export default function DearFoodieScreen() {
           ) : null}
         </View>
       </ScrollView>
+
+      <FoodieCartBar
+        count={cartSummary.count}
+        total={cartSummary.itemTotal}
+        onReview={() => navigation.navigate("DearKitchenCheckoutScreen")}
+      />
     </View>
   );
 }

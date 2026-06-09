@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react"; // Added useRef
+import React, { useEffect, useMemo, useState, useRef } from "react"; // Added useRef
 import {
   View,
   ScrollView,
@@ -48,7 +48,11 @@ export default function SidebarScreen(data) {
 
 
 
-  const cart = useSelector((state) => state.cart.cart);
+  const allCart = useSelector((state) => state.cart.cart || []);
+  const cart = useMemo(
+    () => allCart.filter((item) => item?.source !== "dearkitchen"),
+    [allCart]
+  );
 
   const total = cart
     .map((item) => item.price * item.orderquantity)

@@ -17,7 +17,7 @@ import { useDispatch, useSelector } from "react-redux";
 import * as Location from "expo-location";
 import { DearKitchenAPI } from "../../../App_Utils/Services/APIService";
 import Storage from "../../../App_Utils/Services/StorageService";
-import { clearCart, decrementQuantity, incrementQuantity, removeFromCart } from "../../Redux/CartReducer";
+import { clearCartBySource, decrementQuantity, incrementQuantity, removeFromCart } from "../../Redux/CartReducer";
 import {
   buildDearKitchenOrderItems,
   buildDearKitchenOrderId,
@@ -205,7 +205,7 @@ export default function DearKitchenCheckoutScreen() {
         await DearKitchenAPI.POST("OrderItems", detail);
       }
 
-      dispatch(clearCart());
+      dispatch(clearCartBySource({ source: "dearkitchen" }));
       Alert.alert("Success", "Dear Kitchen order placed successfully.", [
         {
           text: "OK",
@@ -222,14 +222,14 @@ export default function DearKitchenCheckoutScreen() {
 
   const updateQuantity = (item, delta) => {
     if (delta > 0) {
-      dispatch(incrementQuantity({ variantid: item.variantid }));
+      dispatch(incrementQuantity({ variantid: item.variantid, source: "dearkitchen" }));
       return;
     }
     if ((item.orderquantity || 0) <= 1) {
-      dispatch(removeFromCart({ variantid: item.variantid }));
+      dispatch(removeFromCart({ variantid: item.variantid, source: "dearkitchen" }));
       return;
     }
-    dispatch(decrementQuantity({ variantid: item.variantid }));
+    dispatch(decrementQuantity({ variantid: item.variantid, source: "dearkitchen" }));
   };
 
   if (loading && dearKitchenItems.length === 0) {

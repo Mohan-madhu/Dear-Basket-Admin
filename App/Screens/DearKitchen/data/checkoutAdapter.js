@@ -40,6 +40,7 @@ export const buildDearKitchenOrderPayload = ({
   cart,
 }) => {
   const totals = getDearKitchenOrderTotals(cart);
+  const items = getDearKitchenCartItems(cart);
   const nowName = normalizeText(userData?.name || userData?.username || "Dear Kitchen User");
 
   return {
@@ -60,7 +61,7 @@ export const buildDearKitchenOrderPayload = ({
     totalamount: totals.itemTotal,
     paymentmode: "COD",
     rcu: nowName,
-    orderdata: JSON.stringify(cart),
+    orderdata: JSON.stringify(items),
   };
 };   
 

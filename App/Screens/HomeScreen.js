@@ -3,7 +3,7 @@
 // ───────────────────────────────────────────────────────────────────────────
 // Imports
 // ───────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -136,7 +136,11 @@ export default function HomeScreen() {
 
 
 
-  const cart = useSelector((state) => state.cart.cart);
+  const allCart = useSelector((state) => state.cart.cart || []);
+  const cart = useMemo(
+    () => allCart.filter((item) => item?.source !== "dearkitchen"),
+    [allCart]
+  );
 
   const total = cart
     .map((item) => item.price * item.orderquantity)

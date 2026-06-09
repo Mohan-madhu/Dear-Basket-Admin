@@ -210,11 +210,11 @@ export default function DearKitchenDetailScreen({ navigation, route }) {
 
   const updateQuantity = (product, delta) => {
     const productId = product.id || product.itemid;
-    const existing = reduxCart.find((i) => String(i.variantid) === String(productId));
+    const existing = dearKitchenCartItems.find((i) => String(i.variantid) === String(productId));
 
     if (delta > 0) {
       if (existing) {
-        dispatch(incrementQuantity({ variantid: productId }));
+        dispatch(incrementQuantity({ variantid: productId, source: "dearkitchen" }));
       } else {
         // Map menu item to cart product shape expected by reducers
         const cartProduct = {
@@ -239,7 +239,7 @@ export default function DearKitchenDetailScreen({ navigation, route }) {
       }
     } else {
       if (existing) {
-        dispatch(decrementQuantity({ variantid: productId }));
+        dispatch(decrementQuantity({ variantid: productId, source: "dearkitchen" }));
       }
     }
   };

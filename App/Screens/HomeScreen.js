@@ -488,6 +488,7 @@ export default function HomeScreen() {
                     source={cat.image}
                     style={styles.addMenuImage}
                     contentFit="contain"
+                    cachePolicy="memory-disk"
                   />
                 ) : (
                   <Ionicons
@@ -575,7 +576,7 @@ export default function HomeScreen() {
               >
                 {newCat.image ? (
                   <Image
-                    cachePolicy="disk"
+                    cachePolicy="memory-disk"
                     source={{ uri: newCat.image }}
                     style={styles.previewImage}
                   />

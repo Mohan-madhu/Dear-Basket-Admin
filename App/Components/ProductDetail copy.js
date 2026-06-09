@@ -200,14 +200,14 @@ export default function ProductDetail({ product, onUpdate, onDelete }) {
           nav.navigate("ProductScreen", { prod: item });
         }}
       >
-        <Image  cachePolicy="disk"
+        <Image  cachePolicy="memory-disk"
           source={
             getImageURI()
               ? { uri: getImageURI() }
               : require("../../assets/icon.png")
           }
           style={{ width: "100%", height: 100 }}
-          resizeMode="cover"
+          contentFit="cover"
         />
         <View style={{ padding: 6 }}>
           <Text numberOfLines={2} style={{ fontSize: 12, fontWeight: "600" }}>
@@ -224,7 +224,7 @@ export default function ProductDetail({ product, onUpdate, onDelete }) {
     <ScrollView className="flex-1 bg-gray-100 p-4 pt-10">
       {/* IMAGE + PICKER */}
       <View className="relative bg-white rounded-lg overflow-hidden shadow-lg">
-         <Image  cachePolicy="disk"  
+         <Image  cachePolicy="memory-disk"  
           source={
             getImageURI()
               ? { uri: getImageURI() }
@@ -232,7 +232,7 @@ export default function ProductDetail({ product, onUpdate, onDelete }) {
           }
           className="w-full h-64"
           style={{ height: 256 }}
-          resizeMode="cover"
+          contentFit="cover"
         />
         {editing && (
           <TouchableOpacity

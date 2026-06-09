@@ -524,7 +524,6 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
 
                                     style={{ width: "100%", aspectRatio: 1 }}
                                     contentFit='contain'
-                                    resizeMode="contain"
                                 />
                                 <TouchableOpacity
                                     onPress={toggleFavorite}
@@ -985,8 +984,7 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
                                                 aspectRatio: 1,     // makes height = width (square)
                                                 borderRadius: 12,   // rounded corners (rounded-lg ≈ 12px)
                                             }}
-
-                                            resizeMode="contain"
+                                            contentFit="contain"
                                         />
                                     ) : (
                                         <View className="items-center">

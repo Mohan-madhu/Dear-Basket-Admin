@@ -3,7 +3,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { getImageUrl } from '../../config';
-import { View, Text, TouchableOpacity, Image, Linking, Alert, Modal, TextInput, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Linking, Alert, Modal, TextInput, ScrollView } from 'react-native';
+import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { createLogger } from '../../App_Utils/Utils/logger';
 import { useLoading } from '../../App_Utils/Contexts/LoadingContext';
@@ -671,7 +672,8 @@ const OrderCard = ({ order, onOrderUpdate }) => {
                                                         uri: getImageUri(item.imageurl) || getImageUri(item.product?.imageurl) || 'https://placehold.co/60x60/png?text=No+Image'
                                                     }}
                                                     className="w-12 h-12 rounded-md mr-3"
-                                                    resizeMode="cover"
+                                                    contentFit="cover"
+                                                    cachePolicy="memory-disk"
                                                 />
                                                 <View className="flex-1">
                                                     <Text className="text-sm font-medium text-gray-900" numberOfLines={1}>

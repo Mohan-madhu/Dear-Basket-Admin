@@ -377,7 +377,7 @@ const ProductCard = ({ product, setrefresh }) => {
       {/* IMAGE + BADGES */}
       <View className="relative">
         <Image
-          cachePolicy="disk"
+          cachePolicy="memory-disk"
           source={
             getDisplayImage()
               ? { uri: getDisplayImage() }
@@ -385,7 +385,7 @@ const ProductCard = ({ product, setrefresh }) => {
           }
           style={{ height: 180 }}
           className="w-full"
-          resizeMode="cover"
+          contentFit="cover"
           transition={300}
         />
 

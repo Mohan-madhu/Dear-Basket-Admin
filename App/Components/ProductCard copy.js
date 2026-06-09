@@ -60,7 +60,7 @@ const ProductCard = ({ product, onAdd }) => {
     >
       {/* IMAGE + BADGES */}
       <View className="relative">
-        <Image  cachePolicy="disk"
+        <Image  cachePolicy="memory-disk"
           // <-- now using your 'image' URL field
           source={
             getImageURI()
@@ -69,7 +69,7 @@ const ProductCard = ({ product, onAdd }) => {
           }
           style={{  height: 128 }}
           className="w-full h-32"
-          resizeMode="cover"
+          contentFit="cover"
         />
         {/* quantity */}
         <View className="absolute top-2 left-2 bg-white bg-opacity-80 px-2 py-0.5 rounded">

@@ -135,6 +135,7 @@ const ZoomableImage = ({ source, style }) => {
             source={source}
             style={{ width: width, height: height }}
             contentFit="contain"
+            cachePolicy="memory-disk"
           />
         </Animated.View>
       </Animated.View>

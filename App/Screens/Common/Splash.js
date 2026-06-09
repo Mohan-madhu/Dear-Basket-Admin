@@ -175,11 +175,11 @@ export default function Splash() {
         ))}
 
         <Animated.View entering={ZoomIn.delay(100)}>
-          <Image cachePolicy="disk"
+          <Image cachePolicy="memory-disk"
             source={require("../../../assets/logo.jpg")}
             className="w-48 h-48 mb-6"
 
-            resizeMode="contain"
+            contentFit="contain"
           />
         </Animated.View>
 

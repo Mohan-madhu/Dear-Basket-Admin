@@ -369,7 +369,7 @@ export default function ProductDetail({
       <AnimatedView style={headerAnimStyle}>
         <View style={{ height: windowHeight * 0.5, position: 'relative' }}>
           <Image
-            cachePolicy="disk"
+            cachePolicy="memory-disk"
             source={
               getImageURI()
                 ? { uri: getImageURI() }

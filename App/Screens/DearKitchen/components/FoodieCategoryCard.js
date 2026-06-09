@@ -1,5 +1,6 @@
 import React from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 
 export default function FoodieCategoryCard({ category, onPress }) {
@@ -12,7 +13,8 @@ export default function FoodieCategoryCard({ category, onPress }) {
       <Image
         source={{ uri: category.image }}
         className="h-full w-full"
-        resizeMode="cover"
+        contentFit="cover"
+        cachePolicy="memory-disk"
       />
       <LinearGradient
         colors={["transparent", "rgba(15, 23, 42, 0.72)"]}

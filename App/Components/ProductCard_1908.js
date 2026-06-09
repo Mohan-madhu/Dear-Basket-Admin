@@ -92,7 +92,7 @@ const ProductCard = ({ product }) => {
       {/* IMAGE + BADGES */}
       <View className="relative">
         <Image
-          cachePolicy="disk"
+          cachePolicy="memory-disk"
           source={
             getImageURI()
               ? { uri: getImageURI() }
@@ -100,7 +100,7 @@ const ProductCard = ({ product }) => {
           }
           style={{ height: 180 }} // bigger image
           className="w-full"
-          resizeMode="cover"
+          contentFit="cover"
           transition={300}
         />
 

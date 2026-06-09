@@ -4,7 +4,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Image,
   Linking,
   Alert,
   Modal,
@@ -14,6 +13,7 @@ import {
   Platform,
   Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { createLogger } from '../../App_Utils/Utils/logger';
 import { useLoading } from '../../App_Utils/Contexts/LoadingContext';
@@ -1138,7 +1138,8 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                             'https://placehold.co/60x60/png?text=No+Image',
                         }}
                         className="w-14 h-14 rounded-xl mr-3"
-                        resizeMode="cover"
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
                       />
 
                       <View className="flex-1">

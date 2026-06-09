@@ -3,10 +3,10 @@ import { getImageUrl } from "../../config";
 import {
     View,
     Text,
-    Image,
     TouchableOpacity,
     Alert,
 } from "react-native";
+import { Image } from "expo-image";
 import { Picker } from "@react-native-picker/picker";
 import Storage from "../../App_Utils/Services/StorageService";
 import { API } from "../../App_Utils/Services/APIService";
@@ -378,7 +378,8 @@ const DailyMilkBooking = () => {
                                 <Image
                                     source={{ uri: getImageUrl(product.image) }}
                                     className="w-full h-[100px] rounded-xl bg-gray-50"
-                                    resizeMode="contain"
+                                    contentFit="contain"
+                                    cachePolicy="memory-disk"
                                 />
                                 <Text className={`mt-2 text-sm font-bold text-center ${isSelected ? "text-blue-700" : "text-gray-800"}`}>
                                     {product.name}
@@ -402,7 +403,8 @@ const DailyMilkBooking = () => {
                     <Image
                         source={{ uri: getImageUrl(currentProduct.image) }}
                         className="w-[140px] h-[140px] rounded-xl"
-                        resizeMode="contain"
+                        contentFit="contain"
+                        cachePolicy="memory-disk"
                     />
                     <Text className="mt-3 text-lg font-bold text-gray-800 text-center">
                         {currentProduct.name}

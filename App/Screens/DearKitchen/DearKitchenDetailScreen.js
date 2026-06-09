@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Linking,
   RefreshControl,
   SectionList,
@@ -11,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import FoodieCartBar from "./components/FoodieCartBar";
@@ -55,7 +55,7 @@ const KitchenImage = ({ uri, className }) => {
     );
   }
 
-  return <Image source={{ uri }} className={className} resizeMode="cover" />;
+  return <Image source={{ uri }} className={className} contentFit="cover" cachePolicy="memory-disk" />;
 };
 
 export default function DearKitchenDetailScreen({ navigation, route }) {
@@ -403,7 +403,8 @@ export default function DearKitchenDetailScreen({ navigation, route }) {
                       key={image.imageid || image.url}
                       source={{ uri: image.url }}
                       className="mr-2 h-24 w-28 rounded-lg bg-slate-100"
-                      resizeMode="cover"
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
                     />
                   ))}
                 </ScrollView>

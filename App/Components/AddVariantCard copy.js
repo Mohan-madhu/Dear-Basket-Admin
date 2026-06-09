@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Modal, ScrollView, Alert, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Modal, ScrollView, Alert } from 'react-native';
+import { Image } from 'expo-image';
 import { useLoading } from '../../App_Utils/Contexts/LoadingContext';
 import { API } from '../../App_Utils/Services/APIService';
 import { useNavigation } from '@react-navigation/native';
@@ -283,7 +284,8 @@ const AddVariantCard = ({ productData, editProductData }) => {
                     }
                     className="w-full"
                     style={{ height: 200 }}
-                    resizeMode="contain"
+                    contentFit="contain"
+                    cachePolicy="memory-disk"
                   />
                   <View className="absolute top-2 right-2 flex-row">
                     <TouchableOpacity

@@ -1,4 +1,5 @@
 import { Config } from "../../config";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 var BASE_URL = Config.API_URL;
 var DEAR_KITCHEN_BASE_URL = Config.DEAR_KITCHEN_API_URL;
@@ -7,6 +8,82 @@ var DEAR_KITCHEN_BASE_URL = Config.DEAR_KITCHEN_API_URL;
 
 const headers = {
   Accept: "application/json",
+};
+
+const API_CACHE_PREFIX = "api_get_cache:";
+const API_CACHE_INDEX_KEY = "api_get_cache:index";
+const cacheListeners = new Set();
+
+const normalizeEndpoint = (endpoint) => String(endpoint || "").replace(/^\/+/, "");
+
+const buildCacheKey = (baseUrl, endpoint) =>
+  `${API_CACHE_PREFIX}${baseUrl}/${normalizeEndpoint(endpoint)}`;
+
+const notifyCacheListeners = (event) => {
+  cacheListeners.forEach((listener) => {
+    try {
+      listener(event);
+    } catch (error) {
+      console.error("API cache listener error:", error);
+    }
+  });
+};
+
+export const subscribeApiCache = (listener) => {
+  cacheListeners.add(listener);
+  return () => cacheListeners.delete(listener);
+};
+
+const readCachedGet = async (cacheKey) => {
+  try {
+    const cached = await AsyncStorage.getItem(cacheKey);
+    return cached ? JSON.parse(cached)?.data ?? null : null;
+  } catch (error) {
+    console.error("API cache read error:", error);
+    return null;
+  }
+};
+
+const rememberCacheKey = async (cacheKey) => {
+  try {
+    const raw = await AsyncStorage.getItem(API_CACHE_INDEX_KEY);
+    const keys = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(keys) || keys.includes(cacheKey)) return;
+    await AsyncStorage.setItem(API_CACHE_INDEX_KEY, JSON.stringify([...keys, cacheKey]));
+  } catch (error) {
+    console.error("API cache index error:", error);
+  }
+};
+
+const writeCachedGet = async ({ cacheKey, baseUrl, endpoint, data }) => {
+  try {
+    await AsyncStorage.setItem(
+      cacheKey,
+      JSON.stringify({
+        data,
+        baseUrl,
+        endpoint: normalizeEndpoint(endpoint),
+        cachedAt: new Date().toISOString(),
+      })
+    );
+    await rememberCacheKey(cacheKey);
+    notifyCacheListeners({ cacheKey, baseUrl, endpoint: normalizeEndpoint(endpoint), data });
+  } catch (error) {
+    console.error("API cache write error:", error);
+  }
+};
+
+export const clearApiGetCache = async () => {
+  try {
+    const raw = await AsyncStorage.getItem(API_CACHE_INDEX_KEY);
+    const keys = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(keys) && keys.length > 0) {
+      await AsyncStorage.multiRemove(keys);
+    }
+    await AsyncStorage.removeItem(API_CACHE_INDEX_KEY);
+  } catch (error) {
+    console.error("API cache clear error:", error);
+  }
 };
 
 const fetchWithTimeout = async (url, options, timeout = 60000) => {
@@ -84,6 +161,36 @@ const apiRequest = async (endpoint, method = "GET", body = null) => {
   }
 };
 
+const cachedApiGetRequest = async (baseUrl, endpoint, requestFn) => {
+  const normalizedEndpoint = normalizeEndpoint(endpoint);
+  const cacheKey = buildCacheKey(baseUrl, normalizedEndpoint);
+  const cached = await readCachedGet(cacheKey);
+
+  if (cached) {
+    requestFn(normalizedEndpoint)
+      .then((fresh) =>
+        writeCachedGet({
+          cacheKey,
+          baseUrl,
+          endpoint: normalizedEndpoint,
+          data: fresh,
+        })
+      )
+      .catch((error) => {
+        console.warn(
+          `Background refresh failed for ${baseUrl}/${normalizedEndpoint}:`,
+          error?.message || error
+        );
+      });
+
+    return cached;
+  }
+
+  const fresh = await requestFn(normalizedEndpoint);
+  await writeCachedGet({ cacheKey, baseUrl, endpoint: normalizedEndpoint, data: fresh });
+  return fresh;
+};
+
 const kitchenApiRequest = async (endpoint, method = "GET", body = null) => {
   const options = { method, headers: { ...headers } };
 
@@ -100,6 +207,12 @@ const kitchenApiRequest = async (endpoint, method = "GET", body = null) => {
     console.error("API Error from kitchenApiRequest:", enrichedMessage);
     throw new Error(enrichedMessage);
   }
+};
+
+const writeApiRequest = async (endpoint, method, body, requestFn) => {
+  const result = await requestFn(endpoint, method, body);
+  await clearApiGetCache();
+  return result;
 };
 
 // ✅ Function to handle file uploads using FormData
@@ -129,7 +242,9 @@ const uploadFile = async (endpoint, file, extraData = {}) => {
   };
 
   try {
-    return await fetchWithTimeout(`${BASE_URL}/${endpoint}`, options, 20000); // Increased timeout for file upload
+    const result = await fetchWithTimeout(`${BASE_URL}/${endpoint}`, options, 20000); // Increased timeout for file upload
+    await clearApiGetCache();
+    return result;
   } catch (error) {
     console.log(error)
     console.error("File Upload Error:", error);
@@ -139,17 +254,19 @@ const uploadFile = async (endpoint, file, extraData = {}) => {
 
 // Exporting individual methods for direct usage
 export const API = {
-  GET: (endpoint) => apiRequest(endpoint, "GET"),
-  GETBYID: (endpoint, id) => apiRequest(`${endpoint}/${id}`, "GET"),
-  POST: (endpoint, body) => apiRequest(endpoint, "POST", body),
-  PUT: (endpoint, body) => apiRequest(endpoint, "PUT", body),
-  DELETE: (endpoint, body) => apiRequest(endpoint, "DELETE", body),
+  GET: (endpoint) => cachedApiGetRequest(BASE_URL, endpoint, (nextEndpoint) => apiRequest(nextEndpoint, "GET")),
+  GETBYID: (endpoint, id) => cachedApiGetRequest(BASE_URL, `${endpoint}/${id}`, (nextEndpoint) => apiRequest(nextEndpoint, "GET")),
+  POST: (endpoint, body) => writeApiRequest(endpoint, "POST", body, apiRequest),
+  PUT: (endpoint, body) => writeApiRequest(endpoint, "PUT", body, apiRequest),
+  DELETE: (endpoint, body) => writeApiRequest(endpoint, "DELETE", body, apiRequest),
   UPLOAD: (endpoint, file, extraData) => uploadFile(endpoint, file, extraData), // 📌 Added Upload API
+  CLEAR_CACHE: clearApiGetCache,
 };
 
 export const DearKitchenAPI = {
-  GET: (endpoint) => kitchenApiRequest(endpoint, "GET"),
-  POST: (endpoint, body) => kitchenApiRequest(endpoint, "POST", body),
-  PUT: (endpoint, body) => kitchenApiRequest(endpoint, "PUT", body),
-  DELETE: (endpoint, body) => kitchenApiRequest(endpoint, "DELETE", body),
+  GET: (endpoint) => cachedApiGetRequest(DEAR_KITCHEN_BASE_URL, endpoint, (nextEndpoint) => kitchenApiRequest(nextEndpoint, "GET")),
+  POST: (endpoint, body) => writeApiRequest(endpoint, "POST", body, kitchenApiRequest),
+  PUT: (endpoint, body) => writeApiRequest(endpoint, "PUT", body, kitchenApiRequest),
+  DELETE: (endpoint, body) => writeApiRequest(endpoint, "DELETE", body, kitchenApiRequest),
+  CLEAR_CACHE: clearApiGetCache,
 };

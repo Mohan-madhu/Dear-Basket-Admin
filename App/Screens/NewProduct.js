@@ -160,14 +160,14 @@ nav.goBack();
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* IMAGE + PICKER */}
         <View className=" bg-white rounded-lg overflow-hidden shadow-lg">
-          {/* <Image  cachePolicy="disk"
+          {/* <Image  cachePolicy="memory-disk"
           source={
             draft.image
               ? { uri: draft.image }
               : require("../../assets/icon.png")
           }
           className="w-full h-64"
-          resizeMode="cover"
+          contentFit="cover"
         />
         <TouchableOpacity
           onPress={pickImage}
@@ -181,7 +181,7 @@ nav.goBack();
             onPress={pickImage}
           >
             {getImageURI() ? (
-              <Image  cachePolicy="disk"
+              <Image  cachePolicy="memory-disk"
                 source={{ uri: getImageURI() }}
                 className="w-full h-full rounded-md"
                   style={{ width: "100%", height: "100%" }}

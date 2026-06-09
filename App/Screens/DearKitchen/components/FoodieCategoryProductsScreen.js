@@ -2,7 +2,6 @@ import React, { useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Linking,
   RefreshControl,
   ScrollView,
@@ -10,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
@@ -45,7 +45,7 @@ const KitchenImage = ({ uri, className }) => {
     );
   }
 
-  return <Image source={{ uri }} className={className} resizeMode="cover" />;
+  return <Image source={{ uri }} className={className} contentFit="cover" cachePolicy="memory-disk" />;
 };
 
 export default function FoodieCategoryProductsScreen({

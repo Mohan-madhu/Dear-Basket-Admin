@@ -6,12 +6,12 @@ import {
   ScrollView,
   RefreshControl,
   TextInput,
-  Image,
   Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
 } from "react-native";
+import { Image } from "expo-image";
 import { useNavigation } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import Icon from "react-native-vector-icons/MaterialIcons";
@@ -81,7 +81,8 @@ const ProductImage = ({ image, size = 62 }) => {
     <Image
       source={{ uri }}
       style={{ width: size, height: size, borderRadius: 14, backgroundColor: "#f3f4f6" }}
-      resizeMode="cover"
+      contentFit="cover"
+      cachePolicy="memory-disk"
     />
   );
 };

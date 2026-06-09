@@ -5,7 +5,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Image,
   Alert,
   Animated,
   Easing,
@@ -14,6 +13,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
+import { Image } from "expo-image";
 import * as DocumentPicker from "expo-document-picker";
 import { useNavigation } from "@react-navigation/native";
 import { Picker } from "@react-native-picker/picker";
@@ -372,7 +372,8 @@ const NewUser = () => {
                   <Image
                     source={{ uri: profileImage }}
                     className="w-full h-full"
-                    resizeMode="cover"
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
                   />
                 ) : (
                   <View className="items-center px-3">

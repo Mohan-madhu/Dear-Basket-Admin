@@ -23,6 +23,8 @@ import { Image } from 'expo-image';
 import { useSelector } from "react-redux";
 import { getImageUrl } from "../../config";
 //const ROLE = "ADMIN";
+const AnimatedImage = Animated.createAnimatedComponent(Image);
+
 export default function SidebarScreen(data) {
   const { setLoading } = useLoading();
   const route = useRoute();
@@ -488,13 +490,14 @@ export default function SidebarScreen(data) {
               >
                 <View className="relative w-16 h-16 rounded-full mb-1 bg-transparent justify-center items-center">
                   {/* Background View */}
-                  <Animated.Image // Animate the Image directly
+                  <AnimatedImage
                     source={{
                       uri: getImageUrl(item.image),
                     }}
                     className="w-full h-full rounded-full" // Make the image fill the container
                     style={imageAnimatedStyle}
-                    resizeMode="contain" // Or 'cover' depending on your image aspect ratio
+                    contentFit="contain"
+                    cachePolicy="memory-disk"
                   />
                   {ROLE == "ADMIN" && (
                     <TouchableOpacity
@@ -590,7 +593,7 @@ export default function SidebarScreen(data) {
               onPress={pickImage}
             >
               {getTypeUri() ? (
-                <Image cachePolicy="disk"
+                <Image cachePolicy="memory-disk"
                   source={{ uri: getTypeUri() }}
                   className="w-full h-full rounded-md"
                   style={{ width: "100%", height: "100%" }}

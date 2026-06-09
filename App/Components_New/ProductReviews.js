@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 
 const StarRating = ({ rating, size = 16, showEmpty = true }) => {
   const fullStars = Math.floor(rating);
@@ -75,7 +76,8 @@ const ReviewCard = ({ review }) => {
               key={index}
               source={{ uri: image }}
               className="w-16 h-16 rounded-md mr-2"
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
             />
           ))}
         </ScrollView>

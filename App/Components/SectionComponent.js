@@ -122,11 +122,11 @@ function MenuCard({
             }}
           >
             <Image
-              cachePolicy="disk"
+              cachePolicy="memory-disk"
               className="rounded-lg flex-1"
               source={uri}
               onLoadEnd={() => setLoaded(true)}
-              resizeMode="cover"
+              contentFit="cover"
               style={{ width: "100%", height: "100%" }}
             />
 
@@ -713,7 +713,7 @@ export default function MenuViewComponent({ MENU, loading }) {
             >
               {getProfileUri() ? (
                 <Image
-                  cachePolicy="disk"
+                  cachePolicy="memory-disk"
                   source={{
                     uri: getProfileUri(),
                   }}

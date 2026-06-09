@@ -9,9 +9,9 @@ import {
   Linking,
   Share,
   Dimensions,
-  Image,
   Modal
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { API } from '../../App_Utils/Services/APIService';
 import Storage from '../../App_Utils/Services/StorageService';
@@ -502,7 +502,8 @@ const isBenefitsActiveToday = (data) => {
               <Image
                 source={{ uri: Config.BASE_URL + rawData?.documentpath?.slice(1) }}
                 style={{ width: '100%', height: 200 }}
-                resizeMode="contain"
+                contentFit="contain"
+                cachePolicy="memory-disk"
                 onError={(error) => console.log('Image load error:', error.nativeEvent.error)}
               />
             </TouchableOpacity>
@@ -591,7 +592,8 @@ const isBenefitsActiveToday = (data) => {
             <Image
               source={{ uri: Config.BASE_URL + rawData?.documentpath?.slice(1) }}
               style={{ width: width * 0.95, height: width * 0.95 * 1.4 }}
-              resizeMode="contain"
+              contentFit="contain"
+              cachePolicy="memory-disk"
             />
           )}
           <Text className="text-white mt-4 text-center px-4">

@@ -61,7 +61,7 @@ const ImageCarousel = ({ images, time = 3 }) => {
             contentContainerStyle={{ width: containerWidth * extendedImages.length }}
           >
             {extendedImages.map((image, index) => (
-              <Image  cachePolicy="disk" key={index} source={{ uri: image }} style={[styles.image, { width: containerWidth }]} />
+              <Image  cachePolicy="memory-disk" key={index} source={{ uri: image }} style={[styles.image, { width: containerWidth }]} />
             ))}
           </ScrollView>
           <View style={styles.pagination}>

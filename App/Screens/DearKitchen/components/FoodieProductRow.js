@@ -1,5 +1,6 @@
 import React from "react";
-import { Image, View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 
 function FoodieProductRow({ product, quantity, onIncrement, onDecrement }) {
@@ -12,7 +13,8 @@ function FoodieProductRow({ product, quantity, onIncrement, onDecrement }) {
         <Image
           source={{ uri: product.image }}
           className="h-[82px] w-[82px] rounded-lg bg-slate-100"
-          resizeMode="cover"
+          contentFit="cover"
+          cachePolicy="memory-disk"
         />
       ) : (
         <View className="h-[82px] w-[82px] items-center justify-center rounded-lg bg-orange-50">

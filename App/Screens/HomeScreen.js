@@ -36,7 +36,7 @@ import { API } from "../../App_Utils/Services/APIService";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import Storage from "../../App_Utils/Services/StorageService";
 import { useSelector } from "react-redux";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 
 const menusData = [];
 const ADDNEWMENU = {
@@ -100,6 +100,11 @@ export default function HomeScreen() {
   const activeColor = theme === "dark" ? "#fff" : "#000";
   const idleColor = theme === "dark" ? "#aaa" : "#666";
   const navigation = useNavigation();
+  const route = useRoute();
+  const dailyMilkRefreshKey =
+    route?.params?.dailyMilkRefreshKey ||
+    route?.params?.params?.dailyMilkRefreshKey ||
+    null;
 
   // ─────────────────────────────────────────────────────────────────────────
   // State & Refs
@@ -186,9 +191,13 @@ export default function HomeScreen() {
 
       setMenus(ordered);
       if (ordered.length > 0) {
-        setSelected(ordered[0].id);
-        setPrevColors(ordered[0].colors);
-        setNextColors(ordered[0].colors);
+        const targetMenu =
+          dailyMilkRefreshKey
+            ? ordered.find((item) => item.id === DAILY_MILK_MENU_ID) || ordered[0]
+            : ordered[0];
+        setSelected(targetMenu.id);
+        setPrevColors(targetMenu.colors);
+        setNextColors(targetMenu.colors);
       }
     } catch (error) {
       showError(error, "Failed to fetch menu data");
@@ -199,7 +208,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     fetchData();
-  }, [ROLE]);
+  }, [ROLE, dailyMilkRefreshKey]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Gradient Animation on Tab Change
@@ -396,7 +405,7 @@ export default function HomeScreen() {
      // console.log("Selected Menu:", selectedMenu);
       if (!selectedMenu) return null;
 
-      return <MenuViewScreen MENU={selectedMenu} />;
+      return <MenuViewScreen MENU={selectedMenu} dailyMilkRefreshKey={dailyMilkRefreshKey} />;
     } catch (error) {
       showError(error, "Failed to render menu");
       return null;

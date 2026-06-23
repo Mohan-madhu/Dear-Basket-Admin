@@ -17,6 +17,7 @@ import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 
 import "react-native-get-random-values";
 import DailyMilkBooking from "./DailyMilkUserBooking30Days";
+import DailyMilkRenewalBooking from "./DailyMilkUserBooking30Days_Renewal";
 
 
 import Storage from "../../App_Utils/Services/StorageService";
@@ -27,7 +28,7 @@ import { v4 as uuidv4 } from "uuid";
 import { createLogger } from "../../App_Utils/Utils/logger";
 import Toaster from "../../App_Utils/Services/ToastService";
 import OrderCard from "../Components_New/OrdersCard";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 
 const OVERLAY_Z = 9999;
@@ -159,6 +160,22 @@ const DailyMilkBookingScreen = ({
   const { setLoading } = useLoading();
 
   const navigation = useNavigation();
+  const route = useRoute();
+  const routeUserBooked = route?.params?.UserBooked;
+  const effectiveBookingData = useMemo(() => {
+    if (Array.isArray(UserBooked) && UserBooked.length > 0) return UserBooked;
+    if (Array.isArray(BookingData) && BookingData.length > 0) return BookingData;
+    if (Array.isArray(UserBookings) && UserBookings.length > 0) return UserBookings;
+    if (Array.isArray(routeUserBooked) && routeUserBooked.length > 0) return routeUserBooked;
+    return [];
+  }, [UserBooked, BookingData, UserBookings, routeUserBooked]);
+
+  useEffect(() => {
+    const routeBooking = Array.isArray(routeUserBooked) ? routeUserBooked[0] : null;
+    if (!DailyMilkRegistrationID && routeBooking?.dailymilkregistrationid) {
+      setDailyMilkRegistrationID(routeBooking.dailymilkregistrationid);
+    }
+  }, [DailyMilkRegistrationID, routeUserBooked]);
   // --------- UI/Overlay state (using animation instead of Modal) ---------
   const [showBookingTerms, setShowBookingTerms] = useState(false);
   const [showDemoTerms, setShowDemoTerms] = useState(false);
@@ -350,9 +367,11 @@ const DailyMilkBookingScreen = ({
     };
 
     const activeBookings = [];
-    for (const booking of bookingsData) {
+    for (const booking of Array.isArray(bookingsData) ? bookingsData : []) {
+      if (!booking?.bookingstartdate || !booking?.bookingenddate) continue;
       const startDate = normalizeToDateOnly(booking.bookingstartdate);
       const endDate = normalizeToDateOnly(booking.bookingenddate);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) continue;
       const current = normalizeToDateOnly(currentDateNormalized);
       const isActive =
         current.getTime() >= startDate.getTime() &&
@@ -431,7 +450,11 @@ const DailyMilkBookingScreen = ({
           return Date.parse(ymd + "T00:00:00+05:30");
         }
 
-        const record = bookings[0];
+        const record = bookings.find((item) => item?.bookingstartdate && item?.bookingenddate);
+        if (!record) {
+          setBookingStatus("Booking details are not available yet");
+          setUserBookingStatus(0);
+        } else {
 
         console.warn("22222222222222222222222", record)
 
@@ -459,6 +482,7 @@ const DailyMilkBookingScreen = ({
           setBookingStatus(`❌ Booking has ended`);
           setUserBookingStatus(2);
         }
+        }
 
       }
 
@@ -479,7 +503,7 @@ const DailyMilkBookingScreen = ({
         const { Response: bookings2 } = await API.GET(
           "DailyMilkBooking/UserBookings/" + res.Response[0].transid
         );
-        const active = findActiveBooking(bookings2 || []); w
+        const active = findActiveBooking(bookings2 || []);
 
         if (active) setUserBooked(active);
       } else if (res.Response[0].status === 0) {
@@ -751,40 +775,33 @@ const DailyMilkBookingScreen = ({
 
                   <DailyMilkStatus
                     DailyMilkRegistrationID={DailyMilkRegistrationID}
-                    BookingData={BookingData}
+                    BookingData={effectiveBookingData}
                   />
 
                 </View>
               ) : userBookingStatus === 2 ? (
-                <View className="flex-1 bg-gray-800 items-center justify-center">
-                  <Text className="text-white text-lg text-center">
-                    Your booking has ended.
-                  </Text>
-                  <Text className="text-white text-lg text-center">
-                    {bookingStatus}
-                  </Text>
+                <View className="flex-1 bg-gray-800 w-full">
+                  {showBookingUI ? (
+                    <View className="flex-1 w-full">
+                      <DailyMilkRenewalBooking UserBooked={effectiveBookingData} />
+                    </View>
+                  ) : (
+                    <View className="flex-1 items-center justify-center px-4">
+                      <Text className="text-white text-lg text-center">
+                        Your booking has ended.
+                      </Text>
+                      <Text className="text-white text-lg text-center">
+                        {bookingStatus}
+                      </Text>
 
-                  <PrimaryButton title="Renew Your Daily Milk Subscription" onPress={() => { setAgreedBooking(true); handleProceedBooking(); setIsrenewal(true); }} />
-
-                  {/* Reveal booking UI only after agreeing  to terms */}
-                  {showBookingUI && (
-                    <View className="mt-2  w-full">
-                      <DailyMilkBooking
-                        DailyMilkRegistrationID={DailyMilkRegistrationID}
-                        setupd={setupd}
-                        CheckAlreadyRegistered={CheckAlreadyRegistered}
-                        isrenewal={isrenewal}
-                      />
+                      <PrimaryButton title="Renew Your Daily Milk Subscription" onPress={() => { setAgreedBooking(true); handleProceedBooking(); setIsrenewal(true); }} />
                     </View>
                   )}
-
-
-
                 </View>
               ) : (
                 <DailyMilkStatus
                   DailyMilkRegistrationID={DailyMilkRegistrationID}
-                  BookingData={BookingData}
+                  BookingData={effectiveBookingData}
                 />
               )}
             </View>

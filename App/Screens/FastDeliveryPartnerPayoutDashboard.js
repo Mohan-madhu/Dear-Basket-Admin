@@ -60,11 +60,59 @@ const safeParseOrderData = (orderdata) => {
   }
 };
 
+const buildKitchenPayoutPartners = (rows = []) => {
+  const partnerMap = new Map();
+
+  rows.forEach((row) => {
+    const partnerId = String(row?.mappedpartnerid || "").trim();
+    if (!partnerId) return;
+
+    if (!partnerMap.has(partnerId)) {
+      partnerMap.set(partnerId, {
+        mappedpartnerid: partnerId,
+        partnername: row?.partnername || partnerId,
+        users: [],
+      });
+    }
+
+    const partner = partnerMap.get(partnerId);
+    const userId = String(row?.userid || "NO_USER").trim();
+    let user = partner.users.find((item) => String(item?.userid || "") === userId);
+
+    if (!user) {
+      user = {
+        userid: userId,
+        username: row?.username || row?.name || "Client",
+        name: row?.username || row?.name || "Client",
+        mobile: row?.usermobile || row?.user_mobile || "",
+        orders: [],
+      };
+      partner.users.push(user);
+    }
+
+    user.orders.push({
+      ...row,
+      productorderid: row?.productorderid || row?.orderid,
+      orderid: row?.orderid || row?.productorderid,
+      isdailymilkuser: 4,
+      order_type: "kitchen_order",
+      type: "Food Delivery",
+      orderdelivered: Number(row?.orderdelivered ?? 1),
+      ordergrandtotal: parseNumber(row?.ordergrandtotal ?? row?.totalamount),
+    });
+  });
+
+  return Array.from(partnerMap.values());
+};
+
 const isFastDeliveryOrder = (order) => Number(order?.isdailymilkuser) === 0;
 
 const isDeliveredOrder = (order) => {
   const status = String(order?.orderstatus || "").toLowerCase();
-  return isFastDeliveryOrder(order) && (Boolean(order?.orderdelivered) || status.includes("delivered"));
+  return (
+    (isFastDeliveryOrder(order) || Number(order?.isdailymilkuser) === 4) &&
+    (Boolean(order?.orderdelivered) || status.includes("delivered"))
+  );
 };
 
 const clampAmount = (value, min, max) =>
@@ -294,7 +342,58 @@ const buildDeliveredPartnerPayload = (partners) => {
     })
     .filter(Boolean);
 
-  const summary = normalizedPartners.reduce(
+  const mergedPartners = Array.from(
+    normalizedPartners.reduce((map, partner) => {
+      const partnerId = String(partner?.mappedpartnerid || "").trim();
+      if (!partnerId) return map;
+
+      if (!map.has(partnerId)) {
+        map.set(partnerId, { ...partner, users: [...(partner?.users || [])] });
+        return map;
+      }
+
+      const existing = map.get(partnerId);
+      (partner?.users || []).forEach((user) => {
+        const userId = String(user?.userid || "").trim();
+        const existingUser = existing.users.find(
+          (item) => String(item?.userid || "") === userId
+        );
+
+        if (!existingUser) {
+          existing.users.push(user);
+          return;
+        }
+
+        existingUser.orders = [
+          ...(existingUser.orders || []),
+          ...(user?.orders || []),
+        ];
+        existingUser.userordercount = parseNumber(existingUser.userordercount) + parseNumber(user?.userordercount);
+        existingUser.usergrandtotal = parseNumber(existingUser.usergrandtotal) + parseNumber(user?.usergrandtotal);
+        existingUser.deliveredordercount = parseNumber(existingUser.deliveredordercount) + parseNumber(user?.deliveredordercount);
+        existingUser.payoutamount = parseNumber(existingUser.payoutamount) + parseNumber(user?.payoutamount);
+        existingUser.paidpayoutamount = parseNumber(existingUser.paidpayoutamount) + parseNumber(user?.paidpayoutamount);
+        existingUser.pendingpayoutamount = parseNumber(existingUser.pendingpayoutamount) + parseNumber(user?.pendingpayoutamount);
+        existingUser.processedorders = parseNumber(existingUser.processedorders) + parseNumber(user?.processedorders);
+        existingUser.paidorders = parseNumber(existingUser.paidorders) + parseNumber(user?.paidorders);
+        existingUser.pendingorders = parseNumber(existingUser.pendingorders) + parseNumber(user?.pendingorders);
+      });
+
+      existing.totalusers = existing.users.length;
+      existing.totalorders = parseNumber(existing.totalorders) + parseNumber(partner?.totalorders);
+      existing.totalamount = parseNumber(existing.totalamount) + parseNumber(partner?.totalamount);
+      existing.totalpayout = parseNumber(existing.totalpayout) + parseNumber(partner?.totalpayout);
+      existing.paidpayoutamount = parseNumber(existing.paidpayoutamount) + parseNumber(partner?.paidpayoutamount);
+      existing.pendingpayoutamount = parseNumber(existing.pendingpayoutamount) + parseNumber(partner?.pendingpayoutamount);
+      existing.processedorders = parseNumber(existing.processedorders) + parseNumber(partner?.processedorders);
+      existing.paidorders = parseNumber(existing.paidorders) + parseNumber(partner?.paidorders);
+      existing.pendingorders = parseNumber(existing.pendingorders) + parseNumber(partner?.pendingorders);
+
+      return map;
+    }, new Map()).values()
+  );
+
+  const summary = mergedPartners.reduce(
     (acc, partner) => {
       acc.totalpartners += 1;
       acc.totalclients += parseNumber(partner?.totalusers);
@@ -327,7 +426,7 @@ const buildDeliveredPartnerPayload = (partners) => {
     : 0;
 
   return {
-    partners: normalizedPartners,
+    partners: mergedPartners,
     summary,
   };
 };
@@ -1462,6 +1561,19 @@ const FastDeliveryPartnerPayoutDashboard = () => {
     return `ProductOrder/PayoutOrdersDashboard?${params.toString()}`;
   };
 
+  const buildKitchenPayoutUrl = () => {
+    const params = new URLSearchParams();
+    params.append("payout", "1");
+    params.append("filterType", filterType);
+
+    if (filterType === "CUSTOM") {
+      if (fromDate) params.append("fromDate", fromDate);
+      if (toDate) params.append("toDate", toDate);
+    }
+
+    return `DearKitchen/Orders?${params.toString()}`;
+  };
+
   const fetchDashboardData = async (showLoader = true) => {
     try {
       if (filterType === "CUSTOM" && (!fromDate || !toDate)) {
@@ -1473,8 +1585,14 @@ const FastDeliveryPartnerPayoutDashboard = () => {
         setLoading(true, "Fetching fast delivery partner payouts...");
       }
 
-      const res = await API.GET(buildUrl());
-      setRawPartners(res?.partners || []);
+      const [res, kitchenRes] = await Promise.all([
+        API.GET(buildUrl()),
+        API.GET(buildKitchenPayoutUrl()),
+      ]);
+      setRawPartners([
+        ...(res?.partners || []),
+        ...buildKitchenPayoutPartners(kitchenRes?.Response || []),
+      ]);
     } catch (err) {
       console.error(err);
       Alert.alert("Error", "Failed to fetch partner payout dashboard data");

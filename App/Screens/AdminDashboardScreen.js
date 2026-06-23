@@ -235,6 +235,7 @@ import { useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toaster from '../../App_Utils/Services/ToastService';
 import Storage from '../../App_Utils/Services/StorageService';
+import { resetToLogin } from '../../App_Utils/Services/AuthNavigationService';
 import { Ionicons } from '@expo/vector-icons';
 
 
@@ -299,10 +300,7 @@ const AdminDashboardScreen = () => {
               await Storage.removeData('USER');
               await Storage.removeData('ROLE');
               await Storage.removeData('DATA');
-              navigation.reset?.({
-                index: 0,
-                routes: [{ name: 'Login' }],
-              });
+              resetToLogin(navigation);
             } catch (e) {
               Toaster.errortop('Logout failed');
               console.error('Logout error:', e);

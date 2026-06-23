@@ -18,6 +18,11 @@ const asNumber = (value, fallback = 0) => {
 
 const isEnabled = (value) => asNumber(value) === 1;
 
+const getDearKitchen = (endpoint, { fresh = false } = {}) =>
+  fresh && DearKitchenAPI.GET_FRESH
+    ? DearKitchenAPI.GET_FRESH(endpoint)
+    : DearKitchenAPI.GET(endpoint);
+
 export const getKitchenImageUrl = (imagePath) => {
   if (!imagePath || imagePath === "No Image Uploaded") return null;
   if (/^https?:\/\//i.test(String(imagePath))) return imagePath;
@@ -67,14 +72,14 @@ export const fetchVisibleKitchens = async () => {
     .filter((kitchen) => kitchen.isApproved && kitchen.isActive);
 };
 
-export const fetchKitchenDetailBundle = async (kitchenid) => {
+export const fetchKitchenDetailBundle = async (kitchenid, { fresh = false } = {}) => {
   const [kitchenRes, imagesRes, mealTypesRes, timeslotsRes, menuItemsRes] =
     await Promise.all([
-      DearKitchenAPI.GET(`Kitchens/${kitchenid}`),
-      DearKitchenAPI.GET(`KitchenImages/${kitchenid}`),
-      DearKitchenAPI.GET("MealTypes"),
-      DearKitchenAPI.GET(`Timeslots/${kitchenid}`),
-      DearKitchenAPI.GET(`MenuItems/${kitchenid}`),
+      getDearKitchen(`Kitchens/${kitchenid}`, { fresh }),
+      getDearKitchen(`KitchenImages/${kitchenid}`, { fresh }),
+      getDearKitchen("MealTypes", { fresh }),
+      getDearKitchen(`Timeslots/${kitchenid}`, { fresh }),
+      getDearKitchen(`MenuItems/${kitchenid}`, { fresh }),
     ]);
 
   const kitchen = normalizeKitchen(asArray(kitchenRes)[0] || {});
@@ -103,12 +108,12 @@ export const fetchKitchenDetailBundle = async (kitchenid) => {
   };
 };
 
-export const fetchMenuCategories = async (kitchenid, mealtypeid) => {
+export const fetchMenuCategories = async (kitchenid, mealtypeid, { fresh = false } = {}) => {
   console.log("Fetching menu categories for kitchenid:", kitchenid, "mealtypeid:", mealtypeid);
   const endpoint = mealtypeid
     ? `MenuCategories/${kitchenid}/${mealtypeid}`
     : `MenuCategories/${kitchenid}`;
-  const res = await DearKitchenAPI.GET(endpoint);
+  const res = await getDearKitchen(endpoint, { fresh });
   console.log("Fetched menu categories:", res);
   console.log("Raw response for menu categories:", asArray(res).filter(
     (category) => category.isactive == null || isEnabled(category.isactive)));

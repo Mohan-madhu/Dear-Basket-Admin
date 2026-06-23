@@ -37,6 +37,12 @@ const StatusPill = ({ label, tone = "slate" }) => {
 };
 
 const KitchenImage = ({ uri, className }) => {
+  const imageStyle = className?.includes("h-32")
+    ? { width: "100%", height: 128 }
+    : className?.includes("h-16")
+      ? { width: 64, height: 64, borderRadius: 12, borderWidth: 2, borderColor: "#ffffff" }
+      : { width: "100%", height: "100%" };
+
   if (!uri) {
     return (
       <View className={`${className} items-center justify-center bg-orange-50`}>
@@ -45,7 +51,15 @@ const KitchenImage = ({ uri, className }) => {
     );
   }
 
-  return <Image source={{ uri }} className={className} contentFit="cover" cachePolicy="memory-disk" />;
+  return (
+    <Image
+      source={{ uri }}
+      className={className}
+      style={imageStyle}
+      contentFit="cover"
+      cachePolicy="memory-disk"
+    />
+  );
 };
 
 export default function FoodieCategoryProductsScreen({
@@ -260,7 +274,7 @@ export default function FoodieCategoryProductsScreen({
 
       <FoodieCartBar
         count={cartSummary.count}
-        total={cartSummary.itemTotal}
+        total={cartSummary.totalAmount}
         onReview={() => navigation.navigate("DearKitchenCheckoutScreen")}
       />
     </View>

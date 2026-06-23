@@ -1,6 +1,9 @@
 import { v4 as uuidv4 } from "uuid";
+import { Config } from "../../../../config";
 
 const normalizeText = (value) => String(value || "").trim();
+const DEAR_KITCHEN_DELIVERY_CHARGE = Number(Config.DEAR_KITCHEN_DELIVERY_CHARGE || 0);
+const DEAR_KITCHEN_TAX_PERCENTAGE = Number(Config.DEAR_KITCHEN_TAX_PERCENTAGE || 0);
 
 export const getDearKitchenCartItems = (cart = []) =>
   (Array.isArray(cart) ? cart : []).filter((item) => item?.source === "dearkitchen");
@@ -8,7 +11,7 @@ export const getDearKitchenCartItems = (cart = []) =>
 export const getDearKitchenOrderTotals = (cart = []) => {
   const items = getDearKitchenCartItems(cart);
 
-  return items.reduce(
+  const itemSummary = items.reduce(
     (summary, item) => {
       const quantity = Number(item.orderquantity) || 0;
       const price = Number(item.price) || 0;
@@ -20,6 +23,17 @@ export const getDearKitchenOrderTotals = (cart = []) => {
     },
     { count: 0, itemTotal: 0 }
   );
+
+  const tax = (itemSummary.itemTotal * DEAR_KITCHEN_TAX_PERCENTAGE) / 100;
+  const totalAmount = itemSummary.itemTotal + DEAR_KITCHEN_DELIVERY_CHARGE + tax;
+
+  return {
+    ...itemSummary,
+    deliveryCharge: DEAR_KITCHEN_DELIVERY_CHARGE,
+    taxPercentage: DEAR_KITCHEN_TAX_PERCENTAGE,
+    tax,
+    totalAmount,
+  };
 };
 
 export const buildDearKitchenOrderId = () => `DK-${uuidv4()}`;
@@ -50,7 +64,8 @@ export const buildDearKitchenOrderPayload = ({
     mealtypeid: mealTypeId || null,
     deliverydate: deliveryDate || null,
     itemtotal: totals.itemTotal,
-    deliverycharge: 0,
+    deliverycharge: totals.deliveryCharge,
+    tax: totals.tax,
     deliveryaddress: normalizeText(address),
     deliverycity: normalizeText(city),
     deliverystate: normalizeText(state),
@@ -58,7 +73,7 @@ export const buildDearKitchenOrderPayload = ({
     latitude: normalizeText(latitude),
     longitude: normalizeText(longitude),
     specialinstructions: normalizeText(specialInstructions),
-    totalamount: totals.itemTotal,
+    totalamount: totals.totalAmount,
     paymentmode: "COD",
     rcu: nowName,
     orderdata: JSON.stringify(items),

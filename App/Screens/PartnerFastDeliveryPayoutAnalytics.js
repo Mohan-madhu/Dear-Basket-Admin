@@ -58,11 +58,53 @@ const safeParseOrderData = (orderdata) => {
   }
 };
 
+const buildKitchenPayoutPartner = (rows = [], partnerId, partnerName) => {
+  const users = [];
+
+  rows.forEach((row) => {
+    const userId = String(row?.userid || "NO_USER").trim();
+    let user = users.find((item) => String(item?.userid || "") === userId);
+
+    if (!user) {
+      user = {
+        userid: userId,
+        username: row?.username || row?.name || "Client",
+        name: row?.username || row?.name || "Client",
+        mobile: row?.usermobile || row?.user_mobile || "",
+        orders: [],
+      };
+      users.push(user);
+    }
+
+    user.orders.push({
+      ...row,
+      productorderid: row?.productorderid || row?.orderid,
+      orderid: row?.orderid || row?.productorderid,
+      isdailymilkuser: 4,
+      order_type: "kitchen_order",
+      type: "Food Delivery",
+      orderdelivered: Number(row?.orderdelivered ?? 1),
+      ordergrandtotal: parseNumber(row?.ordergrandtotal ?? row?.totalamount),
+    });
+  });
+
+  if (!users.length) return null;
+
+  return {
+    mappedpartnerid: partnerId,
+    partnername: partnerName || partnerId || "Partner",
+    users,
+  };
+};
+
 const isFastDeliveryOrder = (order) => Number(order?.isdailymilkuser) === 0;
 
 const isDeliveredOrder = (order) => {
   const status = String(order?.orderstatus || "").toLowerCase();
-  return isFastDeliveryOrder(order) && (Boolean(order?.orderdelivered) || status.includes("delivered"));
+  return (
+    (isFastDeliveryOrder(order) || Number(order?.isdailymilkuser) === 4) &&
+    (Boolean(order?.orderdelivered) || status.includes("delivered"))
+  );
 };
 
 const clampAmount = (value, min, max) =>
@@ -833,6 +875,20 @@ const PartnerFastDeliveryPayoutAnalytics = ({ partnerid, partnername }) => {
     return `ProductOrder/GroceryOrdersDashboard?${params.toString()}`;
   };
 
+  const buildKitchenPayoutUrl = () => {
+    const params = new URLSearchParams();
+    params.append("payout", "1");
+    params.append("filterType", filterType);
+    if (partnerid) {
+      params.append("mappedpartnerid", partnerid);
+    }
+    if (filterType === "CUSTOM") {
+      if (fromDate) params.append("fromDate", fromDate);
+      if (toDate) params.append("toDate", toDate);
+    }
+    return `DearKitchen/Orders?${params.toString()}`;
+  };
+
   const fetchData = useCallback(
     async (showLoader = true) => {
       if (!partnerid) return;
@@ -847,15 +903,31 @@ const PartnerFastDeliveryPayoutAnalytics = ({ partnerid, partnername }) => {
           setLoading(true, "Fetching payout analytics...");
         }
 
-        const res = await API.GET(buildUrl());
+        const [res, kitchenRes] = await Promise.all([
+          API.GET(buildUrl()),
+          API.GET(buildKitchenPayoutUrl()),
+        ]);
         const partners = Array.isArray(res?.partners) ? res.partners : [];
         const matchedPartner =
           partners.find(
             (partner) =>
               String(partner?.mappedpartnerid || "") === String(partnerid)
           ) || null;
+        const kitchenPartner = buildKitchenPayoutPartner(
+          kitchenRes?.Response || [],
+          partnerid,
+          partnername
+        );
 
-        setRawPartner(matchedPartner);
+        setRawPartner({
+          ...(matchedPartner || {}),
+          mappedpartnerid: matchedPartner?.mappedpartnerid || partnerid,
+          partnername: matchedPartner?.partnername || partnername,
+          users: [
+            ...((matchedPartner && Array.isArray(matchedPartner?.users)) ? matchedPartner.users : []),
+            ...((kitchenPartner && Array.isArray(kitchenPartner?.users)) ? kitchenPartner.users : []),
+          ],
+        });
       } catch (error) {
         console.error(error);
         Alert.alert("Error", "Failed to fetch payout analytics");

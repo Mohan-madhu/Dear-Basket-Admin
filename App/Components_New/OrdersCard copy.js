@@ -672,6 +672,7 @@ const OrderCard = ({ order, onOrderUpdate }) => {
                                                         uri: getImageUri(item.imageurl) || getImageUri(item.product?.imageurl) || 'https://placehold.co/60x60/png?text=No+Image'
                                                     }}
                                                     className="w-12 h-12 rounded-md mr-3"
+                                                    style={{ width: 48, height: 48, borderRadius: 6, marginRight: 12 }}
                                                     contentFit="cover"
                                                     cachePolicy="memory-disk"
                                                 />

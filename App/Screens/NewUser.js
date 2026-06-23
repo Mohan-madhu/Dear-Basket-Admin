@@ -372,6 +372,7 @@ const NewUser = () => {
                   <Image
                     source={{ uri: profileImage }}
                     className="w-full h-full"
+                    style={{ width: 112, height: 112, borderRadius: 56 }}
                     contentFit="cover"
                     cachePolicy="memory-disk"
                   />

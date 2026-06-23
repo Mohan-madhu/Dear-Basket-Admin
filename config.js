@@ -7,10 +7,14 @@ export const Config = {
    //BASE_URL: "http://82.25.105.135:15000",
   
   // API endpoint
-   API_URL: "https://dev.dine360.ca/backend/API/DearBasket",
+  API_URL: "https://dev.dine360.ca/backend/API/DearBasket",
 //  API_URL: "http://82.25.105.135:15000/API/DearBasket",
   DEAR_KITCHEN_API_URL: "https://dev.dine360.ca/backend/API/DearBasket/DearKitchen",
    FAST_DELIVERY_PARTNER_PAYOUT_PER_ORDER: 50,
+   NORMAL_DELIVERY_CHARGE: 50,
+   NORMAL_DELIVERY_TAX_PERCENTAGE: 3,
+   DEAR_KITCHEN_DELIVERY_CHARGE: 50,
+   DEAR_KITCHEN_TAX_PERCENTAGE: 3,
 };
 
 // Helper function to build image URLs

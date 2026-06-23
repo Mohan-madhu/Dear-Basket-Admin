@@ -5,6 +5,7 @@ import {
     Text,
     TouchableOpacity,
     Alert,
+    ScrollView,
 } from "react-native";
 import { Image } from "expo-image";
 import { Picker } from "@react-native-picker/picker";
@@ -29,10 +30,12 @@ const getDaysInMonth = (monthValue, yearValue) => {
     return Array.from({ length: numDays }, (_, i) => i + 1);
 };
 
-const DailyMilkBooking = () => {
+const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
     const { setLoading } = useLoading();
     const route = useRoute();
-    const UserBooked = Array.isArray(route?.params?.UserBooked) ? route.params.UserBooked : [];
+    const UserBooked = Array.isArray(UserBookedProp)
+        ? UserBookedProp
+        : (Array.isArray(route?.params?.UserBooked) ? route.params.UserBooked : []);
     console.log("UserBooked:", UserBooked);
 
     const navigation = useNavigation();
@@ -136,7 +139,7 @@ const DailyMilkBooking = () => {
         } catch (error) {
             console.error("Prefill booking data error:", error);
         }
-    }, [UserBooked, products]);
+    }, [UserBooked]);
 
     const getDailyMilkProducts = async () => {
         if (!USER) return;
@@ -151,9 +154,13 @@ const DailyMilkBooking = () => {
                     ? prev
                     : (safeProducts[0]?.transid || null)
             );
+            const renewalBooking = UserBooked?.[0];
             const initialQtys = safeProducts.reduce((acc, prod) => {
                 if (prod?.transid) {
-                    acc[prod.transid] = 0;
+                    acc[prod.transid] =
+                        prod.transid === renewalBooking?.productid
+                            ? Number(renewalBooking?.quantity || 0)
+                            : 0;
                 }
                 return acc;
             }, {});
@@ -228,18 +235,24 @@ const DailyMilkBooking = () => {
 
     const safeNavigateAfterSubmit = () => {
         try {
-            if (navigation?.canGoBack?.()) {
-                navigation.goBack();
-                return;
-            }
-
-            const navState = navigation?.getState?.();
-            const currentRouteName = navState?.routes?.[navState.index]?.name;
-            if (currentRouteName !== "Main") {
-                navigation.navigate("Main");
-            }
+            navigation.reset({
+                index: 0,
+                routes: [
+                    {
+                        name: "Main",
+                        params: {
+                            screen: "Home",
+                            params: { dailyMilkRefreshKey: Date.now() },
+                        },
+                    },
+                ],
+            });
         } catch (error) {
             console.error("safeNavigateAfterSubmit error:", error);
+            navigation.navigate("Main", {
+                screen: "Home",
+                params: { dailyMilkRefreshKey: Date.now() },
+            });
         }
     };
 
@@ -355,7 +368,13 @@ const DailyMilkBooking = () => {
     const currentProduct = products.find((prod) => prod?.transid === selectedProductId) || null;
 
     return (
-        <View className="flex-1 px-4 py-5 pt-10  bg-gray-800 ">
+        <ScrollView
+            className="flex-1 bg-gray-800"
+            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 48 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+        >
             <Text className="text-white text-center text-2xl my-2">
                 Renew Daily Milk Subscription
             </Text>
@@ -378,6 +397,7 @@ const DailyMilkBooking = () => {
                                 <Image
                                     source={{ uri: getImageUrl(product.image) }}
                                     className="w-full h-[100px] rounded-xl bg-gray-50"
+                                    style={{ width: "100%", height: 100, borderRadius: 12, backgroundColor: "#f9fafb" }}
                                     contentFit="contain"
                                     cachePolicy="memory-disk"
                                 />
@@ -403,6 +423,7 @@ const DailyMilkBooking = () => {
                     <Image
                         source={{ uri: getImageUrl(currentProduct.image) }}
                         className="w-[140px] h-[140px] rounded-xl"
+                        style={{ width: 140, height: 140, borderRadius: 12 }}
                         contentFit="contain"
                         cachePolicy="memory-disk"
                     />
@@ -508,12 +529,12 @@ const DailyMilkBooking = () => {
 
             {/* ──────────────── SUBMIT ──────────────── */}
             <TouchableOpacity
-                className="bg-blue-600 rounded-2xl py-5 items-center shadow-2xl active:bg-blue-700"
+                className="bg-blue-600 rounded-2xl py-5 items-center shadow-2xl active:bg-blue-700 mb-4"
                 onPress={handleSubmit}
             >
                 <Text className="text-white text-lg font-black uppercase tracking-widest">Confirm Booking</Text>
             </TouchableOpacity>
-        </View>
+        </ScrollView>
     );
 };
 

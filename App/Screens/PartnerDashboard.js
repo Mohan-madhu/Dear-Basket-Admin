@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import Storage from "../../App_Utils/Services/StorageService";
 import PartnerMilkOrderList from "./PartnerMilkOrderList";
+import { resetToLogin } from "../../App_Utils/Services/AuthNavigationService";
 const colors = {
   background: "#F9FAFB",
   text: "#111827",
@@ -72,11 +73,11 @@ export default function PartnerDashboard({ navigation }) {
           </View>
 
           <TouchableOpacity
-            onPress={() => {
-              Storage.removeData("USER");
-              Storage.removeData("ROLE");
-              Storage.removeData("DATA");
-              navigation.navigate("Login");
+            onPress={async () => {
+              await Storage.removeData("USER");
+              await Storage.removeData("ROLE");
+              await Storage.removeData("DATA");
+              resetToLogin(navigation);
             }}
             style={{ marginTop: 32 }}
           >

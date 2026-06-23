@@ -178,6 +178,7 @@ export default function Splash() {
           <Image cachePolicy="memory-disk"
             source={require("../../../assets/logo.jpg")}
             className="w-48 h-48 mb-6"
+            style={{ width: 192, height: 192, marginBottom: 24 }}
 
             contentFit="contain"
           />

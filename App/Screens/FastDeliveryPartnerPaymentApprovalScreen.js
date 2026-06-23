@@ -39,6 +39,19 @@ const formatDateTime = (value) => {
 const getField = (row, properKey, typoKey) =>
   row?.[properKey] ?? row?.[typoKey] ?? null;
 
+const getApplicationOrderIds = (row) => {
+  const raw =
+    row?.payoutapplicationkitchenorderids ||
+    row?.payoutapplicationorderids ||
+    row?.orderids ||
+    row?.productorderids ||
+    "";
+  return String(raw)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
 const normalizeStatus = (row) =>
   String(row?.payoutapplicationstatus || row?.payputapplicationstatus || "Applied");
 
@@ -202,11 +215,31 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
     });
   }, [groupedPartners]);
 
-  const runAction = async (label, apiPath, payload) => {
+  const syncKitchenPayoutOrders = async (row, status, updaterId) => {
+    const orderIds = getApplicationOrderIds(row);
+    if (!orderIds.length) return;
+
+    await Promise.all(
+      orderIds.map((orderid) =>
+        API.PUT("DearKitchen/Orders", {
+          orderid,
+          partnerpayoutapplicationid: row?.payoutapplicationid,
+          partnerpayoutapplicationstatus: status,
+          partnerpayoutpaid: status === "Paid" ? "1" : "0",
+          luu: updaterId || "ADMIN",
+        }).catch(() => null)
+      )
+    );
+  };
+
+  const runAction = async (label, apiPath, payload, row = null, kitchenStatus = null) => {
     try {
       setActionLoading(true);
       loadingRef.current?.(true, `${label}...`);
       await API.PUT(apiPath, payload);
+      if (row && kitchenStatus) {
+        await syncKitchenPayoutOrders(row, kitchenStatus, payload?.luu);
+      }
       await loadAll(false);
       if (selectedApplication?.payoutapplicationid === payload?.payoutapplicationid) {
         const updated = (await fetchApplications()).find(
@@ -233,7 +266,7 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
             payoutapplicationid: row?.payoutapplicationid,
             payoutapplicationapprovedby: adminId || adminName || "ADMIN",
             luu: adminId || "ADMIN",
-          }),
+          }, row, "Approved"),
       },
     ]);
   };
@@ -256,7 +289,7 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
       payoutapplicationrejectedby: adminId || adminName || "ADMIN",
       payputapplicationrejectedreason: rejectReason.trim(),
       luu: adminId || "ADMIN",
-    });
+    }, rejectTarget, "Rejected");
     setRejectTarget(null);
     setRejectReason("");
   };
@@ -271,7 +304,7 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
             payoutapplicationid: row?.payoutapplicationid,
             payoutapplicationamountpaidby: adminId || adminName || "ADMIN",
             luu: adminId || "ADMIN",
-          }),
+          }, row, "Paid"),
       },
     ]);
   };
@@ -286,7 +319,7 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
             payoutapplicationid: row?.payoutapplicationid,
             payoutapplicationcancelledby: adminId || adminName || "ADMIN",
             luu: adminId || "ADMIN",
-          }),
+          }, row, "Cancelled"),
       },
     ]);
   };

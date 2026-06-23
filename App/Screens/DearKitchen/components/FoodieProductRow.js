@@ -13,6 +13,7 @@ function FoodieProductRow({ product, quantity, onIncrement, onDecrement }) {
         <Image
           source={{ uri: product.image }}
           className="h-[82px] w-[82px] rounded-lg bg-slate-100"
+          style={{ width: 82, height: 82, borderRadius: 8, backgroundColor: "#f1f5f9" }}
           contentFit="cover"
           cachePolicy="memory-disk"
         />

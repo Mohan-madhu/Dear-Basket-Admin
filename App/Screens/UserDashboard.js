@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Alert } from "react-native";
 import Storage from "../../App_Utils/Services/StorageService";
 import { Ionicons } from "@expo/vector-icons";
 import { API } from "../../App_Utils/Services/APIService";
+import { resetToLogin } from "../../App_Utils/Services/AuthNavigationService";
 
 export default function UserDashboard({ navigation }) {
   const [ROLE, setROLE] = useState(null);
@@ -123,11 +124,11 @@ export default function UserDashboard({ navigation }) {
 
       {/* Logout Button */}
       <TouchableOpacity
-        onPress={() => {
-          Storage.removeData("USER");
-          Storage.removeData("ROLE");
-          Storage.removeData("DATA");
-          navigation.navigate("Login");
+        onPress={async () => {
+          await Storage.removeData("USER");
+          await Storage.removeData("ROLE");
+          await Storage.removeData("DATA");
+          resetToLogin(navigation);
         }}
         className="mt-8"
       >

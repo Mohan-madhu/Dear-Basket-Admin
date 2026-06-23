@@ -76,6 +76,7 @@ const ReviewCard = ({ review }) => {
               key={index}
               source={{ uri: image }}
               className="w-16 h-16 rounded-md mr-2"
+              style={{ width: 64, height: 64, borderRadius: 6, marginRight: 8 }}
               contentFit="cover"
               cachePolicy="memory-disk"
             />

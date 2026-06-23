@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -8,11 +8,12 @@ export default function FoodieCategoryCard({ category, onPress }) {
     <TouchableOpacity
       activeOpacity={0.88}
       className="mb-3.5 h-[154px] w-[48%] overflow-hidden rounded-lg bg-slate-50"
+      style={styles.card}
       onPress={onPress}
     >
       <Image
         source={{ uri: category.image }}
-        className="h-full w-full"
+        style={StyleSheet.absoluteFillObject}
         contentFit="cover"
         cachePolicy="memory-disk"
       />
@@ -32,3 +33,12 @@ export default function FoodieCategoryCard({ category, onPress }) {
     </TouchableOpacity>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    width: "48%",
+    height: 154,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+});

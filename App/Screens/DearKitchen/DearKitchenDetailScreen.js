@@ -26,6 +26,7 @@ import {
   incrementQuantity,
   decrementQuantity,
 } from "../../Redux/CartReducer";
+import { getDearKitchenOrderTotals } from "./data/checkoutAdapter";
 
 const normalizeText = (value) => String(value || "").trim();
 
@@ -47,6 +48,12 @@ const StatusPill = ({ label, tone = "slate" }) => {
 };
 
 const KitchenImage = ({ uri, className }) => {
+  const imageStyle = className?.includes("h-52")
+    ? { width: "100%", height: 208 }
+    : className?.includes("h-20")
+      ? { width: 80, height: 80, borderRadius: 12 }
+      : { width: "100%", height: "100%" };
+
   if (!uri) {
     return (
       <View className={`${className} items-center justify-center bg-orange-50`}>
@@ -55,7 +62,15 @@ const KitchenImage = ({ uri, className }) => {
     );
   }
 
-  return <Image source={{ uri }} className={className} contentFit="cover" cachePolicy="memory-disk" />;
+  return (
+    <Image
+      source={{ uri }}
+      className={className}
+      style={imageStyle}
+      contentFit="cover"
+      cachePolicy="memory-disk"
+    />
+  );
 };
 
 export default function DearKitchenDetailScreen({ navigation, route }) {
@@ -77,6 +92,7 @@ export default function DearKitchenDetailScreen({ navigation, route }) {
   );
   const [loading, setLoading] = useState(false);
   const [selectedMealTypeId, setSelectedMealTypeId] = useState(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [categoriesByMeal, setCategoriesByMeal] = useState({});
   const [loadingCategories, setLoadingCategories] = useState(false);
   const dispatch = useDispatch();
@@ -98,13 +114,16 @@ export default function DearKitchenDetailScreen({ navigation, route }) {
     : [];
   const activeMealCategoryLabel = selectedMeal?.mealtypename || "Menu";
 
-  const loadDetail = useCallback(async () => {
+  const loadDetail = useCallback(async ({ fresh = true } = {}) => {
     if (!kitchenid) return;
 
     try {
       setLoading(true);
-      const nextDetail = await fetchKitchenDetailBundle(kitchenid);
+      const nextDetail = await fetchKitchenDetailBundle(kitchenid, { fresh });
       setDetail(nextDetail);
+      if (fresh) {
+        setCategoriesByMeal({});
+      }
       setSelectedMealTypeId((current) => current || nextDetail.mealTypes?.[0]?.mealtypeid || null);
     } catch (error) {
       console.error("Dear Kitchen detail page error:", error);
@@ -121,6 +140,20 @@ export default function DearKitchenDetailScreen({ navigation, route }) {
   );
 
   useEffect(() => {
+    setSelectedCategoryId(null);
+  }, [activeMealTypeId]);
+
+  useEffect(() => {
+    if (!selectedCategoryId) return;
+    const categoryStillVisible = activeMealCategories.some(
+      (category) => String(category?.categoryid) === String(selectedCategoryId)
+    );
+    if (!categoryStillVisible) {
+      setSelectedCategoryId(null);
+    }
+  }, [activeMealCategories, selectedCategoryId]);
+
+  useEffect(() => {
     const loadCategories = async () => {
       if (!kitchenid || !activeMealTypeId) return;
       const key = `${kitchenid}_${activeMealTypeId}`;
@@ -128,7 +161,7 @@ export default function DearKitchenDetailScreen({ navigation, route }) {
 
       try {
         setLoadingCategories(true);
-        const rows = await fetchMenuCategories(kitchenid, activeMealTypeId);
+        const rows = await fetchMenuCategories(kitchenid, activeMealTypeId, { fresh: true });
         console.warn("Categories for meal type", rows);
         setCategoriesByMeal((prev) => ({ ...prev, [key]: rows }));
       } catch (error) {
@@ -142,8 +175,24 @@ export default function DearKitchenDetailScreen({ navigation, route }) {
   }, [activeMealTypeId, categoriesByMeal, kitchenid]);
 
   const visibleItems = useMemo(() => {
-    return detail?.menuItems || [];
-  }, [detail]);
+    const allItems = detail?.menuItems || [];
+    if (!activeMealTypeId || activeMealCategories.length === 0) return [];
+
+    const activeCategoryIds = new Set(
+      activeMealCategories
+        .map((category) => category?.categoryid)
+        .filter(Boolean)
+        .map((categoryId) => String(categoryId))
+    );
+
+    return allItems.filter((item) => {
+      if (item?.mealtypeid && String(item.mealtypeid) !== String(activeMealTypeId)) {
+        return false;
+      }
+
+      return activeCategoryIds.has(String(item?.categoryid));
+    });
+  }, [activeMealCategories, activeMealTypeId, detail]);
 
   const cartQuantityByItemId = useMemo(() => {
     return dearKitchenCartItems.reduce((acc, item) => {
@@ -173,30 +222,19 @@ export default function DearKitchenDetailScreen({ navigation, route }) {
     const orderedGroups = [];
     activeMealCategories.forEach((category) => {
       const categoryKey = String(category.categoryid);
+      if (selectedCategoryId && String(selectedCategoryId) !== categoryKey) {
+        return;
+      }
       const existing = groupsByCategory.find((group) => group.key === categoryKey);
       if (existing) {
         orderedGroups.push(existing);
       }
     });
 
-    groupsByCategory.forEach((group) => {
-      if (!orderedGroups.some((existing) => existing.key === group.key)) {
-        orderedGroups.push(group);
-      }
-    });
-
     return orderedGroups;
-  }, [activeMealCategories, visibleItems]);
+  }, [activeMealCategories, selectedCategoryId, visibleItems]);
 
-  const cartSummary = useMemo(() => {
-    return dearKitchenCartItems.reduce(
-      (summary, item) => ({
-        count: summary.count + (Number(item.orderquantity) || 0),
-        total: summary.total + (Number(item.price) || 0) * (Number(item.orderquantity) || 0),
-      }),
-      { count: 0, total: 0 }
-    );
-  }, [dearKitchenCartItems]);
+  const cartSummary = useMemo(() => getDearKitchenOrderTotals(dearKitchenCartItems), [dearKitchenCartItems]);
 
   const menuSections = useMemo(() => {
     if (!groupedItems.length) return [];
@@ -403,6 +441,7 @@ export default function DearKitchenDetailScreen({ navigation, route }) {
                       key={image.imageid || image.url}
                       source={{ uri: image.url }}
                       className="mr-2 h-24 w-28 rounded-lg bg-slate-100"
+                      style={{ width: 112, height: 96, borderRadius: 8, backgroundColor: "#f1f5f9" }}
                       contentFit="cover"
                       cachePolicy="memory-disk"
                     />
@@ -462,15 +501,38 @@ export default function DearKitchenDetailScreen({ navigation, route }) {
                     Categories for {activeMealCategoryLabel}
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      className={`mr-2 rounded-full border px-3 py-2 ${
+                        !selectedCategoryId
+                          ? "border-orange-500 bg-orange-500"
+                          : "border-orange-100 bg-white"
+                      }`}
+                      onPress={() => setSelectedCategoryId(null)}
+                    >
+                      <Text className={`text-[12px] font-black ${!selectedCategoryId ? "text-white" : "text-slate-700"}`}>
+                        All
+                      </Text>
+                    </TouchableOpacity>
                     {activeMealCategories.map((category) => (
-                      <View
+                      <TouchableOpacity
                         key={category.categoryid}
-                        className="mr-2 rounded-full border border-orange-100 bg-white px-3 py-2"
+                        activeOpacity={0.85}
+                        className={`mr-2 rounded-full border px-3 py-2 ${
+                          String(selectedCategoryId) === String(category.categoryid)
+                            ? "border-orange-500 bg-orange-500"
+                            : "border-orange-100 bg-white"
+                        }`}
+                        onPress={() => setSelectedCategoryId(category.categoryid)}
                       >
-                        <Text className="text-[12px] font-black text-slate-700">
+                        <Text className={`text-[12px] font-black ${
+                          String(selectedCategoryId) === String(category.categoryid)
+                            ? "text-white"
+                            : "text-slate-700"
+                        }`}>
                           {category.categoryname || "Menu"}
                         </Text>
-                      </View>
+                      </TouchableOpacity>
                     ))}
                   </ScrollView>
                 </View>
@@ -515,7 +577,7 @@ export default function DearKitchenDetailScreen({ navigation, route }) {
 
       <FoodieCartBar
         count={cartSummary.count}
-        total={cartSummary.total}
+        total={cartSummary.totalAmount}
         onReview={() => navigation.navigate("DearKitchenCheckoutScreen")}
       />
     </View>

@@ -81,6 +81,16 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     'Delivered',
   ];
 
+  const KITCHEN_STATUS_FLOW = [
+    'Order Placed',
+    'Accepted',
+    'Preparing',
+    'Ready for Pickup',
+    'Pickup Confirmed',
+    'Picked Up',
+    'Delivered',
+  ];
+
   useEffect(() => {
     checkForNewUpdates();
     getUserRole();
@@ -373,17 +383,30 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    if (Number.isNaN(date.getTime())) return 'N/A';
+    const rawDate = String(dateString).trim();
+    const hasExplicitZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(rawDate);
+    const isKitchenTimestamp =
+      Number(order?.isdailymilkuser || 0) === 4 ||
+      String(order?.order_type || order?.ordertype || '').toLowerCase() === 'kitchen_order';
+    const shouldConvertFromUTC = hasExplicitZone || isKitchenTimestamp;
+    const normalizedDate = !hasExplicitZone && isKitchenTimestamp ? `${rawDate}Z` : rawDate;
+    const parsedDate = new Date(normalizedDate);
+    if (Number.isNaN(parsedDate.getTime())) return 'N/A';
 
-    return date.toLocaleDateString('en', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'UTC',
-    });
+    // Kitchen SQL DATETIME values arrive without a zone but represent UTC.
+    // Read them as UTC, shift to IST, then use UTC getters to avoid device-zone drift.
+    const displayDate = shouldConvertFromUTC
+      ? new Date(parsedDate.getTime() + 330 * 60 * 1000)
+      : parsedDate;
+    const day = shouldConvertFromUTC ? displayDate.getUTCDate() : displayDate.getDate();
+    const month = shouldConvertFromUTC ? displayDate.getUTCMonth() : displayDate.getMonth();
+    const year = shouldConvertFromUTC ? displayDate.getUTCFullYear() : displayDate.getFullYear();
+    const hours24 = shouldConvertFromUTC ? displayDate.getUTCHours() : displayDate.getHours();
+    const minutes = shouldConvertFromUTC ? displayDate.getUTCMinutes() : displayDate.getMinutes();
+    const period = hours24 >= 12 ? 'PM' : 'AM';
+    const hours12 = hours24 % 12 || 12;
+    const monthLabel = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month];
+    return `${day} ${monthLabel} ${year}, ${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`;
   };
 
   const getTimeDifference = (startDate, endDate) => {
@@ -450,7 +473,36 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     });
   };
 
+  const isKitchenOrderType = (row = order) =>
+    Number(row?.isdailymilkuser || 0) === 4 ||
+    String(row?.order_type || row?.ordertype || '').toLowerCase() === 'kitchen_order';
+
+  const kitchenFlag = (name) => Number(order?.[`dk_${name}`] ?? order?.[name] ?? 0) === 1;
+
+  const kitchenTime = (name, fallbackName) =>
+    order?.[`dk_${name}time`] ||
+    order?.[`${name}time`] ||
+    (fallbackName ? order?.[fallbackName] : null);
+
+  const getKitchenCurrentStatus = () => {
+    const rawStatus = String(order?.orderstatus || '').trim();
+    const normalizedStatus = rawStatus.toLowerCase();
+
+    if (kitchenFlag('orderrejected') || normalizedStatus === 'rejected') return 'Rejected';
+    if (kitchenFlag('ordercancelled') || normalizedStatus === 'cancelled') return 'Cancelled';
+    if (kitchenFlag('orderdelivered') || normalizedStatus === 'delivered') return 'Delivered';
+    if (kitchenFlag('orderpicked') || normalizedStatus === 'picked' || normalizedStatus === 'picked up') return 'Picked Up';
+    if (kitchenFlag('orderassigned') || normalizedStatus === 'assigned' || normalizedStatus === 'pickup confirmed') return 'Pickup Confirmed';
+    if (kitchenFlag('orderready') || normalizedStatus === 'ready' || normalizedStatus === 'ready for pickup') return 'Ready for Pickup';
+    if (kitchenFlag('orderpreparing') || normalizedStatus === 'preparing') return 'Preparing';
+    if (kitchenFlag('orderaccepted') || normalizedStatus === 'accepted') return 'Accepted';
+    if (kitchenFlag('orderplaced') || normalizedStatus === 'placed' || normalizedStatus === 'order placed') return 'Order Placed';
+
+    return rawStatus || 'Pending';
+  };
+
   const getCurrentStatus = () => {
+    if (isKitchenOrderType()) return getKitchenCurrentStatus();
     if (order.ordercancelled === 1) return 'Cancelled';
     if (order.orderdelivered === 1) return 'Delivered';
     if (order.orderoutofdelivery === 1) return 'Out for Delivery';
@@ -461,6 +513,8 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   };
 
   const getNextStatus = () => {
+    if (isKitchenOrderType()) return null;
+
     const currentStatus = getCurrentStatus();
 
     if (currentStatus === 'Cancelled' || currentStatus === 'Delivered') {
@@ -477,6 +531,19 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   };
 
   const isStatusCompleted = (status) => {
+    if (isKitchenOrderType()) {
+      const currentStatus = getKitchenCurrentStatus();
+      if (status === 'Cancelled') return currentStatus === 'Cancelled';
+      if (status === 'Rejected') return currentStatus === 'Rejected';
+      if (currentStatus === 'Cancelled' || currentStatus === 'Rejected') {
+        return status === 'Order Placed';
+      }
+
+      const currentIndex = KITCHEN_STATUS_FLOW.indexOf(currentStatus);
+      const statusIndex = KITCHEN_STATUS_FLOW.indexOf(status);
+      return statusIndex >= 0 && currentIndex >= statusIndex;
+    }
+
     switch (status) {
       case 'Order Placed':
         return order.orderplaced === 1;
@@ -534,6 +601,48 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
           icon: 'truck-delivery',
           iconColor: '#7C3AED',
         };
+      case 'accepted':
+        return {
+          wrap: 'bg-blue-50 border-blue-200',
+          text: 'text-blue-700',
+          icon: 'check-decagram',
+          iconColor: '#2563EB',
+        };
+      case 'preparing':
+        return {
+          wrap: 'bg-amber-50 border-amber-200',
+          text: 'text-amber-700',
+          icon: 'pot-steam',
+          iconColor: '#D97706',
+        };
+      case 'ready for pickup':
+        return {
+          wrap: 'bg-orange-50 border-orange-200',
+          text: 'text-orange-700',
+          icon: 'package-variant-closed-check',
+          iconColor: '#EA580C',
+        };
+      case 'pickup confirmed':
+        return {
+          wrap: 'bg-indigo-50 border-indigo-200',
+          text: 'text-indigo-700',
+          icon: 'account-check',
+          iconColor: '#4F46E5',
+        };
+      case 'picked up':
+        return {
+          wrap: 'bg-purple-50 border-purple-200',
+          text: 'text-purple-700',
+          icon: 'truck-check',
+          iconColor: '#7C3AED',
+        };
+      case 'rejected':
+        return {
+          wrap: 'bg-red-50 border-red-200',
+          text: 'text-red-700',
+          icon: 'close-octagon',
+          iconColor: '#DC2626',
+        };
       default:
         return {
           wrap: 'bg-gray-50 border-gray-200',
@@ -555,6 +664,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
 
   const AdminActions = () => {
     if (ROLE !== 'ADMIN') return null;
+    if (isKitchenOrderType()) return null;
 
     const currentStatus = getCurrentStatus();
     const nextStatus = getNextStatus();
@@ -672,6 +782,104 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     <View className="mt-2">
       <Text className="text-sm font-bold text-gray-800 mb-4">Order Timeline</Text>
 
+      {isKitchenOrderType() ? (
+        <>
+          {isStatusCompleted('Order Placed') &&
+            renderTimelineRow(
+              'check-circle',
+              '#10B981',
+              'Order Placed',
+              formatDate(kitchenTime('orderplaced', 'orderpalcedtime') || order?.rcm || order?.ordertime),
+              'Completed'
+            )}
+
+          {isStatusCompleted('Accepted') &&
+            renderTimelineRow(
+              'check-decagram',
+              '#2563EB',
+              'Accepted by Kitchen',
+              formatDate(kitchenTime('orderaccepted', 'orderconfirmedtime')),
+              isStatusCompleted('Order Placed')
+                ? `Time taken: ${getTimeDifference(kitchenTime('orderplaced', 'orderpalcedtime') || order?.rcm || order?.ordertime, kitchenTime('orderaccepted', 'orderconfirmedtime'))}`
+                : null
+            )}
+
+          {isStatusCompleted('Preparing') &&
+            renderTimelineRow(
+              'pot-steam',
+              '#D97706',
+              'Preparing',
+              formatDate(kitchenTime('orderpreparing')),
+              isStatusCompleted('Accepted')
+                ? `Time taken: ${getTimeDifference(kitchenTime('orderaccepted', 'orderconfirmedtime'), kitchenTime('orderpreparing'))}`
+                : null
+            )}
+
+          {isStatusCompleted('Ready for Pickup') &&
+            renderTimelineRow(
+              'package-variant-closed-check',
+              '#EA580C',
+              'Ready for Pickup',
+              formatDate(kitchenTime('orderready', 'orderpackedtime')),
+              isStatusCompleted('Preparing')
+                ? `Time taken: ${getTimeDifference(kitchenTime('orderpreparing'), kitchenTime('orderready', 'orderpackedtime'))}`
+                : null
+            )}
+
+          {isStatusCompleted('Pickup Confirmed') &&
+            renderTimelineRow(
+              'account-check',
+              '#4F46E5',
+              'Pickup Confirmed',
+              formatDate(kitchenTime('orderassigned')),
+              isStatusCompleted('Ready for Pickup')
+                ? `Time taken: ${getTimeDifference(kitchenTime('orderready', 'orderpackedtime'), kitchenTime('orderassigned'))}`
+                : null
+            )}
+
+          {isStatusCompleted('Picked Up') &&
+            renderTimelineRow(
+              'truck-check',
+              '#7C3AED',
+              'Picked Up',
+              formatDate(kitchenTime('orderpicked', 'orderoutofdeliverytime')),
+              isStatusCompleted('Pickup Confirmed')
+                ? `Time taken: ${getTimeDifference(kitchenTime('orderassigned'), kitchenTime('orderpicked', 'orderoutofdeliverytime'))}`
+                : null
+            )}
+
+          {isStatusCompleted('Delivered') &&
+            renderTimelineRow(
+              'check-circle',
+              '#16A34A',
+              'Delivered',
+              formatDate(kitchenTime('orderdelivered', 'orderdeliveredtime')),
+              isStatusCompleted('Picked Up')
+                ? `Delivered in: ${getTimeDifference(kitchenTime('orderpicked', 'orderoutofdeliverytime'), kitchenTime('orderdelivered', 'orderdeliveredtime'))}`
+                : null
+            )}
+
+          {isStatusCompleted('Cancelled') &&
+            renderTimelineRow(
+              'close-circle',
+              '#DC2626',
+              'Cancelled',
+              formatDate(kitchenTime('ordercancelled', 'ordercancelledtime')),
+              order.ordercancelledreason ? `Reason: ${order.ordercancelledreason}` : null
+            )}
+
+          {isStatusCompleted('Rejected') &&
+            renderTimelineRow(
+              'close-octagon',
+              '#DC2626',
+              'Rejected',
+              formatDate(kitchenTime('orderrejected')),
+              order.ordercancelledreason ? `Reason: ${order.ordercancelledreason}` : null
+            )}
+        </>
+      ) : (
+        <>
+
       {isStatusCompleted('Order Placed') &&
         renderTimelineRow(
           'check-circle',
@@ -733,6 +941,8 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
           formatDate(order.ordercancelledtime),
           order.ordercancelledreason ? `Reason: ${order.ordercancelledreason}` : null
         )}
+        </>
+      )}
     </View>
   );
 
@@ -763,8 +973,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   const statusStyle = getStatusStyle();
   const isMilkTypeOrder = [1, 2, 3].includes(Number(order?.isdailymilkuser || 0));
   const isKitchenTypeOrder =
-    Number(order?.isdailymilkuser || 0) === 4 ||
-    String(order?.order_type || order?.ordertype || '').toLowerCase() === 'kitchen_order';
+    isKitchenOrderType(order);
   const pregnancyBenefitMl = Number(
     order?.milkamountml ??
     order?.pregnancy_milkamountml ??
@@ -1138,6 +1347,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                             'https://placehold.co/60x60/png?text=No+Image',
                         }}
                         className="w-14 h-14 rounded-xl mr-3"
+                        style={{ width: 56, height: 56, borderRadius: 12, marginRight: 12 }}
                         contentFit="cover"
                         cachePolicy="memory-disk"
                       />

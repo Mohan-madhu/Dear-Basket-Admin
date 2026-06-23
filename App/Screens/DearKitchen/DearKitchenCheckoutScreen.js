@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { useDispatch, useSelector } from "react-redux";
 import * as Location from "expo-location";
 import { DearKitchenAPI } from "../../../App_Utils/Services/APIService";
 import Storage from "../../../App_Utils/Services/StorageService";
+import { useLoading } from "../../../App_Utils/Contexts/LoadingContext";
 import { clearCartBySource, decrementQuantity, incrementQuantity, removeFromCart } from "../../Redux/CartReducer";
 import {
   buildDearKitchenOrderItems,
@@ -26,6 +27,77 @@ import {
   getDearKitchenOrderTotals,
 } from "./data/checkoutAdapter";
 import { fetchKitchenDetailBundle } from "./data/liveDearKitchen";
+
+const DEAR_KITCHEN_ADDRESS_KEY_PREFIX = "DEAR_KITCHEN_CHECKOUT_ADDRESS";
+
+const getDearKitchenAddressKey = (userData) => {
+  const userId = userData?.transid || userData?.userid || userData?.id || "guest";
+  return `${DEAR_KITCHEN_ADDRESS_KEY_PREFIX}_${userId}`;
+};
+
+const IST_OFFSET_MINUTES = 330;
+
+const getISTNow = () => new Date(Date.now() + IST_OFFSET_MINUTES * 60 * 1000);
+
+const getISTDateString = () => {
+  const now = getISTNow();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(now.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const parseSlotTimeToMinutes = (value) => {
+  if (!value) return null;
+  const text = String(value).trim();
+  const match = text.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2] || 0);
+  const meridiem = match[3]?.toUpperCase();
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  if (meridiem === "PM" && hour < 12) hour += 12;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+  if (hour > 23 || minute > 59) return null;
+
+  return hour * 60 + minute;
+};
+
+const getSlotStartMinutes = (slot) =>
+  parseSlotTimeToMinutes(
+    slot?.starttime ||
+    slot?.startTime ||
+    slot?.fromtime ||
+    slot?.fromTime ||
+    slot?.slottime ||
+    slot?.slotTime
+  );
+
+const isEnabledValue = (value) => {
+  if (value == null) return true;
+  if (value === true) return true;
+  if (value === false) return false;
+
+  const text = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "active", "available"].includes(text)) return true;
+  if (["0", "false", "no", "inactive", "unavailable"].includes(text)) return false;
+
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue === 1 : true;
+};
+
+const isSlotAvailableNow = (slot) => {
+  if (!slot || !isEnabledValue(slot?.isactive) || !isEnabledValue(slot?.isavailable)) return false;
+
+  const startMinutes = getSlotStartMinutes(slot);
+  if (startMinutes == null) return true;
+
+  const now = getISTNow();
+  const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  return startMinutes >= nowMinutes;
+};
 
 const Field = ({ label, value, onChangeText, placeholder, keyboardType = "default", editable = true }) => (
   <View className="mb-4">
@@ -61,6 +133,7 @@ export default function DearKitchenCheckoutScreen() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const cart = useSelector((state) => state.cart.cart || []);
+  const { setLoading: setGlobalLoading } = useLoading();
   const [loading, setLoading] = useState(false);
   const [placingOrder, setPlacingOrder] = useState(false);
   const [userData, setUserData] = useState(null);
@@ -78,30 +151,73 @@ export default function DearKitchenCheckoutScreen() {
   const dearKitchenItems = useMemo(() => getDearKitchenCartItems(cart), [cart]);
   const totals = useMemo(() => getDearKitchenOrderTotals(cart), [cart]);
   const kitchenId = dearKitchenItems[0]?.kitchenid || null;
+  const cartMealTypeId = dearKitchenItems[0]?.mealtypeid || null;
 
   const mealTypes = kitchenDetail?.mealTypes || [];
   const timeslots = kitchenDetail?.timeslots || [];
+  const hasKitchenContextLoaded = !!kitchenDetail;
+  const isCartMealTypeAvailable =
+    !cartMealTypeId ||
+    !hasKitchenContextLoaded ||
+    mealTypes.some((meal) => String(meal.mealtypeid) === String(cartMealTypeId));
+  const cartMealType = useMemo(() => {
+    if (!cartMealTypeId) return null;
+    const item = dearKitchenItems[0] || {};
+    return {
+      mealtypeid: cartMealTypeId,
+      mealtypename: item.mealtypename || item.mealtype || item.categoryname || "Selected meal",
+    };
+  }, [cartMealTypeId, dearKitchenItems]);
+
   const selectedMealType =
     mealTypes.find((meal) => String(meal.mealtypeid) === String(selectedMealTypeId)) ||
-    mealTypes[0] ||
+    cartMealType ||
     null;
+
+  const mealSlots = useMemo(
+    () =>
+      timeslots.filter(
+        (slot) => !selectedMealType?.mealtypeid || String(slot.mealtypeid) === String(selectedMealType.mealtypeid)
+      ),
+    [selectedMealType?.mealtypeid, timeslots]
+  );
+
+  const availableSlots = useMemo(() => mealSlots.filter(isSlotAvailableNow), [mealSlots]);
+  const displayMealSlots = useMemo(
+    () =>
+      [...mealSlots].sort((a, b) => {
+        const aAvailable = isSlotAvailableNow(a);
+        const bAvailable = isSlotAvailableNow(b);
+        if (aAvailable === bAvailable) {
+          return (getSlotStartMinutes(a) ?? 0) - (getSlotStartMinutes(b) ?? 0);
+        }
+        return aAvailable ? -1 : 1;
+      }),
+    [mealSlots]
+  );
   const selectedSlot =
-    timeslots.find((slot) => String(slot.slotid) === String(selectedSlotId)) ||
-    timeslots.find((slot) => String(slot.mealtypeid) === String(selectedMealType?.mealtypeid)) ||
-    timeslots[0] ||
+    availableSlots.find((slot) => String(slot.slotid) === String(selectedSlotId)) ||
     null;
+  const isCheckoutBlocked =
+    placingOrder ||
+    dearKitchenItems.length === 0 ||
+    !isCartMealTypeAvailable ||
+    mealSlots.length === 0 ||
+    !selectedSlot?.slotid;
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
     try {
       const data = await Storage.getData("DATA");
+      const savedAddress = data ? await Storage.getData(getDearKitchenAddressKey(data)) : null;
+      const checkoutAddress = savedAddress || {};
       setUserData(data);
-      setAddress(data?.deliveryaddress || "");
-      setCity(data?.deliverycity || "");
-      setState(data?.deliverystate || "");
-      setPincode(data?.deliverypincode || "");
-      setLatitude(data?.latitude ? String(data.latitude) : "");
-      setLongitude(data?.longitude ? String(data.longitude) : "");
+      setAddress(checkoutAddress.address || data?.deliveryaddress || "");
+      setCity(checkoutAddress.city || data?.deliverycity || "");
+      setState(checkoutAddress.state || data?.deliverystate || "");
+      setPincode(checkoutAddress.pincode || data?.deliverypincode || "");
+      setLatitude(checkoutAddress.latitude || (data?.latitude ? String(data.latitude) : ""));
+      setLongitude(checkoutAddress.longitude || (data?.longitude ? String(data.longitude) : ""));
     } catch (error) {
       console.error("Dear Kitchen checkout profile error:", error);
     } finally {
@@ -115,8 +231,8 @@ export default function DearKitchenCheckoutScreen() {
     try {
       const detail = await fetchKitchenDetailBundle(kitchenId);
       setKitchenDetail(detail);
-      setSelectedMealTypeId((current) => current || dearKitchenItems[0]?.mealtypeid || detail?.mealTypes?.[0]?.mealtypeid || null);
-      setSelectedSlotId((current) => current || detail?.timeslots?.[0]?.slotid || null);
+      setSelectedMealTypeId(dearKitchenItems[0]?.mealtypeid || detail?.mealTypes?.[0]?.mealtypeid || null);
+      setSelectedSlotId(null);
     } catch (error) {
       console.error("Dear Kitchen context load error:", error);
     }
@@ -134,6 +250,25 @@ export default function DearKitchenCheckoutScreen() {
     }, [loadKitchenContext])
   );
 
+  useEffect(() => {
+    if (!cartMealTypeId) return;
+    setSelectedMealTypeId(cartMealTypeId);
+  }, [cartMealTypeId]);
+
+  useEffect(() => {
+    if (availableSlots.length === 0) {
+      if (selectedSlotId) setSelectedSlotId(null);
+      return;
+    }
+
+    const currentSlotStillAvailable = availableSlots.some(
+      (slot) => String(slot.slotid) === String(selectedSlotId)
+    );
+    if (!currentSlotStillAvailable) {
+      setSelectedSlotId(availableSlots[0].slotid);
+    }
+  }, [availableSlots, selectedSlotId]);
+
   const requestLocation = async () => {
     const permission = await Location.requestForegroundPermissionsAsync();
     if (permission.status !== "granted") {
@@ -149,8 +284,10 @@ export default function DearKitchenCheckoutScreen() {
   const validate = () => {
     if (!userData?.transid && !userData?.userid && !userData?.id) return "User details are still loading.";
     if (!kitchenId) return "Kitchen details are missing.";
+    if (!isCartMealTypeAvailable) return "This meal type is not available right now. Please remove this item and choose an available meal.";
     if (!selectedMealType?.mealtypeid) return "Meal type is required.";
-    if (!selectedSlot?.slotid) return "Delivery slot is required.";
+    if (mealSlots.length === 0) return "No delivery slots are configured for this meal.";
+    if (!selectedSlot?.slotid) return "No delivery slots are available right now for this meal.";
     if (!address.trim()) return "Address is required.";
     if (!city.trim()) return "City is required.";
     if (!state.trim()) return "State is required.";
@@ -170,7 +307,7 @@ export default function DearKitchenCheckoutScreen() {
     }
 
     const orderId = buildDearKitchenOrderId();
-    const deliveryDate = new Date().toISOString().slice(0, 10);
+    const deliveryDate = getISTDateString();
     const payload = buildDearKitchenOrderPayload({
       userData,
       kitchenId,
@@ -196,6 +333,7 @@ export default function DearKitchenCheckoutScreen() {
 
     try {
       setPlacingOrder(true);
+      setGlobalLoading(true, "Placing Dear Kitchen order...");
 
       const orderRes = await DearKitchenAPI.POST("Orders", payload);
       const createdOrder = Array.isArray(orderRes) ? orderRes[0] : orderRes?.Response?.[0] || orderRes?.Response || null;
@@ -204,6 +342,16 @@ export default function DearKitchenCheckoutScreen() {
       for (const detail of orderDetails.map((item) => ({ ...item, orderid: createdOrderId }))) {
         await DearKitchenAPI.POST("OrderItems", detail);
       }
+
+      await Storage.storeData(getDearKitchenAddressKey(userData), {
+        address: address.trim(),
+        city: city.trim(),
+        state: state.trim(),
+        pincode: pincode.trim(),
+        latitude: latitude.trim(),
+        longitude: longitude.trim(),
+        updatedAt: new Date().toISOString(),
+      });
 
       dispatch(clearCartBySource({ source: "dearkitchen" }));
       Alert.alert("Success", "Dear Kitchen order placed successfully.", [
@@ -217,6 +365,7 @@ export default function DearKitchenCheckoutScreen() {
       Alert.alert("Checkout", error?.message || "Failed to place order.");
     } finally {
       setPlacingOrder(false);
+      setGlobalLoading(false);
     }
   };
 
@@ -236,6 +385,56 @@ export default function DearKitchenCheckoutScreen() {
     return (
       <View className="flex-1 items-center justify-center bg-slate-50">
         <ActivityIndicator color="#f97316" />
+      </View>
+    );
+  }
+
+  if (dearKitchenItems.length === 0) {
+    return (
+      <View className="flex-1 bg-slate-50">
+        <View className="border-b border-orange-100 bg-white px-4 py-3">
+          <View className="flex-row items-center">
+            <TouchableOpacity
+              activeOpacity={0.85}
+              className="mr-3 h-10 w-10 items-center justify-center rounded-xl bg-orange-50"
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="chevron-back" size={22} color="#ea580c" />
+            </TouchableOpacity>
+            <View className="flex-1">
+              <Text className="text-xs font-extrabold uppercase text-orange-600">Dear Kitchen</Text>
+              <Text className="text-[20px] font-black text-gray-900">Cart</Text>
+            </View>
+          </View>
+        </View>
+
+        <View className="flex-1 items-center justify-center px-6">
+          <View className="h-28 w-28 items-center justify-center rounded-full bg-orange-50 border border-orange-100">
+            <Ionicons name="basket-outline" size={48} color="#f97316" />
+          </View>
+          <Text className="mt-6 text-center text-[24px] font-black text-slate-900">
+            Your kitchen cart is empty
+          </Text>
+          <Text className="mt-2 text-center text-[14px] leading-6 text-slate-500">
+            Fresh meals you add from Dear Kitchen will appear here before checkout.
+          </Text>
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            className="mt-7 w-full rounded-2xl bg-orange-500 px-5 py-4"
+            onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Main")}
+          >
+            <Text className="text-center text-[15px] font-black text-white">Continue Browsing</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-5 py-4"
+            onPress={() => navigation.navigate("MyOrdersScreen")}
+          >
+            <Text className="text-center text-[15px] font-black text-slate-800">View My Orders</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -274,50 +473,70 @@ export default function DearKitchenCheckoutScreen() {
             {mealTypes.length > 0 ? (
               <View className="mt-4">
                 <Text className="text-[12px] font-bold uppercase text-slate-500">Meal Type</Text>
+                <View className="mt-2 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3">
+                  <View className="flex-row items-center">
+                    <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-orange-500">
+                      <Ionicons name="restaurant-outline" size={20} color="#ffffff" />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-[14px] font-black text-slate-900">
+                        {selectedMealType?.mealtypename || "Selected meal"}
+                      </Text>
+                      <Text className="mt-0.5 text-[11px] font-semibold text-orange-700">
+                        Fixed from the food items in this cart
+                      </Text>
+                    </View>
+                    <Ionicons name="lock-closed-outline" size={18} color="#ea580c" />
+                  </View>
+                </View>
+                {!isCartMealTypeAvailable ? (
+                  <View className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2">
+                    <Text className="text-[12px] font-bold text-red-700">
+                      This meal type is not available right now. Please remove this item and choose an available meal.
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            {mealSlots.length > 0 ? (
+              <View className="mt-4">
+                <Text className="text-[12px] font-bold uppercase text-slate-500">Delivery Slot</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
-                  {mealTypes.map((meal) => {
-                    const active = String(meal.mealtypeid) === String(selectedMealType?.mealtypeid);
+                  {displayMealSlots.map((slot) => {
+                    const available = isSlotAvailableNow(slot);
+                    const active = available && String(slot.slotid) === String(selectedSlot?.slotid);
                     return (
                       <TouchableOpacity
-                        key={meal.mealtypeid}
-                        className={`mr-2 rounded-full border px-3 py-2 ${active ? "border-orange-500 bg-orange-50" : "border-slate-200 bg-white"}`}
-                        onPress={() => {
-                          setSelectedMealTypeId(meal.mealtypeid);
-                          const nextSlot = timeslots.find((slot) => String(slot.mealtypeid) === String(meal.mealtypeid));
-                          if (nextSlot) setSelectedSlotId(nextSlot.slotid);
-                        }}
+                        key={slot.slotid}
+                        disabled={!available}
+                        activeOpacity={available ? 0.85 : 1}
+                        className={`mr-2 rounded-2xl border px-3 py-2 ${
+                          active
+                            ? "border-orange-500 bg-orange-50"
+                            : available
+                              ? "border-slate-200 bg-white"
+                              : "border-slate-200 bg-slate-100"
+                        }`}
+                        onPress={() => setSelectedSlotId(slot.slotid)}
                       >
-                        <Text className={`text-[12px] font-black ${active ? "text-orange-700" : "text-slate-600"}`}>
-                          {meal.mealtypename}
+                        <Text className={`text-[12px] font-black ${active ? "text-orange-700" : available ? "text-slate-700" : "text-slate-400"}`}>
+                          {slot.slottime}
                         </Text>
+                        {!available ? (
+                          <Text className="mt-0.5 text-[10px] font-bold text-slate-400">Not available</Text>
+                        ) : null}
                       </TouchableOpacity>
                     );
                   })}
                 </ScrollView>
-              </View>
-            ) : null}
-
-            {timeslots.length > 0 ? (
-              <View className="mt-4">
-                <Text className="text-[12px] font-bold uppercase text-slate-500">Delivery Slot</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
-                  {timeslots
-                    .filter((slot) => !selectedMealType?.mealtypeid || String(slot.mealtypeid) === String(selectedMealType.mealtypeid))
-                    .map((slot) => {
-                      const active = String(slot.slotid) === String(selectedSlot?.slotid);
-                      return (
-                        <TouchableOpacity
-                          key={slot.slotid}
-                          className={`mr-2 rounded-full border px-3 py-2 ${active ? "border-orange-500 bg-orange-50" : "border-slate-200 bg-white"}`}
-                          onPress={() => setSelectedSlotId(slot.slotid)}
-                        >
-                          <Text className={`text-[12px] font-black ${active ? "text-orange-700" : "text-slate-600"}`}>
-                            {slot.slottime}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                </ScrollView>
+                {availableSlots.length === 0 ? (
+                  <View className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                    <Text className="text-[12px] font-bold text-amber-700">
+                      No active slots are available right now for this meal.
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             ) : null}
 
@@ -401,15 +620,15 @@ export default function DearKitchenCheckoutScreen() {
             </View>
             <View className="mt-2 flex-row items-center justify-between">
               <Text className="text-[13px] text-slate-700">Delivery charge</Text>
-              <Text className="text-[13px] font-bold text-slate-900">Rs. 0</Text>
+              <Text className="text-[13px] font-bold text-slate-900">Rs. {totals.deliveryCharge.toFixed(0)}</Text>
             </View>
             <View className="mt-2 flex-row items-center justify-between">
-              <Text className="text-[13px] text-slate-700">Tax</Text>
-              <Text className="text-[13px] font-bold text-slate-900">Rs. 0</Text>
+              <Text className="text-[13px] text-slate-700">Tax ({totals.taxPercentage}%)</Text>
+              <Text className="text-[13px] font-bold text-slate-900">Rs. {totals.tax.toFixed(0)}</Text>
             </View>
             <View className="mt-3 border-t border-orange-200 pt-3 flex-row items-center justify-between">
               <Text className="text-[15px] font-black text-slate-900">To Pay</Text>
-              <Text className="text-[18px] font-black text-orange-600">Rs. {totals.itemTotal.toFixed(0)}</Text>
+              <Text className="text-[18px] font-black text-orange-600">Rs. {totals.totalAmount.toFixed(0)}</Text>
             </View>
           </View>
 
@@ -427,11 +646,11 @@ export default function DearKitchenCheckoutScreen() {
         <View className="flex-row items-center justify-between">
           <View className="pr-3">
             <Text className="text-[12px] font-bold uppercase text-slate-400">Payable</Text>
-            <Text className="text-[20px] font-black text-slate-900">Rs. {totals.itemTotal.toFixed(0)}</Text>
+            <Text className="text-[20px] font-black text-slate-900">Rs. {totals.totalAmount.toFixed(0)}</Text>
           </View>
           <TouchableOpacity
-            disabled={placingOrder || dearKitchenItems.length === 0}
-            className={`rounded-xl px-5 py-3.5 ${placingOrder || dearKitchenItems.length === 0 ? "bg-slate-300" : "bg-orange-500"}`}
+            disabled={isCheckoutBlocked}
+            className={`rounded-xl px-5 py-3.5 ${isCheckoutBlocked ? "bg-slate-300" : "bg-orange-500"}`}
             onPress={placeOrder}
           >
             <Text className="text-[14px] font-black text-white">

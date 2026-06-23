@@ -509,7 +509,7 @@ const isTodayBirthday = (dobString) => {
   }
 };
 
-const DailyMilkRegistrationScreen = () => {
+const DailyMilkRegistrationScreen = ({ refreshKey }) => {
   const nav = useNavigation();
   const { setLoading } = useLoading();
   const [UserStatus, setUserStatus] = useState(null);
@@ -695,7 +695,7 @@ const DailyMilkRegistrationScreen = () => {
   useEffect(() => {
     if (!USER) return;
 
-    const runKey = `${USER}-${upd}`;
+    const runKey = `${USER}-${upd}-${refreshKey || ""}`;
     if (prereqRunKeyRef.current === runKey) return;
     prereqRunKeyRef.current = runKey;
 
@@ -712,7 +712,7 @@ const DailyMilkRegistrationScreen = () => {
     return () => {
       isCancelled = true;
     };
-  }, [USER, upd]);
+  }, [USER, upd, refreshKey]);
 
 
   function hasValidBookings(bookings) {

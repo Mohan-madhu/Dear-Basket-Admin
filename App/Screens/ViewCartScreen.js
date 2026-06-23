@@ -37,6 +37,7 @@ import { v4 as uuidv4 } from "uuid";
 import { createLogger } from "../../App_Utils/Utils/logger";
 import { set } from "date-fns";
 import { fi, ms } from "date-fns/locale";
+import { Config } from "../../config";
 
 // Add these imports
 import Animated from "react-native-reanimated";
@@ -60,6 +61,9 @@ const DAILY_MILK_DELIVERY_SCHEDULE = {
         cutoffHour: 16,
     },
 };
+
+const NORMAL_DELIVERY_CHARGE = Number(Config.NORMAL_DELIVERY_CHARGE || 0);
+const NORMAL_DELIVERY_TAX_PERCENTAGE = Number(Config.NORMAL_DELIVERY_TAX_PERCENTAGE || 0);
 
 const pad2 = (value) => String(value).padStart(2, "0");
 
@@ -195,8 +199,8 @@ const ViewCartScreen = () => {
 
     // State variables
     const [isdailymilkuser, setisdailymilkuser] = useState(false);
-    const [deliveryfee, setdeliveryfee] = useState(50);
-    const [taxpercentage, settaxpercentage] = useState(3);
+    const [deliveryfee, setdeliveryfee] = useState(NORMAL_DELIVERY_CHARGE);
+    const [taxpercentage, settaxpercentage] = useState(NORMAL_DELIVERY_TAX_PERCENTAGE);
     const [currentSection, setCurrentSection] = useState(1); // 1: Products, 2: Order Details, 3: Location
     const [deliveryOption, setDeliveryOption] = useState(1); // 1 for Fast Delivery, 2 for With Daily Milk
     const [isPlacingOrder, setIsPlacingOrder] = useState(false);
@@ -328,7 +332,7 @@ const ViewCartScreen = () => {
             if (res.Response.length === 0) {
                 setisdailymilkuser(false)
                 setDeliveryOption(1);
-                setdeliveryfee(50);
+                setdeliveryfee(NORMAL_DELIVERY_CHARGE);
                 console.log("Not a Daily Milk User")
             } else if (res.Response[0].status === 1) {
                 setisdailymilkuser(true)
@@ -354,7 +358,7 @@ const ViewCartScreen = () => {
     useEffect(() => {
         if (!isdailymilkuser && deliveryOption !== 1) {
             setDeliveryOption(1);
-            setdeliveryfee(50);
+            setdeliveryfee(NORMAL_DELIVERY_CHARGE);
         }
     }, [isdailymilkuser, deliveryOption]);
 
@@ -448,7 +452,7 @@ const ViewCartScreen = () => {
 
             console.log("Final Product Order ID:", ProductOrderid);
 
-            const deliveryfeeValue = deliveryfee === "FREE" ? 0 : 50;
+            const deliveryfeeValue = deliveryfee === "FREE" ? 0 : NORMAL_DELIVERY_CHARGE;
             const data = {
                 "productorderid": ProductOrderid,
                 "userid": userData?.transid,
@@ -659,7 +663,7 @@ const ViewCartScreen = () => {
                                     To Pay
                                 </Text>
                                 <Text className="text-lg font-bold">
-                                    ₹{total + (total * taxpercentage) / 100 + (deliveryfee === "FREE" ? 0 : 50)}
+                                    ₹{total + (total * taxpercentage) / 100 + (deliveryfee === "FREE" ? 0 : NORMAL_DELIVERY_CHARGE)}
                                 </Text>
                             </View>
 
@@ -680,7 +684,7 @@ const ViewCartScreen = () => {
                                                     activeOpacity={0.88}
                                                     onPress={() => {
                                                         setDeliveryOption(1);
-                                                        setdeliveryfee(50);
+                                                        setdeliveryfee(NORMAL_DELIVERY_CHARGE);
                                                     }}
                                                 >
                                                     <View className="flex-row items-center">
@@ -694,7 +698,7 @@ const ViewCartScreen = () => {
                                                                     Fast Delivery
                                                                 </Text>
                                                                 <Text className="text-sm font-bold text-blue-600">
-                                                                    ₹50
+                                                                    ₹{NORMAL_DELIVERY_CHARGE}
                                                                 </Text>
                                                             </View>
                                                             <Text className="text-xs text-gray-500 mt-1">
@@ -774,7 +778,7 @@ const ViewCartScreen = () => {
                                                     activeOpacity={0.88}
                                                     onPress={() => {
                                                         setDeliveryOption(1);
-                                                        setdeliveryfee(50);
+                                                        setdeliveryfee(NORMAL_DELIVERY_CHARGE);
                                                     }}
                                                 >
                                                     <View className="flex-row items-center flex-1">
@@ -786,7 +790,7 @@ const ViewCartScreen = () => {
                                                                 Switch to Fast Delivery
                                                             </Text>
                                                             <Text className="text-xs text-blue-700 mt-0.5">
-                                                                Send separately for ₹50
+                                                                Send separately for ₹{NORMAL_DELIVERY_CHARGE}
                                                             </Text>
                                                         </View>
                                                     </View>

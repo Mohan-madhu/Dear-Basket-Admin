@@ -495,7 +495,7 @@ export default function SidebarScreen(data) {
                       uri: getImageUrl(item.image),
                     }}
                     className="w-full h-full rounded-full" // Make the image fill the container
-                    style={imageAnimatedStyle}
+                    style={[{ width: 64, height: 64, borderRadius: 32 }, imageAnimatedStyle]}
                     contentFit="contain"
                     cachePolicy="memory-disk"
                   />

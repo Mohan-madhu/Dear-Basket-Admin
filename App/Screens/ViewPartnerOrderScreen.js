@@ -212,6 +212,7 @@ const ViewPartnerOrderScreen = () => {
         contentFit="cover"
         cachePolicy="memory-disk"
         className="w-12 h-12 rounded-xl border border-gray-200"
+        style={{ width: 48, height: 48, borderRadius: 12 }}
       />
     );
   };

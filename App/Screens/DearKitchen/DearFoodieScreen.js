@@ -145,7 +145,7 @@ export default function DearFoodieScreen() {
 
       <FoodieCartBar
         count={cartSummary.count}
-        total={cartSummary.itemTotal}
+        total={cartSummary.totalAmount}
         onReview={() => navigation.navigate("DearKitchenCheckoutScreen")}
       />
     </View>

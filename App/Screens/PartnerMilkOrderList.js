@@ -20,6 +20,7 @@ import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import { API } from "../../App_Utils/Services/APIService";
 import Storage from "../../App_Utils/Services/StorageService";
 import { useNavigation } from "@react-navigation/native";
+import { resetToLogin } from "../../App_Utils/Services/AuthNavigationService";
 
 const PartnerMilkOrderList = () => {
    const navigation = useNavigation();
@@ -88,11 +89,11 @@ const PartnerMilkOrderList = () => {
           Partner Dashboard
         </Text>
         <TouchableOpacity
-            onPress={() => {
-              Storage.removeData("USER");
-              Storage.removeData("ROLE");
-              Storage.removeData("DATA");
-              navigation.navigate("Login");
+            onPress={async () => {
+              await Storage.removeData("USER");
+              await Storage.removeData("ROLE");
+              await Storage.removeData("DATA");
+              resetToLogin(navigation);
             }}
             style={{ marginTop: 32 }}
           >

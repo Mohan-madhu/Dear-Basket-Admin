@@ -13,7 +13,7 @@ const log = (val = "", msg = "") => {
   console.log(`[MENU VIEW SCREEN] ${msg}`, val);
 };
 
-export default function MenuViewScreen({ MENU }) {
+export default function MenuViewScreen({ MENU, dailyMilkRefreshKey }) {
   //log(MENU);
   const [ROLE, setROLE] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -56,7 +56,7 @@ export default function MenuViewScreen({ MENU }) {
     if (ROLE === "ADMIN") {
       return <ViewDailyMilkRegistration />;
     } else {
-      return <DailyMilkRegistrationScreen />;
+      return <DailyMilkRegistrationScreen refreshKey={dailyMilkRefreshKey} />;
     }
   }
   return (

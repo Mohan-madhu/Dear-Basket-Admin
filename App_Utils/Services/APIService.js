@@ -191,6 +191,14 @@ const cachedApiGetRequest = async (baseUrl, endpoint, requestFn) => {
   return fresh;
 };
 
+const freshApiGetRequest = async (baseUrl, endpoint, requestFn) => {
+  const normalizedEndpoint = normalizeEndpoint(endpoint);
+  const cacheKey = buildCacheKey(baseUrl, normalizedEndpoint);
+  const fresh = await requestFn(normalizedEndpoint);
+  await writeCachedGet({ cacheKey, baseUrl, endpoint: normalizedEndpoint, data: fresh });
+  return fresh;
+};
+
 const kitchenApiRequest = async (endpoint, method = "GET", body = null) => {
   const options = { method, headers: { ...headers } };
 
@@ -255,6 +263,7 @@ const uploadFile = async (endpoint, file, extraData = {}) => {
 // Exporting individual methods for direct usage
 export const API = {
   GET: (endpoint) => cachedApiGetRequest(BASE_URL, endpoint, (nextEndpoint) => apiRequest(nextEndpoint, "GET")),
+  GET_FRESH: (endpoint) => freshApiGetRequest(BASE_URL, endpoint, (nextEndpoint) => apiRequest(nextEndpoint, "GET")),
   GETBYID: (endpoint, id) => cachedApiGetRequest(BASE_URL, `${endpoint}/${id}`, (nextEndpoint) => apiRequest(nextEndpoint, "GET")),
   POST: (endpoint, body) => writeApiRequest(endpoint, "POST", body, apiRequest),
   PUT: (endpoint, body) => writeApiRequest(endpoint, "PUT", body, apiRequest),
@@ -265,6 +274,7 @@ export const API = {
 
 export const DearKitchenAPI = {
   GET: (endpoint) => cachedApiGetRequest(DEAR_KITCHEN_BASE_URL, endpoint, (nextEndpoint) => kitchenApiRequest(nextEndpoint, "GET")),
+  GET_FRESH: (endpoint) => freshApiGetRequest(DEAR_KITCHEN_BASE_URL, endpoint, (nextEndpoint) => kitchenApiRequest(nextEndpoint, "GET")),
   POST: (endpoint, body) => writeApiRequest(endpoint, "POST", body, kitchenApiRequest),
   PUT: (endpoint, body) => writeApiRequest(endpoint, "PUT", body, kitchenApiRequest),
   DELETE: (endpoint, body) => writeApiRequest(endpoint, "DELETE", body, kitchenApiRequest),

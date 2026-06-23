@@ -314,6 +314,7 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
                                 <Image
                                     source={{ uri: getImageUrl(product.image) }}
                                     className="w-full h-[100px] rounded-xl bg-gray-50"
+                                    style={{ width: "100%", height: 100, borderRadius: 12, backgroundColor: "#f9fafb" }}
                                     contentFit="contain"
                                     cachePolicy="memory-disk"
                                 />
@@ -339,6 +340,7 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
                     <Image
                         source={{ uri: getImageUrl(currentProduct.image) }}
                         className="w-[140px] h-[140px] rounded-xl"
+                        style={{ width: 140, height: 140, borderRadius: 12 }}
                         contentFit="contain"
                         cachePolicy="memory-disk"
                     />

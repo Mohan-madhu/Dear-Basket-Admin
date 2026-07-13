@@ -14,6 +14,38 @@ const API_CACHE_PREFIX = "api_get_cache:";
 const API_CACHE_INDEX_KEY = "api_get_cache:index";
 const cacheListeners = new Set();
 
+export const getUserFacingErrorMessage = (
+  error,
+  fallback = "Unable to complete the request. Please try again."
+) => {
+  const rawMessage = String(
+    typeof error === "string" ? error : error?.message || ""
+  ).trim();
+
+  if (!rawMessage) return fallback;
+
+  if (
+    /server returned non-json response/i.test(rawMessage) ||
+    /api error \(\d+\) for\s+(get|post|put|delete|patch)/i.test(rawMessage) ||
+    /<!doctype html|<html|cannot\s+(get|post|put|delete|patch)\s+\//i.test(rawMessage) ||
+    /\b(get|post|put|delete|patch)\s+\/(?:backend\/)?api\//i.test(rawMessage)
+  ) {
+    return fallback;
+  }
+
+  const withoutApiPrefix = rawMessage.replace(
+    /^(?:dearkitchen\s+)?api\s+(?:get|post|put|delete|patch)\s+https?:\/\/\S+\s+failed:\s*/i,
+    ""
+  );
+  const withoutUrls = withoutApiPrefix
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\/(?:backend\/)?api\/\S+/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return withoutUrls || fallback;
+};
+
 const normalizeEndpoint = (endpoint) => String(endpoint || "").replace(/^\/+/, "");
 
 const buildCacheKey = (baseUrl, endpoint) =>
@@ -133,12 +165,12 @@ const fetchWithTimeout = async (url, options, timeout = 60000) => {
 
     return data;
   } catch (error) {
-    console.error("API Error:", {
+    console.log("API request failed:", {
       method: options?.method || "GET",
       url,
       message: error?.message || "Unknown error",
     });
-    throw error;
+    throw new Error(getUserFacingErrorMessage(error));
   }
 };
 
@@ -155,9 +187,12 @@ const apiRequest = async (endpoint, method = "GET", body = null) => {
     return await fetchWithTimeout(`${BASE_URL}/${endpoint}`, options, 15000);
 
   } catch (error) {
-    const enrichedMessage = `API ${method} ${BASE_URL}/${endpoint} failed: ${error?.message || "Unknown error"}`;
-    console.error("API Error from apiRequest:", enrichedMessage);
-    throw new Error(enrichedMessage);
+    console.log("API request details:", {
+      method,
+      endpoint,
+      message: error?.message || "Unknown error",
+    });
+    throw new Error(getUserFacingErrorMessage(error));
   }
 };
 
@@ -211,9 +246,12 @@ const kitchenApiRequest = async (endpoint, method = "GET", body = null) => {
     //console.log("DearKitchen Endpoint : ", `${DEAR_KITCHEN_BASE_URL}/${endpoint}`, options);
     return await fetchWithTimeout(`${DEAR_KITCHEN_BASE_URL}/${endpoint}`, options, 15000);
   } catch (error) {
-    const enrichedMessage = `DearKitchen API ${method} ${DEAR_KITCHEN_BASE_URL}/${endpoint} failed: ${error?.message || "Unknown error"}`;
-    console.error("API Error from kitchenApiRequest:", enrichedMessage);
-    throw new Error(enrichedMessage);
+    console.log("DearKitchen API request details:", {
+      method,
+      endpoint,
+      message: error?.message || "Unknown error",
+    });
+    throw new Error(getUserFacingErrorMessage(error));
   }
 };
 
@@ -254,9 +292,8 @@ const uploadFile = async (endpoint, file, extraData = {}) => {
     await clearApiGetCache();
     return result;
   } catch (error) {
-    console.log(error)
-    console.error("File Upload Error:", error);
-    throw error;
+    console.log("File upload failed:", error?.message || error);
+    throw new Error(getUserFacingErrorMessage(error, "File upload failed. Please try again."));
   }
 };
 

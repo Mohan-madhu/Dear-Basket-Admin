@@ -10,7 +10,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useLoading } from "../../../App_Utils/Contexts/LoadingContext";
 import Storage from "../../../App_Utils/Services/StorageService";
-import { API } from "../../../App_Utils/Services/APIService";
+import { API, getUserFacingErrorMessage } from "../../../App_Utils/Services/APIService";
 import Toaster from "../../../App_Utils/Services/ToastService";
 import { useDispatch } from "react-redux";
 import { clearCart } from "../../Redux/CartReducer";
@@ -129,7 +129,7 @@ export default function LoginScreen({ navigation }) {
     } catch (err) {
       setLoading(false);
       console.log(err);
-      Alert.alert("Error", err);
+      Alert.alert("Error", getUserFacingErrorMessage(err, "Login failed. Please try again."));
       setTimeout(() => phoneRef.current?.focus(), 0);
     } finally {
       setLoading(false);

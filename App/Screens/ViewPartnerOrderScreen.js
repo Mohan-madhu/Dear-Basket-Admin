@@ -29,7 +29,7 @@ const isPendingOrder = (order) => Number(order?.ordercancelled) !== 1 && Number(
 const getOrderType = (order) => {
   switch (Number(order?.isdailymilkuser)) {
     case 1:
-      return "Daily Milk";
+      return "Daily Milk Grocery";
     case 0:
       return "Fast Delivery";
     case 2:
@@ -91,7 +91,7 @@ const ViewPartnerOrderScreen = () => {
         stats.total += 1;
 
         if (type === "Fast Delivery") stats.fast += 1;
-        if (type === "Daily Milk" || type === "Milk" || type === "Demo Daily Milk") stats.daily += 1;
+        if (type === "Daily Milk Grocery" || type === "Milk" || type === "Demo Daily Milk") stats.daily += 1;
 
         map.set(partner.transid, stats);
       });
@@ -332,7 +332,7 @@ const ViewPartnerOrderScreen = () => {
                         <Text className="text-[10px] font-semibold text-purple-700">Fast {fast}</Text>
                       </View>
                       <View className="bg-emerald-50 px-2 py-1 rounded-full mr-1.5">
-                        <Text className="text-[10px] font-semibold text-emerald-700">Daily {daily}</Text>
+                        <Text className="text-[10px] font-semibold text-emerald-700">Daily Grocery {daily}</Text>
                       </View>
                       <View className="flex-1 items-end">
                         <Text className="text-[10px] text-blue-700 font-semibold">Open Partner Orders</Text>

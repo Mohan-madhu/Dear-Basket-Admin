@@ -4,6 +4,8 @@ import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import Icon from "react-native-vector-icons/FontAwesome";
+import { getDailyMilkCancellationReason, isDailyMilkCancelled } from "../../App_Utils/Utils/dailyMilkCancellation";
+import DailyMilkCanStatusBadge from "./DailyMilkCanStatusBadge";
 const MilkStatusTable = ({ data, embedded = false }) => {
   const calculateExtraAmount = (item) => {
     if (!item.extra) return 0;
@@ -30,7 +32,7 @@ const MilkStatusTable = ({ data, embedded = false }) => {
   // Calculate metrics
   const metrics = data?.reduce(
     (acc, item) => {
-      if (item.cancelled) return acc;
+      if (isDailyMilkCancelled(item.cancelled)) return acc;
 
       const extraAmount = calculateExtraAmount(item);
       const totalAmount = item.amount + extraAmount;
@@ -53,24 +55,6 @@ const MilkStatusTable = ({ data, embedded = false }) => {
   if (embedded) {
     return (
       <View className="bg-gray-900 px-3 py-3">
-        <View className="flex-row mb-3">
-          <View className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-2 mr-1">
-            <Text className="text-[10px] text-gray-400">Total</Text>
-            <Text className="text-sm font-black text-blue-300 mt-0.5">{metrics.totalLitres.toFixed(1)} L</Text>
-            <Text className="text-[10px] text-gray-500">₹{metrics.totalAmount.toFixed(2)}</Text>
-          </View>
-          <View className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-2 mx-1">
-            <Text className="text-[10px] text-gray-400">Received</Text>
-            <Text className="text-sm font-black text-green-300 mt-0.5">{metrics.receivedLitres.toFixed(1)} L</Text>
-            <Text className="text-[10px] text-gray-500">₹{metrics.receivedAmount.toFixed(2)}</Text>
-          </View>
-          <View className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-2 ml-1">
-            <Text className="text-[10px] text-gray-400">Remaining</Text>
-            <Text className="text-sm font-black text-amber-300 mt-0.5">{remainingLitres.toFixed(1)} L</Text>
-            <Text className="text-[10px] text-gray-500">₹{remainingAmount.toFixed(2)}</Text>
-          </View>
-        </View>
-
         <View className="flex-row bg-gray-800 border border-gray-700 rounded-t-lg px-2 py-2">
           <Text className="text-[10px] font-bold text-gray-400 flex-[1.5]">DATE</Text>
           <Text className="text-[10px] font-bold text-gray-400 flex-1 text-center">MILK</Text>
@@ -79,7 +63,8 @@ const MilkStatusTable = ({ data, embedded = false }) => {
         </View>
 
         {(Array.isArray(data) ? data : []).map((item, index) => {
-          const cancelled = item?.cancelled != null;
+          const cancelled = isDailyMilkCancelled(item?.cancelled);
+          const cancellationReason = getDailyMilkCancellationReason(item?.cancelled);
           const received = item?.received != null;
           const quantity = Number(item?.quantity || 0);
           const extra = Number(item?.extra || 0);
@@ -117,6 +102,14 @@ const MilkStatusTable = ({ data, embedded = false }) => {
                     {cancelled ? "Cancelled" : received ? "Done" : "Pending"}
                   </Text>
                 </View>
+                {cancelled && cancellationReason ? (
+                  <Text className="text-[8px] text-red-300 mt-1 text-right" numberOfLines={2}>
+                    {cancellationReason}
+                  </Text>
+                ) : null}
+                {!cancelled && received ? (
+                  <DailyMilkCanStatusBadge value={item?.cans_returned} compact />
+                ) : null}
               </View>
             </View>
           );
@@ -216,8 +209,10 @@ const MilkStatusTable = ({ data, embedded = false }) => {
                   }`}
               >
                 {item.date}
-                {item.cancelled && (
-                  <Text className="text-xs italic"> (Cancelled)</Text>
+                {isDailyMilkCancelled(item.cancelled) && (
+                  <Text className="text-xs italic">
+                    {` (Cancelled${getDailyMilkCancellationReason(item.cancelled) ? `: ${getDailyMilkCancellationReason(item.cancelled)}` : ''})`}
+                  </Text>
                 )}
               </Text>
             </View>
@@ -327,16 +322,7 @@ const MilkStatusTable = ({ data, embedded = false }) => {
                     <MaterialIcons name="shopping-cart" size={16} color="#3B82F6" />
                   )}
 
-                  {/* Container status icons  color="#10B981"*/}
-                  {item.cans_returned === 1 && ( // Can Returned
-                    <FontAwesome5 name="wine-bottle" size={16}  />
-                  )}
-                  {item.cans_returned === 2 && ( // Can Damaged
-                    <MaterialCommunityIcons name="alert-circle-outline" size={20} color="#F59E0B" />
-                  )}
-                  {item.cans_returned === 0 && ( // Can Not Returned
-                    <MaterialIcons name="error-outline" size={20} color="#EF4444" />
-                  )}
+                  <DailyMilkCanStatusBadge value={item.cans_returned} />
                   {item.receivedtime && (
                     <Text className="text-gray-500 text-xs">
                       {formatLocalTime(item.receivedtime)}
@@ -352,16 +338,7 @@ const MilkStatusTable = ({ data, embedded = false }) => {
                     <MaterialIcons name="shopping-cart" size={16} color="#3B82F6" />
                   )}
 
-                  {/* Container status icons */}
-                  {item.cans_returned === 1 && ( // Can Returned
-                    <FontAwesome5 name="wine-bottle" size={16} color="#10B981" />
-                  )}
-                  {item.cans_returned === 2 && ( // Can Damaged
-                    <MaterialCommunityIcons name="alert-circle-outline" size={20} color="#F59E0B" />
-                  )}
-                  {item.cans_returned === 0 && ( // Can Not Returned
-                    <MaterialIcons name="error-outline" size={20} color="#EF4444" />
-                  )}
+                  <DailyMilkCanStatusBadge value={item.cans_returned} />
                 </View>
               )}
             </View>

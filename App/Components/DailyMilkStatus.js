@@ -6,15 +6,18 @@ import {
   Modal,
   FlatList,
   ScrollView,
+  RefreshControl,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Calendar } from "react-native-calendars";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
-import { API } from "../../App_Utils/Services/APIService";
+import { API, getUserFacingErrorMessage } from "../../App_Utils/Services/APIService";
 import MilkStatusTable from "./DailyMilkStatusTable";
 import { useNavigation } from "@react-navigation/native";
+import { isDailyMilkCancelled } from "../../App_Utils/Utils/dailyMilkCancellation";
 
 // Format a Date object as "YYYY-MM-DD"
 function formatDateYYYYMMDD(date) {
@@ -35,6 +38,17 @@ function formatFriendly(dateString) {
 }
 
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const DAILY_MILK_STATUS_THEME = {
+  page: "#0f172a",
+  card: "#1e293b",
+  softCard: "#334155",
+  border: "#475569",
+  accent: "#22d3ee",
+  text: "#f8fafc",
+  mutedText: "#cbd5e1",
+  subtleText: "#94a3b8",
+};
 
 export default function DailyMilkStatus({ BookingData, FromAdmin }) {
   console.warn("BookingData in DailyMilkStatus:", BookingData);
@@ -64,6 +78,7 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
 
   const [bookingStatusTable, setBookingStatusTable] = useState([]);
   const [upd, setupd] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -79,14 +94,14 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
 
 
 
-  const GetBookingStatus = async () => {
+  const GetBookingStatus = async ({ showGlobalLoading = true } = {}) => {
 
     console.warn("1111111111111111111111111", BookingData)
     if (!activeBooking?.transid) {
       if (isMountedRef.current) setBookingStatusTable([]);
       return;
     }
-    if (isMountedRef.current) setLoading(true, "Fetching Booking Status");
+    if (isMountedRef.current && showGlobalLoading) setLoading(true, "Fetching Booking Status");
    
     try {
       var { Response } = await API.GET(
@@ -137,9 +152,18 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
         Alert.alert("Error", "Failed to fetch booking status");
       }
     } finally {
-      if (isMountedRef.current) setLoading(false);
+      if (isMountedRef.current) {
+        if (showGlobalLoading) setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
+
+  const refreshBookingStatus = React.useCallback(() => {
+    if (!activeBooking?.transid || refreshing) return;
+    setRefreshing(true);
+    GetBookingStatus({ showGlobalLoading: false });
+  }, [activeBooking?.transid, refreshing]);
   const UpdateBookingConfigurations = async (bookingid) => {
     try {
       setLoading(true, "Updating Booking Configurations");
@@ -170,7 +194,7 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
       console.log(err);
       Alert.alert(
         "Error",
-        err.message || "Failed to update booking configurations"
+        getUserFacingErrorMessage(err, "Failed to update booking configurations")
       );
     } finally {
       if (isMountedRef.current) setLoading(false);
@@ -476,6 +500,56 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
     },
     { delivered: 0, pending: 0, cancelled: 0, extraDays: 0 }
   );
+  const milkValueSummary = (Array.isArray(bookingStatusTable) ? bookingStatusTable : []).reduce(
+    (summary, item) => {
+      if (isDailyMilkCancelled(item?.cancelled)) return summary;
+
+      const quantity = Number(item?.quantity || 0);
+      const extra = Number(item?.extra || 0);
+      const amount = Number(item?.amount || 0);
+      const unitPrice = quantity > 0 ? amount / quantity : 0;
+      const totalLitres = quantity + extra;
+      const totalAmount = amount + (unitPrice * extra);
+
+      summary.totalLitres += totalLitres;
+      summary.totalAmount += totalAmount;
+      if (item?.received) {
+        summary.receivedLitres += totalLitres;
+        summary.receivedAmount += totalAmount;
+      }
+      return summary;
+    },
+    { totalLitres: 0, totalAmount: 0, receivedLitres: 0, receivedAmount: 0 }
+  );
+  milkValueSummary.remainingLitres = Math.max(0, milkValueSummary.totalLitres - milkValueSummary.receivedLitres);
+  milkValueSummary.remainingAmount = Math.max(0, milkValueSummary.totalAmount - milkValueSummary.receivedAmount);
+  const deliveryBatch = String(activeBooking?.deliverytype || '').trim();
+  const isEveningBatch = deliveryBatch.toLowerCase().includes('evening');
+  const isMorningBatch = deliveryBatch.toLowerCase().includes('morning');
+  const batchIcon = isEveningBatch ? 'moon-o' : isMorningBatch ? 'sun-o' : 'clock-o';
+  const batchWrapClass = isEveningBatch
+    ? 'bg-indigo-950 border-indigo-800'
+    : isMorningBatch
+      ? 'bg-amber-950 border-amber-800'
+      : 'bg-gray-800 border-gray-700';
+  const batchTextClass = isEveningBatch
+    ? 'text-indigo-200'
+    : isMorningBatch
+      ? 'text-amber-200'
+      : 'text-gray-300';
+  const batchIconColor = isEveningBatch ? '#a5b4fc' : isMorningBatch ? '#fbbf24' : '#d1d5db';
+  const previewTheme = DAILY_MILK_STATUS_THEME;
+  const themedCardStyle = {
+    backgroundColor: previewTheme.card,
+    borderColor: previewTheme.border,
+  };
+  const themedSoftCardStyle = {
+    backgroundColor: previewTheme.softCard,
+    borderColor: previewTheme.border,
+  };
+  const themedTextStyle = { color: previewTheme.text };
+  const themedMutedTextStyle = { color: previewTheme.mutedText };
+  const themedSubtleTextStyle = { color: previewTheme.subtleText };
 
   const SectionToggle = ({ title, subtitle, icon, expanded, onPress, accent = "#60a5fa" }) => (
     <TouchableOpacity
@@ -483,21 +557,24 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
       activeOpacity={0.85}
       className="flex-row items-center px-3 py-3"
     >
-      <View className="w-9 h-9 rounded-lg bg-gray-800 items-center justify-center mr-3 border border-gray-700">
+      <View
+        className="w-9 h-9 rounded-lg items-center justify-center mr-3 border"
+        style={themedSoftCardStyle}
+      >
         <Icon name={icon} size={16} color={accent} />
       </View>
       <View className="flex-1 mr-2">
-        <Text className="text-sm font-bold text-white">{title}</Text>
-        <Text className="text-[11px] text-gray-400 mt-0.5" numberOfLines={1}>{subtitle}</Text>
+        <Text className="text-sm font-bold" style={themedTextStyle}>{title}</Text>
+        <Text className="text-[11px] mt-0.5" style={themedSubtleTextStyle} numberOfLines={1}>{subtitle}</Text>
       </View>
-      <Icon name={expanded ? "chevron-up" : "chevron-down"} size={15} color="#9ca3af" />
+      <Icon name={expanded ? "chevron-up" : "chevron-down"} size={15} color={previewTheme.subtleText} />
     </TouchableOpacity>
   );
 
   if (!activeBooking) {
     return (
-      <View className="flex-1 items-center justify-center px-4">
-        <Text className="text-white text-base font-semibold text-center">
+      <View className="flex-1 items-center justify-center px-4" style={{ backgroundColor: previewTheme.page }}>
+        <Text className="text-base font-semibold text-center" style={themedTextStyle}>
           Loading daily milk booking details...
         </Text>
       </View>
@@ -506,56 +583,114 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
 
   return (
     <ScrollView
-      className="flex-1 w-full bg-gray-950"
-      contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 32 }}
+      className="flex-1 w-full"
+      style={{ backgroundColor: previewTheme.page }}
+      contentContainerStyle={{
+        paddingHorizontal: 12,
+        paddingTop: 12,
+        paddingBottom: 32,
+        minHeight: "100%",
+        backgroundColor: previewTheme.page,
+      }}
       showsVerticalScrollIndicator={false}
+      alwaysBounceVertical
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={refreshBookingStatus}
+          tintColor={previewTheme.accent}
+          colors={[previewTheme.accent]}
+          progressBackgroundColor={previewTheme.card}
+        />
+      }
     >
       <View className="flex-row items-center justify-between mb-3 px-1">
         <View>
-          <Text className="text-lg font-black text-white">Daily Milk</Text>
-          <Text className="text-xs text-gray-400 mt-0.5">Booking and delivery status</Text>
+          <Text className="text-lg font-black" style={themedTextStyle}>Daily Milk</Text>
+          <Text className="text-xs mt-0.5" style={themedSubtleTextStyle}>Booking and delivery status</Text>
         </View>
-        <View className="bg-green-100 border border-green-200 px-2.5 py-1 rounded-full">
-          <Text className="text-[10px] font-bold text-green-700 uppercase">Active</Text>
+        <View className="flex-row items-center">
+          <TouchableOpacity
+            onPress={refreshBookingStatus}
+            disabled={refreshing}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh daily milk status"
+            className="w-8 h-8 rounded-full border items-center justify-center mr-2"
+            style={{
+              backgroundColor: previewTheme.softCard,
+              borderColor: previewTheme.border,
+              opacity: refreshing ? 0.7 : 1,
+            }}
+          >
+            {refreshing ? (
+              <ActivityIndicator size="small" color={previewTheme.accent} />
+            ) : (
+              <Icon name="refresh" size={13} color={previewTheme.accent} />
+            )}
+          </TouchableOpacity>
+          <View
+            className="px-2.5 py-1 rounded-full border"
+            style={{
+              backgroundColor: previewTheme.softCard,
+              borderColor: previewTheme.accent,
+            }}
+          >
+            <Text className="text-[10px] font-black uppercase" style={{ color: previewTheme.accent }}>Active</Text>
+          </View>
         </View>
       </View>
 
-      <View className="bg-gray-900 border border-gray-700 rounded-lg mb-2 overflow-hidden">
+      <View className="border rounded-lg mb-2 overflow-hidden" style={themedCardStyle}>
         <TouchableOpacity
           onPress={() => setShowBookingDetails((value) => !value)}
           activeOpacity={0.88}
           className="p-3"
         >
           <View className="flex-row items-start">
-            <View className="w-10 h-10 rounded-lg bg-blue-950 items-center justify-center mr-3 border border-blue-800">
-              <Icon name="tint" size={18} color="#60a5fa" />
+            <View
+              className="w-10 h-10 rounded-lg items-center justify-center mr-3 border"
+              style={{
+                backgroundColor: previewTheme.softCard,
+                borderColor: previewTheme.accent,
+              }}
+            >
+              <Icon name="tint" size={18} color={previewTheme.accent} />
             </View>
             <View className="flex-1">
               <View className="flex-row items-center justify-between">
-                <Text className="text-base font-black text-white flex-1 mr-2" numberOfLines={1}>
+                <Text className="text-base font-black flex-1 mr-2" style={themedTextStyle} numberOfLines={1}>
                   {activeBooking.productname || "Daily Milk"}
                 </Text>
-                <Icon name={showBookingDetails ? "chevron-up" : "chevron-down"} size={15} color="#9ca3af" />
+                <Icon name={showBookingDetails ? "chevron-up" : "chevron-down"} size={15} color={previewTheme.subtleText} />
               </View>
-              <Text className="text-xs text-gray-300 mt-0.5">
-                {activeBooking.quantity || 0} L • {activeBooking.deliverytype || "Delivery slot"} • ₹{Number(activeBooking.price || 0).toFixed(2)}
-              </Text>
-              <Text className="text-[11px] text-gray-400 mt-2">
+              <View className="flex-row items-center flex-wrap mt-1">
+                <Text className="text-xs mr-2" style={themedMutedTextStyle}>
+                  {activeBooking.quantity || 0} L • ₹{Number(activeBooking.price || 0).toFixed(2)}
+                </Text>
+                <View className={`flex-row items-center border rounded-full px-2 py-1 ${batchWrapClass}`}>
+                  <Icon name={batchIcon} size={11} color={batchIconColor} />
+                  <Text className={`text-[10px] font-bold ml-1 ${batchTextClass}`}>
+                    {deliveryBatch || 'Delivery'} Batch
+                  </Text>
+                </View>
+              </View>
+              <Text className="text-[11px] mt-2" style={themedSubtleTextStyle}>
                 {formatFriendly(activeBooking.bookingstartdate)} - {formatFriendly(activeBooking.bookingenddate)}
               </Text>
             </View>
           </View>
 
           {showBookingDetails ? (
-            <View className="mt-3 pt-3 border-t border-gray-700">
+            <View className="mt-3 pt-3 border-t" style={{ borderTopColor: previewTheme.border }}>
               <View className="flex-row justify-between">
                 <View className="flex-1 mr-2">
-                  <Text className="text-[10px] text-gray-500 uppercase">User ID</Text>
-                  <Text className="text-xs font-semibold text-gray-200 mt-0.5" numberOfLines={1}>{activeBooking.userid || "N/A"}</Text>
+                  <Text className="text-[10px] uppercase" style={themedSubtleTextStyle}>User ID</Text>
+                  <Text className="text-xs font-semibold mt-0.5" style={themedMutedTextStyle} numberOfLines={1}>{activeBooking.userid || "N/A"}</Text>
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[10px] text-gray-500 uppercase">Registration</Text>
-                  <Text className="text-xs font-semibold text-gray-200 mt-0.5" numberOfLines={1}>{activeBooking.dailymilkregistrationid || "N/A"}</Text>
+                  <Text className="text-[10px] uppercase" style={themedSubtleTextStyle}>Registration</Text>
+                  <Text className="text-xs font-semibold mt-0.5" style={themedMutedTextStyle} numberOfLines={1}>{activeBooking.dailymilkregistrationid || "N/A"}</Text>
                 </View>
               </View>
               {Number(activeBooking.pregnancy_status || 0) === 1 ? (
@@ -570,21 +705,45 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
       </View>
 
       <View className="flex-row mb-2">
-        <View className="flex-1 bg-gray-900 border border-gray-700 border-l-4 border-l-green-500 rounded-lg px-3 py-2 mr-1">
-          <Text className="text-[10px] text-gray-400">Delivered</Text>
+        <View className="flex-1 border border-l-4 border-l-green-500 rounded-lg px-3 py-2 mr-1" style={themedCardStyle}>
+          <Text className="text-[10px]" style={themedSubtleTextStyle}>Delivered</Text>
           <Text className="text-lg font-black text-green-400">{deliverySummary.delivered}</Text>
         </View>
-        <View className="flex-1 bg-gray-900 border border-gray-700 border-l-4 border-l-amber-500 rounded-lg px-3 py-2 mx-1">
-          <Text className="text-[10px] text-gray-400">Pending</Text>
+        <View className="flex-1 border border-l-4 border-l-amber-500 rounded-lg px-3 py-2 mx-1" style={themedCardStyle}>
+          <Text className="text-[10px]" style={themedSubtleTextStyle}>Pending</Text>
           <Text className="text-lg font-black text-amber-400">{deliverySummary.pending}</Text>
         </View>
-        <View className="flex-1 bg-gray-900 border border-gray-700 border-l-4 border-l-red-500 rounded-lg px-3 py-2 ml-1">
-          <Text className="text-[10px] text-gray-400">Cancelled</Text>
+        <View className="flex-1 border border-l-4 border-l-red-500 rounded-lg px-3 py-2 ml-1" style={themedCardStyle}>
+          <Text className="text-[10px]" style={themedSubtleTextStyle}>Cancelled</Text>
           <Text className="text-lg font-black text-red-400">{deliverySummary.cancelled}</Text>
         </View>
       </View>
 
-      <View className="bg-gray-900 border border-gray-700 rounded-lg mb-2 overflow-hidden">
+      <View className="flex-row mb-2">
+        <View className="flex-1 border rounded-lg px-2.5 py-2 mr-1" style={themedCardStyle}>
+          <Text className="text-[10px]" style={themedSubtleTextStyle}>Total</Text>
+          <Text className="text-sm font-black text-blue-300 mt-0.5">
+            {milkValueSummary.totalLitres.toFixed(1)} L
+          </Text>
+          <Text className="text-[10px]" style={themedSubtleTextStyle}>₹{milkValueSummary.totalAmount.toFixed(2)}</Text>
+        </View>
+        <View className="flex-1 border rounded-lg px-2.5 py-2 mx-1" style={themedCardStyle}>
+          <Text className="text-[10px]" style={themedSubtleTextStyle}>Received</Text>
+          <Text className="text-sm font-black text-green-300 mt-0.5">
+            {milkValueSummary.receivedLitres.toFixed(1)} L
+          </Text>
+          <Text className="text-[10px]" style={themedSubtleTextStyle}>₹{milkValueSummary.receivedAmount.toFixed(2)}</Text>
+        </View>
+        <View className="flex-1 border rounded-lg px-2.5 py-2 ml-1" style={themedCardStyle}>
+          <Text className="text-[10px]" style={themedSubtleTextStyle}>Remaining</Text>
+          <Text className="text-sm font-black text-amber-300 mt-0.5">
+            {milkValueSummary.remainingLitres.toFixed(1)} L
+          </Text>
+          <Text className="text-[10px]" style={themedSubtleTextStyle}>₹{milkValueSummary.remainingAmount.toFixed(2)}</Text>
+        </View>
+      </View>
+
+      <View className="border rounded-lg mb-2 overflow-hidden" style={themedCardStyle}>
         <SectionToggle
           title="This Week"
           subtitle="Seven-day delivery overview"
@@ -593,7 +752,7 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
           onPress={() => setShowWeek((value) => !value)}
         />
         {showWeek ? (
-          <View className="flex-row justify-between px-2 pb-3 border-t border-gray-700 pt-3">
+          <View className="flex-row justify-between px-2 pb-3 border-t pt-3" style={{ borderTopColor: previewTheme.border }}>
             {weekArray.map((d) => {
           const ds = formatDateYYYYMMDD(d);
           const dayLabel = dayNames[d.getDay()];
@@ -637,18 +796,23 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
           return (
               <View
               key={ds}
-              className={`flex-1 items-center justify-center py-2 rounded-lg mx-0.5 ${isToday ? "bg-blue-950 border border-blue-500" : "bg-gray-800"
+              className={`flex-1 items-center justify-center py-2 rounded-lg mx-0.5 ${isToday ? "border" : ""
                 }`}
+              style={
+                isToday
+                  ? { backgroundColor: previewTheme.softCard, borderColor: previewTheme.accent }
+                  : { backgroundColor: previewTheme.softCard }
+              }
             >
               <Text
-                className={`text-xs font-semibold uppercase ${isToday ? "text-blue-300" : "text-gray-400"
-                  }`}
+                className="text-xs font-semibold uppercase"
+                style={{ color: isToday ? previewTheme.accent : previewTheme.subtleText }}
               >
                 {dayLabel}
               </Text>
               <Text
-                className={`text-base font-bold mt-1 ${isToday ? "text-blue-100" : "text-gray-200"
-                  }`}
+                className="text-base font-bold mt-1"
+                style={themedTextStyle}
               >
                 {d.getDate()}
               </Text>
@@ -673,7 +837,7 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
       </View>
 
       {FromAdmin !== 1 && (
-        <View className="bg-gray-900 border border-gray-700 rounded-lg mb-2 overflow-hidden">
+        <View className="border rounded-lg mb-2 overflow-hidden" style={themedCardStyle}>
           <SectionToggle
             title="Manage Booking"
             subtitle="Cancel dates, add milk, payments and history"
@@ -683,7 +847,7 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
             accent="#a78bfa"
           />
           {showActions ? (
-            <View className="px-3 pb-3 pt-3 border-t border-gray-700">
+            <View className="px-3 pb-3 pt-3 border-t" style={{ borderTopColor: previewTheme.border }}>
               <View className="flex-row mb-2">
             <TouchableOpacity
               className="flex-1 bg-red-950 border border-red-800 mr-1 py-2.5 rounded-lg items-center flex-row justify-center"
@@ -710,26 +874,46 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
             </TouchableOpacity>
               <View className="flex-row">
                 <TouchableOpacity
-                  className="flex-1 bg-gray-800 border border-gray-700 py-2.5 rounded-lg items-center flex-row justify-center mr-1"
+                  className="flex-1 border py-2.5 rounded-lg items-center flex-row justify-center mr-1"
+                  style={themedSoftCardStyle}
                   onPress={() => navigation.navigate("DailyMilkPayment")}
                 >
-                  <Icon name="credit-card" size={13} color="#d1d5db" />
-                  <Text className="text-gray-200 text-xs font-bold ml-2">Payment</Text>
+                  <Icon name="credit-card" size={13} color={previewTheme.mutedText} />
+                  <Text className="text-xs font-bold ml-2" style={themedMutedTextStyle}>Payment</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  className="flex-1 bg-gray-800 border border-gray-700 py-2.5 rounded-lg items-center flex-row justify-center ml-1"
+                  className="flex-1 border py-2.5 rounded-lg items-center flex-row justify-center ml-1"
+                  style={themedSoftCardStyle}
                   onPress={() => navigation.navigate("DailyMilk_User_AccountsManage", { userid: activeBooking.userid })}
                 >
-                  <Icon name="history" size={13} color="#d1d5db" />
-                  <Text className="text-gray-200 text-xs font-bold ml-2">Bookings</Text>
+                  <Icon name="history" size={13} color={previewTheme.mutedText} />
+                  <Text className="text-xs font-bold ml-2" style={themedMutedTextStyle}>Bookings</Text>
                 </TouchableOpacity>
               </View>
+              <TouchableOpacity
+                className="mt-2 border py-3 rounded-lg items-center flex-row justify-center"
+                style={{
+                  backgroundColor: previewTheme.softCard,
+                  borderColor: previewTheme.accent,
+                }}
+                onPress={() =>
+                  navigation.navigate("DailyMilkComplaintChat", {
+                    mode: "user",
+                    userid: activeBooking.userid,
+                  })
+                }
+              >
+                <Icon name="comments" size={15} color={previewTheme.accent} />
+                <Text className="text-xs font-bold ml-2" style={{ color: previewTheme.accent }}>
+                  Daily Milk Complaint
+                </Text>
+              </TouchableOpacity>
             </View>
           ) : null}
         </View>
       )}
 
-      <View className="bg-gray-900 border border-gray-700 rounded-lg mb-2 overflow-hidden">
+      <View className="border rounded-lg mb-2 overflow-hidden" style={themedCardStyle}>
         <SectionToggle
           title="Delivery History"
           subtitle={`${deliverySummary.delivered} delivered • ${deliverySummary.pending} pending • ${deliverySummary.extraDays} extra milk`}
@@ -739,7 +923,7 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
           accent="#34d399"
         />
         {showDeliveryHistory ? (
-          <View className="border-t border-gray-700">
+          <View className="border-t" style={{ borderTopColor: previewTheme.border }}>
             <MilkStatusTable data={bookingStatusTable || []} embedded />
           </View>
         ) : null}

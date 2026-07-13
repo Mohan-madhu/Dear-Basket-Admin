@@ -14,6 +14,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { API } from '../../App_Utils/Services/APIService';
 import { useLoading } from '../../App_Utils/Contexts/LoadingContext';
+import { matchesCustomerPhone } from '../../App_Utils/Utils/orderSearch';
 
 const DailyMilkActiveBookings = () => {
     const { setLoading } = useLoading();
@@ -235,7 +236,8 @@ const DailyMilkActiveBookings = () => {
                 booking.dailymilkregistrationid?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 booking.productname?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 booking.transid?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                booking.mappedpartnerid?.toLowerCase().includes(searchQuery.toLowerCase());
+                booking.mappedpartnerid?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                matchesCustomerPhone(booking, searchQuery);
 
             if (!matchesSearch) return false;
 
@@ -772,7 +774,7 @@ const DailyMilkActiveBookings = () => {
                 <View className="bg-gray-100 rounded-lg px-3 py-2 flex-row items-center">
                     <Icon name="magnify" size={18} color="#6B7280" />
                     <TextInput
-                        placeholder="Search by User ID, Product, or Partner..."
+                        placeholder="Search user ID, phone, product, or partner..."
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         className="flex-1 ml-2 text-sm text-gray-800"

@@ -5,6 +5,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import Icon from "react-native-vector-icons/FontAwesome";
+import { getDailyMilkCancellationReason, isDailyMilkCancelled } from "../../App_Utils/Utils/dailyMilkCancellation";
+import DailyMilkCanStatusBadge from "./DailyMilkCanStatusBadge";
 const MilkStatusTable_Admin = ({ data }) => {
   const calculateExtraAmount = (item) => {
     if (!item.extra) return 0;
@@ -25,7 +27,7 @@ const MilkStatusTable_Admin = ({ data }) => {
   // Calculate metrics
   const metrics = data?.reduce(
     (acc, item) => {
-      if (item.cancelled) return acc;
+      if (isDailyMilkCancelled(item.cancelled)) return acc;
 
       const extraAmount = calculateExtraAmount(item);
       const totalAmount = item.amount + extraAmount;
@@ -132,8 +134,10 @@ const MilkStatusTable_Admin = ({ data }) => {
                   }`}
               >
                 {item.date}
-                {item.cancelled && (
-                  <Text className="text-xs italic"> (Cancelled)</Text>
+                {isDailyMilkCancelled(item.cancelled) && (
+                  <Text className="text-xs italic">
+                    {` (Cancelled${getDailyMilkCancellationReason(item.cancelled) ? `: ${getDailyMilkCancellationReason(item.cancelled)}` : ''})`}
+                  </Text>
                 )}
               </Text>
             </View>
@@ -209,6 +213,7 @@ const MilkStatusTable_Admin = ({ data }) => {
                       {formatLocalTime(item.receivedtime)}
                     </Text>
                   )}
+                  <DailyMilkCanStatusBadge value={item.cans_returned} />
                 </View>
               ) : (
                 <View className="items-center">
@@ -295,16 +300,7 @@ const MilkStatusTable_Admin = ({ data }) => {
                     <MaterialIcons name="shopping-cart" size={16} color="#3B82F6" />
                   )}
 
-                  {/* Container status icons  color="#10B981"*/}
-                  {item.cans_returned === 1 && ( // Can Returned
-                    <FontAwesome5 name="wine-bottle" size={16}  />
-                  )}
-                  {item.cans_returned === 2 && ( // Can Damaged
-                    <MaterialCommunityIcons name="alert-circle-outline" size={20} color="#F59E0B" />
-                  )}
-                  {item.cans_returned === 0 && ( // Can Not Returned
-                    <MaterialIcons name="error-outline" size={20} color="#EF4444" />
-                  )}
+                  <DailyMilkCanStatusBadge value={item.cans_returned} />
                   {item.receivedtime && (
                     <Text className="text-gray-500 text-xs">
                       {formatLocalTime(item.receivedtime)}
@@ -320,16 +316,7 @@ const MilkStatusTable_Admin = ({ data }) => {
                     <MaterialIcons name="shopping-cart" size={16} color="#3B82F6" />
                   )}
 
-                  {/* Container status icons */}
-                  {item.cans_returned === 1 && ( // Can Returned
-                    <FontAwesome5 name="wine-bottle" size={16} color="#10B981" />
-                  )}
-                  {item.cans_returned === 2 && ( // Can Damaged
-                    <MaterialCommunityIcons name="alert-circle-outline" size={20} color="#F59E0B" />
-                  )}
-                  {item.cans_returned === 0 && ( // Can Not Returned
-                    <MaterialIcons name="error-outline" size={20} color="#EF4444" />
-                  )}
+                  <DailyMilkCanStatusBadge value={item.cans_returned} />
                 </View>
               )}
             </View>

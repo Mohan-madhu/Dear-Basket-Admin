@@ -18,6 +18,9 @@ import { createLogger } from '../../App_Utils/Utils/logger';
 import Storage from '../../App_Utils/Services/StorageService';
 import OrderCard from '../Components_New/OrdersCard';
 import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
+import { exportOrdersToPdf } from '../../App_Utils/Reports/orderReportPdf';
+import { matchesCustomerPhone } from '../../App_Utils/Utils/orderSearch';
+import { formatCustomerOrderId } from '../../App_Utils/Utils/orderDisplayId';
 
 const DATE_FILTERS = [
   { key: 'today', label: 'Today' },
@@ -28,7 +31,23 @@ const DATE_FILTERS = [
   { key: 'all', label: 'All' },
 ];
 
+const ORDER_TYPE_FILTERS = [
+  { key: 'all', label: 'All Types', code: null },
+  { key: 'milk', label: 'Daily Milk', code: 3 },
+  { key: 'kitchen', label: 'Kitchen Order', code: 4 },
+  { key: 'daily_grocery', label: 'Daily Milk Grocery', code: 1 },
+  { key: 'fast_grocery', label: 'Fast Grocery', code: 0 },
+  { key: 'demo_milk', label: 'Demo Daily Milk', code: 2 },
+];
+
 const ORDER_PAGE_SIZE = 10;
+
+const getOrderSelectionKey = (order) => String(
+  order?.productorderid ||
+  order?.orderid ||
+  order?.transid ||
+  `${order?.userid || 'user'}-${order?.ordertime || order?.rcm || 'order'}`
+);
 
 const parseTimestamp = (value) => {
   if (!value) return 0;
@@ -138,6 +157,13 @@ const isKitchenOrder = (order) =>
   String(order?.order_type || "").toLowerCase() === "kitchen_order" ||
   String(order?.ordertype || "").toLowerCase() === "kitchen_order";
 
+const matchesOrderTypeFilter = (order, filterKey) => {
+  if (filterKey === 'all') return true;
+  if (filterKey === 'kitchen') return isKitchenOrder(order);
+  const selected = ORDER_TYPE_FILTERS.find((item) => item.key === filterKey);
+  return selected?.code !== null && getOrderTypeCode(order) === selected?.code;
+};
+
 const hasOrdersForType = (list, type) => {
   if (!Array.isArray(list) || list.length === 0) return false;
   if (type === 'fast') return list.some(isFastDeliveryOrder);
@@ -198,8 +224,12 @@ const MyOrdersScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [title, setTitle] = useState('My Orders');
   const [selectedDateFilter, setSelectedDateFilter] = useState('all');
+  const [selectedOrderTypeFilter, setSelectedOrderTypeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [visibleOrderLimit, setVisibleOrderLimit] = useState(ORDER_PAGE_SIZE);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [pdfSelectionMode, setPdfSelectionMode] = useState(false);
+  const [selectedPdfOrderIds, setSelectedPdfOrderIds] = useState(() => new Set());
   const [cacheLoaded, setCacheLoaded] = useState(false);
   const [returnOrders, setReturnOrders] = useState([]);
   const [isReturnServiceUnavailable, setIsReturnServiceUnavailable] = useState(false);
@@ -216,7 +246,7 @@ const MyOrdersScreen = () => {
   const getScreenTitle = () => {
 
    if (ordertype === 'fast') return 'Fast Delivery Orders';
-    if (ordertype === 'dailymilk') return 'Daily Milk Orders';
+    if (ordertype === 'dailymilk') return 'Daily Milk Grocery Orders';
     if (ordertype === 'kitchen') return 'Kitchen Orders';
     if (isallorders) return 'All Orders';
 
@@ -384,7 +414,8 @@ const MyOrdersScreen = () => {
 
   useEffect(() => {
     setVisibleOrderLimit(ORDER_PAGE_SIZE);
-  }, [ordertype, selectedDateFilter, searchQuery]);
+    setSelectedPdfOrderIds(new Set());
+  }, [ordertype, selectedDateFilter, selectedOrderTypeFilter, searchQuery]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -451,6 +482,10 @@ const MyOrdersScreen = () => {
       filtered = filtered.filter(isKitchenOrder);
     }
 
+    if (isallorders) {
+      filtered = filtered.filter((item) => matchesOrderTypeFilter(item, selectedOrderTypeFilter));
+    }
+
     filtered = applyDateFilter(filtered, selectedDateFilter);
 
     if (query) {
@@ -464,13 +499,14 @@ const MyOrdersScreen = () => {
           orderId.includes(query) ||
           status.includes(query) ||
           customer.includes(query) ||
-          product.includes(query)
+          product.includes(query) ||
+          matchesCustomerPhone(item, query)
         );
       });
     }
 
     return [...filtered].sort((a, b) => getOrderTimestamp(b) - getOrderTimestamp(a));
-  }, [orders, ordertype, searchQuery, selectedDateFilter]);
+  }, [orders, ordertype, isallorders, searchQuery, selectedDateFilter, selectedOrderTypeFilter]);
 
   const summary = useMemo(() => {
     const totalOrders = visibleOrders.length;
@@ -496,6 +532,60 @@ const MyOrdersScreen = () => {
   );
 
   const hasMoreOrders = displayedOrders.length < visibleOrders.length;
+  const selectedPdfOrders = useMemo(
+    () => visibleOrders.filter((order) => selectedPdfOrderIds.has(getOrderSelectionKey(order))),
+    [visibleOrders, selectedPdfOrderIds]
+  );
+
+  const togglePdfOrderSelection = (order) => {
+    const key = getOrderSelectionKey(order);
+    setSelectedPdfOrderIds((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const togglePdfSelectionMode = () => {
+    if (pdfSelectionMode) setSelectedPdfOrderIds(new Set());
+    setPdfSelectionMode(!pdfSelectionMode);
+  };
+
+  const selectAllFilteredOrders = () => {
+    setSelectedPdfOrderIds(new Set(visibleOrders.map(getOrderSelectionKey)));
+  };
+
+  const handleExportPdf = async () => {
+    const ordersToExport = pdfSelectionMode ? selectedPdfOrders : visibleOrders;
+    if (ordersToExport.length === 0) {
+      Alert.alert(
+        pdfSelectionMode ? 'No Orders Selected' : 'No Orders',
+        pdfSelectionMode
+          ? 'Select at least one order entry before exporting.'
+          : 'There are no filtered orders to export.'
+      );
+      return;
+    }
+
+    try {
+      setExportingPdf(true);
+      const activeFilter = DATE_FILTERS.find((item) => item.key === selectedDateFilter);
+      const activeOrderType = ORDER_TYPE_FILTERS.find((item) => item.key === selectedOrderTypeFilter);
+      await exportOrdersToPdf({
+        orders: ordersToExport,
+        title: `${title} Report`,
+        filterLabel: activeFilter?.label || 'All',
+        orderTypeLabel: activeOrderType?.label || 'All Types',
+        searchQuery: searchQuery.trim(),
+      });
+    } catch (error) {
+      log('PDF export failed:', error);
+      Alert.alert('Export Failed', 'Unable to create the PDF report. Please try again.');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   const handleLoadMoreOrders = () => {
     setVisibleOrderLimit((current) => current + ORDER_PAGE_SIZE);
@@ -534,8 +624,8 @@ const MyOrdersScreen = () => {
 
     if (ordertype === 'dailymilk') {
       return {
-        title: 'No Daily Milk Orders',
-        subtitle: 'No daily milk orders found for the selected period.',
+        title: 'No Daily Milk Grocery Orders',
+        subtitle: 'No daily milk grocery orders found for the selected period.',
       };
     }
 
@@ -607,7 +697,7 @@ const MyOrdersScreen = () => {
           <View className="flex-row items-center bg-gray-100 rounded-xl px-2.5 py-1.5 border border-gray-200">
             <Icon name="search" size={16} color="#6B7280" />
             <TextInput
-              placeholder="Search order ID, product, customer, status..."
+              placeholder="Search order ID, customer phone, product, status..."
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -650,11 +740,98 @@ const MyOrdersScreen = () => {
             })}
           </ScrollView>
 
+          {isallorders ? (
+            <View className="mt-2">
+              <Text className="text-[10px] font-bold text-gray-500 uppercase px-0.5 mb-1">
+                Order Type
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingRight: 8 }}
+              >
+                {ORDER_TYPE_FILTERS.map((item) => {
+                  const isActive = selectedOrderTypeFilter === item.key;
+                  return (
+                    <TouchableOpacity
+                      key={item.key}
+                      onPress={() => setSelectedOrderTypeFilter(item.key)}
+                      activeOpacity={0.85}
+                      className={`mr-2 px-2.5 py-1.5 rounded-lg border ${isActive
+                        ? 'bg-cyan-700 border-cyan-700'
+                        : 'bg-white border-gray-300'
+                        }`}
+                    >
+                      <Text className={`text-[10px] font-semibold ${isActive ? 'text-white' : 'text-gray-700'}`}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
+
           <View className="mt-1.5 px-0.5">
             <Text className="text-[11px] text-gray-600">
               {summary.totalOrders} orders • {summary.totalLitres} L • ₹{summary.totalAmount}
             </Text>
           </View>
+
+          {isallorders ? (
+            <View className="mt-2">
+              <TouchableOpacity
+                onPress={togglePdfSelectionMode}
+                activeOpacity={0.85}
+                className={`min-h-10 rounded-xl px-3 flex-row items-center justify-center border ${pdfSelectionMode
+                  ? 'bg-blue-50 border-blue-300'
+                  : 'bg-white border-gray-300'
+                  }`}
+              >
+                <Icon name={pdfSelectionMode ? 'check-box' : 'check-box-outline-blank'} size={18} color={pdfSelectionMode ? '#2563EB' : '#6B7280'} />
+                <Text className={`text-xs font-bold ml-2 ${pdfSelectionMode ? 'text-blue-700' : 'text-gray-700'}`}>
+                  {pdfSelectionMode ? 'Selecting PDF Entries' : 'Select Specific Entries'}
+                </Text>
+              </TouchableOpacity>
+
+              {pdfSelectionMode ? (
+                <View className="flex-row items-center justify-between mt-2">
+                  <Text className="text-[11px] font-semibold text-gray-600">
+                    {selectedPdfOrders.length} of {visibleOrders.length} selected
+                  </Text>
+                  <View className="flex-row">
+                    <TouchableOpacity onPress={selectAllFilteredOrders} className="px-2 py-1">
+                      <Text className="text-[11px] font-bold text-blue-700">Select All</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setSelectedPdfOrderIds(new Set())} className="px-2 py-1 ml-1">
+                      <Text className="text-[11px] font-bold text-gray-600">Clear</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : null}
+
+              <TouchableOpacity
+                onPress={handleExportPdf}
+                disabled={exportingPdf || visibleOrders.length === 0 || (pdfSelectionMode && selectedPdfOrders.length === 0)}
+                activeOpacity={0.85}
+                className={`mt-2 min-h-11 rounded-xl px-3 flex-row items-center justify-center border ${exportingPdf || visibleOrders.length === 0 || (pdfSelectionMode && selectedPdfOrders.length === 0)
+                  ? 'bg-gray-100 border-gray-200'
+                  : 'bg-red-50 border-red-200'
+                  }`}
+              >
+                {exportingPdf ? (
+                  <ActivityIndicator size="small" color="#DC2626" />
+                ) : (
+                  <Icon name="picture-as-pdf" size={18} color={visibleOrders.length === 0 ? '#9CA3AF' : '#DC2626'} />
+                )}
+                <Text className={`text-xs font-bold ml-2 ${visibleOrders.length === 0 ? 'text-gray-400' : 'text-red-700'}`}>
+                  {exportingPdf
+                    ? 'Creating PDF...'
+                    : `Export PDF (${pdfSelectionMode ? selectedPdfOrders.length : visibleOrders.length})`}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </Animated.View>
       </View>
 
@@ -759,6 +936,25 @@ const MyOrdersScreen = () => {
                 entering={FadeIn.delay(index * 60)}
                 className="mb-2"
               >
+                {isallorders && pdfSelectionMode ? (
+                  <TouchableOpacity
+                    onPress={() => togglePdfOrderSelection(order)}
+                    activeOpacity={0.85}
+                    className={`mb-1.5 min-h-10 px-3 rounded-xl border flex-row items-center ${selectedPdfOrderIds.has(getOrderSelectionKey(order))
+                      ? 'bg-blue-50 border-blue-300'
+                      : 'bg-white border-gray-300'
+                      }`}
+                  >
+                    <Icon
+                      name={selectedPdfOrderIds.has(getOrderSelectionKey(order)) ? 'check-box' : 'check-box-outline-blank'}
+                      size={20}
+                      color={selectedPdfOrderIds.has(getOrderSelectionKey(order)) ? '#2563EB' : '#6B7280'}
+                    />
+                    <Text className={`text-xs font-bold ml-2 ${selectedPdfOrderIds.has(getOrderSelectionKey(order)) ? 'text-blue-700' : 'text-gray-700'}`} numberOfLines={1}>
+                      {formatCustomerOrderId(order, { emptyValue: 'Select this order' })}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
                 <OrderCard
                   order={order}
                   onOrderUpdate={handleOrderUpdate}

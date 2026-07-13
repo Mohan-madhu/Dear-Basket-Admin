@@ -376,6 +376,7 @@ const AdminDashboardScreen = () => {
   const userManagementCards = [
     { id: 101, title: 'Add New User', gradient: gradientPairs[0], screen: 'NewUser', icon: 'account-plus' },
     { id: 102, title: 'Manage Users', gradient: gradientPairs[1], screen: 'ManageUsersScreen', icon: 'account-group' },
+    { id: 107, title: 'Partner Applications', gradient: ['#2563eb', '#1d4ed8'], screen: 'PartnerApplicationApproval', icon: 'account-check-outline' },
     { id: 103, title: 'User-Partner Mapping', gradient: gradientPairs[2], screen: 'PartnerUserMappingScreen', icon: 'account-switch' },
     { id: 104, title: 'View Mappings', gradient: gradientPairs[3], screen: 'ViewPartnerUserMappingScreen', icon: 'link' },
     { id: 105, title: 'View Partner Orders', gradient: gradientPairs[4], screen: 'ViewPartnerOrderScreen', icon: 'cart-outline' },
@@ -393,11 +394,12 @@ const AdminDashboardScreen = () => {
     { id: 208, title: 'Daily Milk Accounts', gradient: gradientPairs[13], screen: 'DailyMilk_AccountsManage', icon: 'tag' },
     { id: 209, title: 'Daily Milk Active Bookings', gradient: gradientPairs[14], screen: 'DailyMilkActiveBookingScreen', icon: 'tag' },
     { id: 210, title: 'Manage Milk Products', gradient: gradientPairs[15], screen: 'DailyMilkProductsManageScreen', icon: 'bottle-tonic-plus' },
+    { id: 211, title: 'Milk Complaints', gradient: ['#0891b2', '#164e63'], screen: 'DailyMilkComplaintAdminInbox', icon: 'message-text-outline' },
   ];
 
   const deliveryOrdersCards = [
     { id: 301, title: 'Fast Delivery Orders', gradient: gradientPairs[15], screen: 'MyOrdersScreen_FAST', icon: 'truck-fast' },
-    { id: 302, title: 'Daily Milk Orders', gradient: gradientPairs[16], screen: 'MyOrdersScreen_DAILYMILK', icon: 'clipboard-list' },
+    { id: 302, title: 'Daily Milk Grocery Orders', gradient: gradientPairs[16], screen: 'MyOrdersScreen_DAILYMILK', icon: 'clipboard-list' },
     { id: 308, title: 'Kitchen Orders', gradient: ['#f472b6', '#db2777'], screen: 'MyOrdersScreen_KITCHEN', icon: 'silverware-fork-knife' },
     { id: 303, title: 'All Orders', gradient: gradientPairs[17], screen: 'MyOrdersScreen', icon: 'truck-check-outline' },
     { id: 304, title: 'Order Analytics', gradient: gradientPairs[18], screen: 'GroceryOrdersDashboard', icon: 'chart-bar' },

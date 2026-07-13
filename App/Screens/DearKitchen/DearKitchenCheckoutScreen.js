@@ -15,7 +15,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import * as Location from "expo-location";
-import { DearKitchenAPI } from "../../../App_Utils/Services/APIService";
+import { DearKitchenAPI, getUserFacingErrorMessage } from "../../../App_Utils/Services/APIService";
 import Storage from "../../../App_Utils/Services/StorageService";
 import { useLoading } from "../../../App_Utils/Contexts/LoadingContext";
 import { clearCartBySource, decrementQuantity, incrementQuantity, removeFromCart } from "../../Redux/CartReducer";
@@ -312,7 +312,12 @@ export default function DearKitchenCheckoutScreen() {
       userData,
       kitchenId,
       slotId: selectedSlot?.slotid || null,
+      slotName: selectedSlot?.slotname || selectedSlot?.name || selectedSlot?.slottime || null,
+      slotTime: selectedSlot?.slottime || selectedSlot?.slotTime || null,
+      slotStartTime: selectedSlot?.starttime || selectedSlot?.startTime || selectedSlot?.fromtime || null,
+      slotEndTime: selectedSlot?.endtime || selectedSlot?.endTime || selectedSlot?.totime || null,
       mealTypeId: selectedMealType?.mealtypeid || null,
+      mealTypeName: selectedMealType?.mealtypename || selectedMealType?.name || null,
       deliveryDate,
       address,
       city,
@@ -362,7 +367,7 @@ export default function DearKitchenCheckoutScreen() {
       ]);
     } catch (error) {
       console.error("Dear Kitchen checkout error:", error);
-      Alert.alert("Checkout", error?.message || "Failed to place order.");
+      Alert.alert("Checkout", getUserFacingErrorMessage(error, "Failed to place order."));
     } finally {
       setPlacingOrder(false);
       setGlobalLoading(false);

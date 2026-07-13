@@ -6,7 +6,7 @@ import { Image } from "expo-image";
 import AddVariantCard from './AddVariantCard';
 import ZoomableImage from './ZoomableImage';
 import { useLoading } from '../../App_Utils/Contexts/LoadingContext';
-import { API } from '../../App_Utils/Services/APIService';
+import { API, getUserFacingErrorMessage } from '../../App_Utils/Services/APIService';
 import Storage from '../../App_Utils/Services/StorageService';
 import * as DocumentPicker from 'expo-document-picker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -189,7 +189,7 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
             // TODO: You might want to refresh the product data here to show the new image
             // This would depend on your state management approach
         } catch (error) {
-            Alert.alert("Error", error.message || "Failed to upload image");
+            Alert.alert("Error", getUserFacingErrorMessage(error, "Failed to upload image"));
         } finally {
             setLoading(false);
         }

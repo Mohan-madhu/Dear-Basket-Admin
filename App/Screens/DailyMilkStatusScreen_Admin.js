@@ -6,6 +6,7 @@ import {
   Modal,
   FlatList,
   ScrollView,
+  RefreshControl,
   TextInput,
   Alert,
 } from "react-native";
@@ -206,6 +207,7 @@ export default function DailyMilkStatusScreen({ route, navigation }) {
   const [finalExtraEntries, setFinalExtraEntries] = useState([]);
   const [bookingStatusTable, setBookingStatusTable] = useState();
   const [upd, setupd] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     // Set screen title based on data
@@ -217,13 +219,13 @@ export default function DailyMilkStatusScreen({ route, navigation }) {
     GetBookingStatus();
   }, [BookingData, upd]);
 
-  const GetBookingStatus = async () => {
+  const GetBookingStatus = async ({ showGlobalLoading = true } = {}) => {
     // if (!BookingData || BookingData.length === 0) {
     //   Alert.alert("Error", "No booking data provided");
     //   return;
     // }
 
-    setLoading(true, "Fetching Booking Status");
+      if (showGlobalLoading) setLoading(true, "Fetching Booking Status");
     try {
 
       console.warn("Fetching booking status for ID:", DailyMilkBookingID);
@@ -265,13 +267,19 @@ export default function DailyMilkStatusScreen({ route, navigation }) {
       setSelectedCancelDates(CancelledDatesSet);
       setFinalExtraEntries(ExtraMilkEntries);
     } catch (err) {
-      setLoading(false);
       console.error("Error fetching booking status:", err);
       Alert.alert("Error", "Failed to fetch booking status");
     } finally {
-      setLoading(false);
+      if (showGlobalLoading) setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  const refreshBookingStatus = React.useCallback(() => {
+    if (!DailyMilkBookingID || refreshing) return;
+    setRefreshing(true);
+    GetBookingStatus({ showGlobalLoading: false });
+  }, [DailyMilkBookingID, refreshing]);
 
   // Memoize the calendar to prevent unnecessary re-renders
   const memoizedCalendar = useMemo(() => {
@@ -298,7 +306,19 @@ export default function DailyMilkStatusScreen({ route, navigation }) {
   }, [navigation]);
 
   return (
-    <ScrollView className="flex-1 px-4 pt-2 w-full bg-gray-900">
+    <ScrollView
+      className="flex-1 px-4 pt-2 w-full bg-gray-900"
+      alwaysBounceVertical
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={refreshBookingStatus}
+          tintColor="#22d3ee"
+          colors={["#22d3ee"]}
+          progressBackgroundColor="#1e293b"
+        />
+      }
+    >
       {/* ─── Header ─── */}
       <Text className="text-xl font-semibold mb-4 text-center text-white">
         Daily Milk Order Status - {BookingData[0]?.name}

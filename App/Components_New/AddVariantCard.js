@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useLoading } from '../../App_Utils/Contexts/LoadingContext';
-import { API } from '../../App_Utils/Services/APIService';
+import { API, getUserFacingErrorMessage } from '../../App_Utils/Services/APIService';
 import { useNavigation } from '@react-navigation/native';
 import Storage from '../../App_Utils/Services/StorageService';
 import * as DocumentPicker from 'expo-document-picker';
@@ -265,7 +265,7 @@ const AddVariantCard = ({ productData, editProductData }) => {
         Alert.alert('Error', message);
       }
     } catch (err) {
-      Alert.alert('Error', err?.message || 'Failed to add new variant');
+      Alert.alert('Error', getUserFacingErrorMessage(err, 'Failed to add new variant'));
     } finally {
       setLoading(false);
     }

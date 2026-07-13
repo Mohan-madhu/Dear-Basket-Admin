@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialIcons";
-import { DearKitchenAPI } from "../../App_Utils/Services/APIService";
+import { DearKitchenAPI, getUserFacingErrorMessage } from "../../App_Utils/Services/APIService";
 import Storage from "../../App_Utils/Services/StorageService";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import Toaster from "../../App_Utils/Services/ToastService";
@@ -173,7 +173,7 @@ const ManageKitchenPartnersScreen = () => {
       await fetchKitchens(false, true);
     } catch (error) {
       console.error("ManageKitchenPartners update error:", error);
-      Alert.alert("Error", error?.message || "Failed to update kitchen.");
+      Alert.alert("Error", getUserFacingErrorMessage(error, "Failed to update kitchen."));
     } finally {
       setLoading(false);
     }

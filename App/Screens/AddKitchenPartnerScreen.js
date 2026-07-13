@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialIcons";
-import { API, DearKitchenAPI } from "../../App_Utils/Services/APIService";
+import { API, DearKitchenAPI, getUserFacingErrorMessage } from "../../App_Utils/Services/APIService";
 import Storage from "../../App_Utils/Services/StorageService";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import Toaster from "../../App_Utils/Services/ToastService";
@@ -227,7 +227,7 @@ const AddKitchenPartnerScreen = () => {
       navigation.goBack();
     } catch (error) {
       console.error("AddKitchenPartner error:", error);
-      Alert.alert("Error", error?.message || "Failed to create kitchen partner.");
+      Alert.alert("Error", getUserFacingErrorMessage(error, "Failed to create kitchen partner."));
     } finally {
       submittingRef.current = false;
       setLoading(false);

@@ -13,7 +13,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
-import { API } from "../../App_Utils/Services/APIService";
+import { API, getUserFacingErrorMessage } from "../../App_Utils/Services/APIService";
 import Storage from "../../App_Utils/Services/StorageService";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 
@@ -249,7 +249,7 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
       }
       Alert.alert("Success", `${label} successful.`);
     } catch (error) {
-      Alert.alert("Error", error?.message || `Failed to ${label.toLowerCase()}.`);
+      Alert.alert("Error", getUserFacingErrorMessage(error, `Failed to ${label.toLowerCase()}.`));
     } finally {
       setActionLoading(false);
       loadingRef.current?.(false);

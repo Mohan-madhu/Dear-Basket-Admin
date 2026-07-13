@@ -61,6 +61,9 @@ import ManageKitchenPartnersScreen from "../App/Screens/ManageKitchenPartnersScr
 import EditKitchenScreen from "../App/Screens/EditKitchenScreen";
 import DearKitchenDetailScreen from "../App/Screens/DearKitchen/DearKitchenDetailScreen";
 import DearKitchenCheckoutScreen from "../App/Screens/DearKitchen/DearKitchenCheckoutScreen";
+import DailyMilkComplaintChatScreen from "../App/Screens/DailyMilkComplaint/DailyMilkComplaintChatScreen";
+import DailyMilkComplaintAdminInboxScreen from "../App/Screens/DailyMilkComplaint/DailyMilkComplaintAdminInboxScreen";
+import PartnerApplicationApprovalScreen from "../App/Screens/PartnerApplicationApprovalScreen";
 
 const StackNavigator = () => {
   const Stack = createNativeStackNavigator();
@@ -114,6 +117,7 @@ const StackNavigator = () => {
       />
 
       <Stack.Screen name="ManageUsersScreen" component={ManageUsersScreen} />
+      <Stack.Screen name="PartnerApplicationApproval" component={PartnerApplicationApprovalScreen} />
       <Stack.Screen
         name="PartnerUserMappingScreen"
         component={PartnerUserMappingScreen}
@@ -306,6 +310,18 @@ const StackNavigator = () => {
         name="DearKitchenCheckoutScreen"
         component={DearKitchenCheckoutScreen}
         options={{ title: 'Dear Kitchen Checkout' }}
+      />
+
+      <Stack.Screen
+        name="DailyMilkComplaintChat"
+        component={DailyMilkComplaintChatScreen}
+        options={{ title: 'Daily Milk Complaint' }}
+      />
+
+      <Stack.Screen
+        name="DailyMilkComplaintAdminInbox"
+        component={DailyMilkComplaintAdminInboxScreen}
+        options={{ title: 'Daily Milk Complaints' }}
       />
 
     </Stack.Navigator>

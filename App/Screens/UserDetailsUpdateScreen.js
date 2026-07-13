@@ -10,7 +10,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import Storage from "../../App_Utils/Services/StorageService";
-import { API } from "../../App_Utils/Services/APIService";
+import { API, getUserFacingErrorMessage } from "../../App_Utils/Services/APIService";
 import Toaster from "../../App_Utils/Services/ToastService";
 import LocationService from "../../App_Utils/Services/LocationService";
 
@@ -109,7 +109,7 @@ export default function UserDetailsUpdateScreen({ navigation }) {
       });
     } catch (error) {
       console.error("Fetch user details error:", error);
-      Alert.alert("Error", error?.message || "Failed to fetch user details");
+      Alert.alert("Error", getUserFacingErrorMessage(error, "Failed to fetch user details"));
     } finally {
       setLoading(false);
     }
@@ -186,7 +186,7 @@ export default function UserDetailsUpdateScreen({ navigation }) {
       Alert.alert("Success", "Your details were updated successfully.");
     } catch (error) {
       console.error("Update user details error:", error);
-      Alert.alert("Error", error?.message || "Failed to update user details");
+      Alert.alert("Error", getUserFacingErrorMessage(error, "Failed to update user details"));
     } finally {
       setLoading(false);
     }

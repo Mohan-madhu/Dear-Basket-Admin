@@ -18,10 +18,11 @@ import { useLoading } from '../../App_Utils/Contexts/LoadingContext';
 import Storage from '../../App_Utils/Services/StorageService';
 import OrderCard from '../Components_New/OrdersCard';
 import PartnerFastDeliveryPayoutAnalytics from './PartnerFastDeliveryPayoutAnalytics';
+import { matchesCustomerPhone } from '../../App_Utils/Utils/orderSearch';
 
 const log = createLogger('PartnerLanding');
 
-const TYPE_OPTIONS = ['Daily Milk', 'Fast Grocery Delivery', 'Demo Daily Milk', 'Milk', 'Kitchen Order'];
+const TYPE_OPTIONS = ['Daily Milk Grocery', 'Fast Grocery Delivery', 'Demo Daily Milk', 'Milk', 'Kitchen Order'];
 const STATUS_OPTIONS = ['All', 'Order Placed', 'Confirmed', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'];
 
 const getISTMinutes = () => {
@@ -36,7 +37,7 @@ const inRange = (minutes, start, end) => minutes >= start && minutes < end;
 const getOrderType = (order) => {
    switch (Number(order?.isdailymilkuser)) {
     case 1:
-      return 'Daily Milk';
+      return 'Daily Milk Grocery';
     case 0:
       return 'Fast Grocery Delivery';
     case 2:
@@ -320,9 +321,8 @@ const PartnerLanding = () => {
       list = list.filter((o) => {
         const orderId = String(o?.productorderid || '').toLowerCase();
         const name = String(o?.name || '').toLowerCase();
-        const mobile = String(o?.user_mobile || '').toLowerCase();
         const address = String(o?.deliveryaddress || '').toLowerCase();
-        return orderId.includes(q) || name.includes(q) || mobile.includes(q) || address.includes(q);
+        return orderId.includes(q) || name.includes(q) || matchesCustomerPhone(o, q) || address.includes(q);
       });
     }
 

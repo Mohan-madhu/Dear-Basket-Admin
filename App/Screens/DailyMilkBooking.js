@@ -12,7 +12,7 @@ import {
 } from "react-native";
 
 import DailyMilkStatus from "../Components/DailyMilkStatus";
-import { API } from "../../App_Utils/Services/APIService";
+import { API, getUserFacingErrorMessage } from "../../App_Utils/Services/APIService";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 
 import "react-native-get-random-values";
@@ -600,7 +600,7 @@ const DailyMilkBookingScreen = ({
         log(error.message, "ERROR");
         Alert.alert(
           "ERROR",
-          error.message
+          getUserFacingErrorMessage(error)
         );
       } finally {
         setLoading(false);
@@ -752,11 +752,11 @@ const DailyMilkBookingScreen = ({
   return (
     <View style={{ flex: 1 }}>
       {isBooked ? (
-        <View className="flex-1 px-4 py-1">
+        <View className="flex-1 bg-gray-950">
           {UserStatus === 2 ? (
-            <View className="flex-1 bg-gray-800">
+            <View className="flex-1 bg-gray-950">
               {userBookingStatus === -1 ? (
-                <View className="flex-1 bg-gray-800 items-center justify-center">
+                <View className="flex-1 bg-gray-950 items-center justify-center px-4">
                   <Text className="text-white text-lg text-center">
                     Your booking has not started yet.
                   </Text>
@@ -765,7 +765,7 @@ const DailyMilkBookingScreen = ({
                   </Text>
                 </View>
               ) : userBookingStatus === 1 ? (
-                <View className="flex-1 bg-gray-800 items-center justify-center">
+                <View className="flex-1 bg-gray-950">
                   {/* <Text className="text-white text-lg text-center">
                     Your booking is currently active.
                   </Text>
@@ -780,7 +780,7 @@ const DailyMilkBookingScreen = ({
 
                 </View>
               ) : userBookingStatus === 2 ? (
-                <View className="flex-1 bg-gray-800 w-full">
+                <View className="flex-1 bg-gray-950 w-full">
                   {showBookingUI ? (
                     <View className="flex-1 w-full">
                       <DailyMilkRenewalBooking UserBooked={effectiveBookingData} />
@@ -806,13 +806,13 @@ const DailyMilkBookingScreen = ({
               )}
             </View>
           ) : UserStatus === 1 ? (
-            <View className="flex-1 bg-gray-800 items-center justify-center">
+            <View className="flex-1 bg-gray-950 items-center justify-center px-4">
               <Text className="text-white text-lg text-center">
                 Your registration is waiting for approval by the admin.
               </Text>
             </View>
           ) : UserStatus === 3 ? (
-            <View className="flex-1 bg-gray-800 items-center justify-center">
+            <View className="flex-1 bg-gray-950 items-center justify-center px-4">
               <Text className="text-white text-lg text-center">
                 Your registration has been rejected by the admin.
               </Text>

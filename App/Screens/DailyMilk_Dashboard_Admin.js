@@ -8,6 +8,7 @@ import Animated, {
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import { API } from "../../App_Utils/Services/APIService";
+import { isDailyMilkCancelled } from "../../App_Utils/Utils/dailyMilkCancellation";
 
 /* ----------------------------- HELPERS ----------------------------- */
 
@@ -41,7 +42,7 @@ const getPregnancyQty = (row) => toNumber(row?.pregnancy_quantity);
 const getCancelledQty = (row) => toNumber(row?.cancelled_quantity);
 const getTotalQty = (row) => {
   const total = toNumber(row?.total_quantity);
-  if (total > 0 || getCancelledQty(row) > 0 || Number(row?.cancelled) === 1) {
+  if (total > 0 || getCancelledQty(row) > 0 || isDailyMilkCancelled(row?.cancelled)) {
     return total;
   }
   return getRegularQty(row) + getExtraQty(row) + getPregnancyQty(row);
@@ -67,7 +68,7 @@ const getAmountByFilter = (row, filterType) => {
   return getUnitPrice(row) * getQtyByFilter(row, filterType);
 };
 
-const isCancelledRow = (row) => Number(row?.cancelled) === 1 || getCancelledQty(row) > 0;
+const isCancelledRow = (row) => isDailyMilkCancelled(row?.cancelled) || getCancelledQty(row) > 0;
 const hasExtraQty = (row) => getExtraQty(row) > 0;
 const hasPregnancyQty = (row) => getPregnancyQty(row) > 0;
 const hasRegularQty = (row) => getRegularQty(row) > 0;

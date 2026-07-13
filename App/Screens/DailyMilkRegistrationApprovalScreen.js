@@ -9,7 +9,7 @@ import {
   Platform,
 } from "react-native";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
-import { API } from "../../App_Utils/Services/APIService";
+import { API, getUserFacingErrorMessage } from "../../App_Utils/Services/APIService";
 import Animated, { FadeIn, FadeOut, Layout } from "react-native-reanimated";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialIcons";
@@ -70,8 +70,8 @@ const DailyMilkRegistrationApprovalScreen = () => {
       );
 
     } catch (err) {
-      Alert.alert("Error", err?.message || "Failed to update status");
-      console.error(err);
+      Alert.alert("Error", getUserFacingErrorMessage(err, "Failed to update status"));
+      console.log("Daily Milk registration status update failed:", err?.message || err);
     } finally {
       setLoading(false);
     }

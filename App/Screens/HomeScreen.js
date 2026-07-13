@@ -32,7 +32,7 @@ import throttle from "lodash.throttle";
 
 import AdminDashboard from "../Screens/AdminDashboard";
 import MenuViewScreen from "../Screens/MenuViewScreen";
-import { API } from "../../App_Utils/Services/APIService";
+import { API, getUserFacingErrorMessage } from "../../App_Utils/Services/APIService";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import Storage from "../../App_Utils/Services/StorageService";
 import { useSelector } from "react-redux";
@@ -83,7 +83,7 @@ const showError = (error, customMessage = "An error occurred") => {
   console.error(customMessage, error);
   Alert.alert(
     "Error",
-    typeof error === "string" ? error : error.message || customMessage,
+    getUserFacingErrorMessage(error, customMessage),
     [{ text: "OK" }]
   );
 };

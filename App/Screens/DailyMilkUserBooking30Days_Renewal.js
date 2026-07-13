@@ -291,17 +291,23 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
             }
 
             const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const startdate = new Date(dateString);
-            const enddate = new Date(startdate);
-            enddate.setDate(startdate.getDate() + 29);
+            const startdate = new Date(Number(year), Number(month) - 1, Number(day));
+            const enddate = new Date(Number(year), Number(month), 0);
 
             if (isNaN(startdate.getTime()) || isNaN(enddate.getTime())) {
                 Alert.alert("Error", "Invalid booking date selected.");
                 return;
             }
 
+            if (startdate > enddate) {
+                Alert.alert("Error", "The renewal start date must be within the selected month.");
+                return;
+            }
+
             const BookingID = uuidv4();
-            const totalAmount = qty * currentProd.price * 30;
+            const bookingDays = Math.floor((enddate - startdate) / (24 * 60 * 60 * 1000)) + 1;
+            const totalAmount = qty * currentProd.price * bookingDays;
+            const endDateString = `${enddate.getFullYear()}-${String(enddate.getMonth() + 1).padStart(2, '0')}-${String(enddate.getDate()).padStart(2, '0')}`;
 
             setLoading(true, "Confirming Booking...");
 
@@ -318,8 +324,8 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
                 quantity: qty,
                 totalamount: parseFloat(totalAmount.toFixed(2)),
                 deliverytype: timeSlot,
-                bookingstartdate: new Date(dateString).toISOString(),
-                bookingenddate: enddate.toISOString(),
+                bookingstartdate: dateString,
+                bookingenddate: endDateString,
                 rcu: USER,
                 renewal: 1,
                 status: 1,

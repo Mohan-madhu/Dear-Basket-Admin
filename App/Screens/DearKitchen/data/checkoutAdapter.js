@@ -42,7 +42,12 @@ export const buildDearKitchenOrderPayload = ({
   userData,
   kitchenId,
   slotId,
+  slotName,
+  slotTime,
+  slotStartTime,
+  slotEndTime,
   mealTypeId,
+  mealTypeName,
   deliveryDate,
   address,
   city,
@@ -54,7 +59,20 @@ export const buildDearKitchenOrderPayload = ({
   cart,
 }) => {
   const totals = getDearKitchenOrderTotals(cart);
-  const items = getDearKitchenCartItems(cart);
+  const orderSlotSnapshot = {
+    slotid: slotId || null,
+    slotname: normalizeText(slotName) || null,
+    slottime: normalizeText(slotTime || slotName) || null,
+    slotstarttime: normalizeText(slotStartTime) || null,
+    slotendtime: normalizeText(slotEndTime) || null,
+    mealtypeid: mealTypeId || null,
+    mealtypename: normalizeText(mealTypeName) || null,
+    deliverydate: deliveryDate || null,
+  };
+  const items = getDearKitchenCartItems(cart).map((item) => ({
+    ...item,
+    ...orderSlotSnapshot,
+  }));
   const nowName = normalizeText(userData?.name || userData?.username || "Dear Kitchen User");
 
   return {

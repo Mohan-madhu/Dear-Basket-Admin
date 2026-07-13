@@ -16,7 +16,7 @@ import { useNavigation } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { getImageUrl } from "../../config";
-import { API } from "../../App_Utils/Services/APIService";
+import { API, getUserFacingErrorMessage } from "../../App_Utils/Services/APIService";
 import Storage from "../../App_Utils/Services/StorageService";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import Toaster from "../../App_Utils/Services/ToastService";
@@ -290,7 +290,7 @@ const DailyMilkProductsManageScreen = () => {
       console.error("DailyMilkProducts save error:", error);
       Alert.alert(
         "Save Failed",
-        error?.message || "Could not save the daily milk product."
+        getUserFacingErrorMessage(error, "Could not save the daily milk product.")
       );
     } finally {
       isSavingRef.current = false;

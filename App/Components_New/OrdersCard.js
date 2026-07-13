@@ -17,8 +17,11 @@ import { Image } from 'expo-image';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { createLogger } from '../../App_Utils/Utils/logger';
 import { useLoading } from '../../App_Utils/Contexts/LoadingContext';
-import { API } from '../../App_Utils/Services/APIService';
+import { API, getUserFacingErrorMessage } from '../../App_Utils/Services/APIService';
 import Storage from '../../App_Utils/Services/StorageService';
+import { getDailyMilkCancellationReason, isDailyMilkCancelled } from '../../App_Utils/Utils/dailyMilkCancellation';
+import DailyMilkCanStatusBadge from '../Components/DailyMilkCanStatusBadge';
+import { formatCustomerOrderId } from '../../App_Utils/Utils/orderDisplayId';
 
 const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCreated }) => {
   const RETURN_MODAL_BODY_MAX_HEIGHT = Dimensions.get('window').height * 0.62;
@@ -238,7 +241,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
         luu: USER,
       };
 
-      const response = await API.PUT('Orders/cancel', payload);
+      const response = await API.PUT('ProductOrder/cancel', payload);
 
       Alert.alert('Success', response.message || 'Order cancelled successfully');
       setShowCancelModal(false);
@@ -352,6 +355,9 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
           regular_quantity: regularQty,
           extra_quantity: extraQty,
           cancelled_quantity: cancelledQty,
+          cancelled: row?.cancelled,
+          received: row?.received,
+          cans_returned: row?.cans_returned,
           total_quantity: totalQty,
           imageurl: row?.imageurl || null,
         }, idx);
@@ -409,6 +415,15 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     return `${day} ${monthLabel} ${year}, ${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`;
   };
 
+  const formatDeliveryDate = (dateString) => {
+    if (!dateString) return null;
+    const match = String(dateString).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return String(dateString);
+    const [, year, month, day] = match;
+    const monthLabel = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(month) - 1];
+    return `${Number(day)} ${monthLabel} ${year}`;
+  };
+
   const getTimeDifference = (startDate, endDate) => {
     if (!startDate || !endDate) return null;
 
@@ -440,9 +455,11 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     const regular = Number(item?.regular_quantity ?? item?.quantity ?? 0) || 0;
     const extra = Number(item?.extra_quantity ?? item?.extra ?? 0) || 0;
     const cancelled = Number(item?.cancelled_quantity ?? 0) || 0;
+    const cancellationReason = getDailyMilkCancellationReason(item?.cancelled);
+    const isCancelled = isDailyMilkCancelled(item?.cancelled) || cancelled > 0;
     const totalRaw = Number(item?.total_quantity);
     const total = Number.isFinite(totalRaw) ? totalRaw : (regular + extra);
-    return { regular, extra, cancelled, total };
+    return { regular, extra, cancelled, cancellationReason, isCancelled, total };
   };
 
   const isDateWithinRange = (startDate, endDate) => {
@@ -727,12 +744,12 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
       icon: 'cow',
       label: 'Demo Milk',
     },
-    'Daily Milk': {
+    'Daily Milk Grocery': {
       bgColor: '#eff6ff',
       textColor: '#1d4ed8',
       borderColor: '#bfdbfe',
       icon: 'cup',
-      label: 'Daily Milk',
+      label: 'Daily Milk Grocery',
     },
     'Fast Grocery Delivery': {
       bgColor: '#f0fdf4',
@@ -951,7 +968,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
 
   switch (Number(order?.isdailymilkuser)) {
     case 1:
-      type = 'Daily Milk';
+      type = 'Daily Milk Grocery';
       break;
     case 0:
       type = 'Fast Grocery Delivery';
@@ -974,6 +991,31 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   const isMilkTypeOrder = [1, 2, 3].includes(Number(order?.isdailymilkuser || 0));
   const isKitchenTypeOrder =
     isKitchenOrderType(order);
+  const kitchenSnapshot = isKitchenTypeOrder
+    ? orderItems.find((item) => item?.slotid || item?.slottime || item?.slotname || item?.deliverydate) || {}
+    : {};
+  const kitchenSlotStart = order?.slotstarttime || order?.dk_slotstarttime || kitchenSnapshot?.slotstarttime;
+  const kitchenSlotEnd = order?.slotendtime || order?.dk_slotendtime || kitchenSnapshot?.slotendtime;
+  const kitchenSlotLabel =
+    order?.slottime ||
+    order?.dk_slottime ||
+    order?.slotname ||
+    kitchenSnapshot?.slottime ||
+    kitchenSnapshot?.slotname ||
+    [kitchenSlotStart, kitchenSlotEnd].filter(Boolean).join(' - ') ||
+    null;
+  const kitchenMealLabel =
+    order?.mealtypename ||
+    order?.dk_mealtypename ||
+    kitchenSnapshot?.mealtypename ||
+    orderItems.find((item) => item?.mealtypename)?.mealtypename ||
+    null;
+  const kitchenDeliveryDate = formatDeliveryDate(
+    order?.deliverydate || order?.dk_deliverydate || kitchenSnapshot?.deliverydate
+  );
+  const kitchenScheduleText = [kitchenMealLabel, kitchenDeliveryDate, kitchenSlotLabel]
+    .filter(Boolean)
+    .join(' • ');
   const pregnancyBenefitMl = Number(
     order?.milkamountml ??
     order?.pregnancy_milkamountml ??
@@ -1001,11 +1043,10 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     ? explicitOrderTotal
     : Number(itemSubtotal || 0) + Number(order?.deliverycharge || 0) + Number(order?.tax || 0);
 
-  const orderDisplayId =
-    order?.dailymilkorderid ||
-    (order?.productorderid && order.productorderid.length > 20
-      ? order.productorderid.slice(-5).toUpperCase()
-      : order?.productorderid?.toUpperCase());
+  const orderDisplayId = formatCustomerOrderId(order, {
+    prefixOtherIds: true,
+    emptyValue: '#N/A',
+  });
 
   const toggleReturnSelection = (index) => {
     setReturnSelections((prev) => ({
@@ -1166,7 +1207,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
       }
     } catch (error) {
       log('Error creating return request:', error);
-      Alert.alert('Return Failed', error?.message || 'Unable to create return request right now.');
+      Alert.alert('Return Failed', getUserFacingErrorMessage(error, 'Unable to create return request right now.'));
     } finally {
       setIsSubmittingReturn(false);
       setLoading(false);
@@ -1195,7 +1236,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
               )} */}
             </View>
 
-            <Text className="text-sm font-extrabold text-gray-900 mt-0.5">#{orderDisplayId || 'N/A'}</Text>
+            <Text className="text-sm font-extrabold text-gray-900 mt-0.5">{orderDisplayId}</Text>
 
             <View className="flex-row items-center mt-1 flex-wrap">
               <View
@@ -1247,6 +1288,17 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
           <Text className="text-[11px] text-gray-500 mt-0.5" numberOfLines={1}>
             {formatDate(order?.ordertime || order?.orderpalcedtime || order?.orderplacedtime)} • {order?.isdailymilkuser === 2 ? 'Demo' : `${totalItems} item${totalItems !== 1 ? 's' : ''}`} • {order?.isdailymilkuser === 2 ? 'Demo Order' : `₹${totalAmount}`}
           </Text>
+          {isKitchenTypeOrder && kitchenScheduleText ? (
+            <View className="flex-row items-center bg-pink-50 border border-pink-200 rounded-lg px-2.5 py-2 mt-2">
+              <Icon name="calendar-clock" size={14} color="#BE185D" />
+              <View className="flex-1 ml-2">
+                <Text className="text-[10px] font-bold text-pink-700 uppercase">Delivery Schedule</Text>
+                <Text className="text-[11px] font-semibold text-gray-800 mt-0.5" numberOfLines={2}>
+                  {kitchenScheduleText}
+                </Text>
+              </View>
+            </View>
+          ) : null}
           {pregnancyStatusActive && isMilkTypeOrder ? (
             <Text className="text-[11px] text-amber-700 mt-1 font-semibold" numberOfLines={1}>
               Complimentary +{pregnancyBenefitMl}ml pregnancy milk active
@@ -1393,12 +1445,17 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                                 </Text>
                               </View>
                             ) : null}
-                            {milkBreakdown.cancelled > 0 ? (
+                            {milkBreakdown.isCancelled ? (
                               <View className="bg-red-50 border border-red-200 px-2 py-0.5 rounded-full mr-1.5 mb-1">
                                 <Text className="text-[10px] font-semibold text-red-700">
-                                  Cancelled {milkBreakdown.cancelled}L
+                                  {milkBreakdown.cancellationReason
+                                    ? `Cancelled: ${milkBreakdown.cancellationReason}`
+                                    : `Cancelled${milkBreakdown.cancelled > 0 ? ` ${milkBreakdown.cancelled}L` : ''}`}
                                 </Text>
                               </View>
+                            ) : null}
+                            {!milkBreakdown.isCancelled && item?.received ? (
+                              <DailyMilkCanStatusBadge value={item?.cans_returned} compact />
                             ) : null}
                             {finalQtyWithPregnancy >= 0 ? (
                               <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mb-1">

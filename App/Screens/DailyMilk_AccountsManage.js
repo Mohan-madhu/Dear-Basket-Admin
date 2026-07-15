@@ -6,6 +6,7 @@ import {
   Alert,
   Linking,
   Platform,
+  ScrollView,
 } from "react-native";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import { API } from "../../App_Utils/Services/APIService";
@@ -34,6 +35,115 @@ const formatDate = (dateString) => {
 const calculateProductTotal = (price, quantity) => {
   if (price == null || quantity == null) return "N/A";
   return (Number(price) * Number(quantity)).toFixed(2);
+};
+
+const litresText = (value) => `${Number(value || 0).toFixed(2)}L`;
+
+const getProductLabel = (order) =>
+  String(order?.productname || order?.product_name || order?.daily_milk_product || "Milk").trim() || "Milk";
+
+const getProductKey = (order) =>
+  String(
+    order?.productid ||
+      order?.product_id ||
+      order?.daily_milk_product_id ||
+      getProductLabel(order)
+  )
+    .trim()
+    .toLowerCase();
+
+const buildProductFilters = (orders) => {
+  const map = new Map();
+
+  (orders || []).forEach((order) => {
+    const key = getProductKey(order);
+    if (!key) return;
+
+    const existing = map.get(key) || {
+      key,
+      label: getProductLabel(order),
+      litres: 0,
+      orders: 0,
+    };
+
+    existing.litres += Number(order?.quantity || order?.total_qty || 0);
+    existing.orders += 1;
+    map.set(key, existing);
+  });
+
+  return [
+    {
+      key: "all",
+      label: "All Products",
+      litres: (orders || []).reduce(
+        (sum, order) => sum + Number(order?.quantity || order?.total_qty || 0),
+        0
+      ),
+      orders: (orders || []).length,
+    },
+    ...Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label)),
+  ];
+};
+
+const ProductFilterBar = ({ products, selectedFilter, onChange }) => {
+  if (!products?.length) return null;
+
+  return (
+    <View className="bg-white border-b border-gray-200 py-3">
+      <View className="px-4 mb-2 flex-row items-center justify-between">
+        <Text className="text-xs font-bold text-gray-700 uppercase">
+          Product Filter
+        </Text>
+        <Text className="text-[11px] font-semibold text-gray-400">
+          {products.length - 1} products
+        </Text>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        className="px-4"
+        contentContainerStyle={{ paddingRight: 16 }}
+      >
+        {products.map((item) => {
+          const active = selectedFilter === item.key;
+
+          return (
+            <TouchableOpacity
+              key={item.key}
+              activeOpacity={0.85}
+              onPress={() => onChange(item.key)}
+              className={`mr-2 rounded-2xl border px-4 py-3 min-w-[130px] ${
+                active ? "bg-cyan-600 border-cyan-600" : "bg-gray-50 border-gray-200"
+              }`}
+            >
+              <View className="flex-row items-center mb-1">
+                <Icon
+                  name={active ? "check-circle" : "local-drink"}
+                  size={15}
+                  color={active ? "#fff" : "#0891b2"}
+                />
+                <Text
+                  numberOfLines={1}
+                  className={`ml-2 text-xs font-bold flex-1 ${
+                    active ? "text-white" : "text-gray-900"
+                  }`}
+                >
+                  {item.label}
+                </Text>
+              </View>
+              <Text
+                className={`text-[11px] font-semibold ${
+                  active ? "text-cyan-50" : "text-gray-500"
+                }`}
+              >
+                {litresText(item.litres)} • {item.orders} orders
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
 };
 
 const getPaymentStatusText = (status) => {
@@ -562,6 +672,7 @@ const PaidPaymentUsers = ({ DailyMilkAccounts, navigation }) => {
 
 const DailyMilk_AccountsManage = ({ navigation }) => {
   const [DailyMilkAccounts, setDailyMilkAccounts] = useState([]);
+  const [selectedProductFilter, setSelectedProductFilter] = useState("all");
   const { setLoading } = useLoading();
 
   const fetchDailyMilkAccounts = async () => {
@@ -569,6 +680,7 @@ const DailyMilk_AccountsManage = ({ navigation }) => {
       setLoading(true, "Fetching DailyMilk Users Accounts...");
       const res = await API.GET("DailyMilkStatus/DailyMilkAccountsDashboard");
       setDailyMilkAccounts(res.Response || []);
+      setSelectedProductFilter("all");
       console.log("Fetched DailyMilk Accounts:", res.Response);
     } catch (err) {
       Alert.alert("Error", "Failed to fetch DailyMilk users. Please try again.");
@@ -582,15 +694,31 @@ const DailyMilk_AccountsManage = ({ navigation }) => {
     fetchDailyMilkAccounts();
   }, []);
 
-  const pendingCount = DailyMilkAccounts.filter(
+  const productFilters = useMemo(
+    () => buildProductFilters(DailyMilkAccounts),
+    [DailyMilkAccounts]
+  );
+
+  useEffect(() => {
+    if (!productFilters.some((item) => item.key === selectedProductFilter)) {
+      setSelectedProductFilter("all");
+    }
+  }, [productFilters, selectedProductFilter]);
+
+  const productFilteredAccounts = useMemo(() => {
+    if (selectedProductFilter === "all") return DailyMilkAccounts;
+    return DailyMilkAccounts.filter((order) => getProductKey(order) === selectedProductFilter);
+  }, [DailyMilkAccounts, selectedProductFilter]);
+
+  const pendingCount = productFilteredAccounts.filter(
     (order) => order.payment_status === 0 || order.payment_status === null
   ).length;
 
-  const paidCount = DailyMilkAccounts.filter(
+  const paidCount = productFilteredAccounts.filter(
     (order) => order.payment_status === 1
   ).length;
 
-  const totalCount = DailyMilkAccounts.length;
+  const totalCount = productFilteredAccounts.length;
 
   return (
     <View className="flex-1 bg-white">
@@ -621,6 +749,12 @@ const DailyMilk_AccountsManage = ({ navigation }) => {
         </View>
       </View>
 
+      <ProductFilterBar
+        products={productFilters}
+        selectedFilter={selectedProductFilter}
+        onChange={setSelectedProductFilter}
+      />
+
       <Tab.Navigator
         screenOptions={{
           tabBarActiveTintColor: "#3b82f6",
@@ -650,7 +784,7 @@ const DailyMilk_AccountsManage = ({ navigation }) => {
           name="Pending"
           children={() => (
             <PendingPaymentUsers
-              DailyMilkAccounts={DailyMilkAccounts}
+              DailyMilkAccounts={productFilteredAccounts}
               navigation={navigation}
             />
           )}
@@ -691,7 +825,7 @@ const DailyMilk_AccountsManage = ({ navigation }) => {
           name="Completed"
           children={() => (
             <PaidPaymentUsers
-              DailyMilkAccounts={DailyMilkAccounts}
+              DailyMilkAccounts={productFilteredAccounts}
               navigation={navigation}
             />
           )}

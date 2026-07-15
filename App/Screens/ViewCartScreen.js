@@ -38,70 +38,23 @@ import { createLogger } from "../../App_Utils/Utils/logger";
 import { set } from "date-fns";
 import { fi, ms } from "date-fns/locale";
 import { Config } from "../../config";
+import {
+    FEATURE_KEYS,
+    getFeatureSettings,
+    isFeatureEnabled,
+} from "../../App_Utils/Services/FeatureSettingsService";
+import {
+    getDailyMilkOrderDate,
+    normalizeDeliveryType,
+    pad2,
+} from "../../App_Utils/Utils/dailyMilkDeliverySchedule";
 
 // Add these imports
 import Animated from "react-native-reanimated";
 import { addToFavorites, removeFromFavorites } from "../Redux/FavouriteReducer";
-import NowInIST from "../../App_Utils/Services/DateService";
-
-const DELIVERY_TYPE = {
-    MORNING: "Morning",
-    EVENING: "Evening",
-};
-
-const DAILY_MILK_DELIVERY_SCHEDULE = {
-    [DELIVERY_TYPE.MORNING]: {
-        startHour: 7,
-        endHour: 9,
-        cutoffHour: 6,
-    },
-    [DELIVERY_TYPE.EVENING]: {
-        startHour: 17,
-        endHour: 19,
-        cutoffHour: 16,
-    },
-};
 
 const NORMAL_DELIVERY_CHARGE = Number(Config.NORMAL_DELIVERY_CHARGE || 0);
 const NORMAL_DELIVERY_TAX_PERCENTAGE = Number(Config.NORMAL_DELIVERY_TAX_PERCENTAGE || 0);
-
-const pad2 = (value) => String(value).padStart(2, "0");
-
-const formatDateForApi = (date) => {
-    const year = date.getUTCFullYear();
-    const month = pad2(date.getUTCMonth() + 1);
-    const day = pad2(date.getUTCDate());
-    return `${year}-${month}-${day}`;
-};
-
-const formatDateKey = (date) => formatDateForApi(date).replace(/-/g, "");
-
-const normalizeDeliveryType = (deliveryType) => {
-    const normalized = String(deliveryType || "").trim().toLowerCase();
-
-    if (normalized === "evening") return DELIVERY_TYPE.EVENING;
-    return DELIVERY_TYPE.MORNING;
-};
-
-const getDailyMilkOrderDate = (deliveryType) => {
-    const normalizedDeliveryType = normalizeDeliveryType(deliveryType);
-    const schedule = DAILY_MILK_DELIVERY_SCHEDULE[normalizedDeliveryType];
-    const date = NowInIST();
-    const hour = date.getUTCHours();
-
-    if (hour >= schedule.cutoffHour) {
-        date.setUTCDate(date.getUTCDate() + 1);
-    }
-
-    return {
-        date,
-        hour,
-        orderdate: formatDateForApi(date),
-        orderDateKey: formatDateKey(date),
-        deliveryType: normalizedDeliveryType,
-        schedule,
-    };
-};
 
 const getPartnerLetter = (mappedpartnerid) => {
     if (!mappedpartnerid || typeof mappedpartnerid !== "string") return null;
@@ -204,6 +157,7 @@ const ViewCartScreen = () => {
     const [currentSection, setCurrentSection] = useState(1); // 1: Products, 2: Order Details, 3: Location
     const [deliveryOption, setDeliveryOption] = useState(1); // 1 for Fast Delivery, 2 for With Daily Milk
     const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+    const [featureSettings, setFeatureSettings] = useState(null);
     const allCart = useSelector((state) => state.cart.cart || []);
     const cart = useMemo(
         () => allCart.filter((item) => item?.source !== "dearkitchen"),
@@ -231,6 +185,29 @@ const ViewCartScreen = () => {
 
     const [userData, setUserData] = useState(null);
     const [USERTYPE, SETUSERTYPE] = useState();
+    const fastDeliveryEnabled = isFeatureEnabled(featureSettings, FEATURE_KEYS.FAST_DELIVERY);
+    const dailyMilkGroceryEnabled = isFeatureEnabled(featureSettings, FEATURE_KEYS.DAILY_MILK_GROCERY);
+    const canUseDailyMilkGrocery = isdailymilkuser && dailyMilkGroceryEnabled;
+
+    useEffect(() => {
+        let mounted = true;
+        getFeatureSettings({ fresh: true }).then((settings) => {
+            if (mounted) setFeatureSettings(settings);
+        });
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!fastDeliveryEnabled && canUseDailyMilkGrocery && deliveryOption !== 2) {
+            setDeliveryOption(2);
+            setdeliveryfee("FREE");
+        } else if (fastDeliveryEnabled && deliveryOption !== 1 && !canUseDailyMilkGrocery) {
+            setDeliveryOption(1);
+            setdeliveryfee(NORMAL_DELIVERY_CHARGE);
+        }
+    }, [canUseDailyMilkGrocery, deliveryOption, fastDeliveryEnabled]);
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -367,6 +344,14 @@ const ViewCartScreen = () => {
     const ProceeedToPay = async () => {
         if (isPlacingOrder) {
             console.log("Already placing order, ignoring duplicate click");
+            return;
+        }
+
+        if (
+            (!fastDeliveryEnabled && deliveryOption === 1) ||
+            (!canUseDailyMilkGrocery && deliveryOption === 2)
+        ) {
+            Toaster.errortop("Selected delivery option is currently unavailable.");
             return;
         }
 
@@ -677,7 +662,16 @@ const ViewCartScreen = () => {
                                 </Text>
 
                                 <View className="mb-3">
-                                        {deliveryOption === 1 ? (
+                                    {!fastDeliveryEnabled && !canUseDailyMilkGrocery ? (
+                                        <View className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                            <Text className="text-sm font-bold text-amber-800">
+                                                Delivery options are currently unavailable.
+                                            </Text>
+                                            <Text className="text-xs text-amber-700 mt-1">
+                                                Please try again later or contact support.
+                                            </Text>
+                                        </View>
+                                    ) : deliveryOption === 1 && fastDeliveryEnabled ? (
                                             <>
                                                 <TouchableOpacity
                                                     className="rounded-xl p-4 mb-3 border-2 bg-blue-50 border-blue-500"
@@ -712,7 +706,7 @@ const ViewCartScreen = () => {
                                                     </View>
                                                 </TouchableOpacity>
 
-                                                {isdailymilkuser && (
+                                                {canUseDailyMilkGrocery && (
                                                     <TouchableOpacity
                                                         className="rounded-xl px-4 py-3 border border-green-200 bg-green-50 flex-row items-center justify-between"
                                                         activeOpacity={0.88}
@@ -738,7 +732,7 @@ const ViewCartScreen = () => {
                                                     </TouchableOpacity>
                                                 )}
                                             </>
-                                        ) : (
+                                        ) : canUseDailyMilkGrocery ? (
                                             <>
                                                 <TouchableOpacity
                                                     className="rounded-xl p-4 mb-3 border-2 bg-green-50 border-green-500"
@@ -773,31 +767,33 @@ const ViewCartScreen = () => {
                                                     </View>
                                                 </TouchableOpacity>
 
-                                                <TouchableOpacity
-                                                    className="rounded-xl px-4 py-3 border border-blue-200 bg-blue-50 flex-row items-center justify-between"
-                                                    activeOpacity={0.88}
-                                                    onPress={() => {
-                                                        setDeliveryOption(1);
-                                                        setdeliveryfee(NORMAL_DELIVERY_CHARGE);
-                                                    }}
-                                                >
-                                                    <View className="flex-row items-center flex-1">
-                                                        <View className="w-9 h-9 rounded-full items-center justify-center mr-3 bg-blue-100">
-                                                            <Ionicons name="flash-outline" size={20} color="#2563eb" />
+                                                {fastDeliveryEnabled ? (
+                                                    <TouchableOpacity
+                                                        className="rounded-xl px-4 py-3 border border-blue-200 bg-blue-50 flex-row items-center justify-between"
+                                                        activeOpacity={0.88}
+                                                        onPress={() => {
+                                                            setDeliveryOption(1);
+                                                            setdeliveryfee(NORMAL_DELIVERY_CHARGE);
+                                                        }}
+                                                    >
+                                                        <View className="flex-row items-center flex-1">
+                                                            <View className="w-9 h-9 rounded-full items-center justify-center mr-3 bg-blue-100">
+                                                                <Ionicons name="flash-outline" size={20} color="#2563eb" />
+                                                            </View>
+                                                            <View className="flex-1">
+                                                                <Text className="text-sm font-bold text-gray-900">
+                                                                    Switch to Fast Delivery
+                                                                </Text>
+                                                                <Text className="text-xs text-blue-700 mt-0.5">
+                                                                    Send separately for ₹{NORMAL_DELIVERY_CHARGE}
+                                                                </Text>
+                                                            </View>
                                                         </View>
-                                                        <View className="flex-1">
-                                                            <Text className="text-sm font-bold text-gray-900">
-                                                                Switch to Fast Delivery
-                                                            </Text>
-                                                            <Text className="text-xs text-blue-700 mt-0.5">
-                                                                Send separately for ₹{NORMAL_DELIVERY_CHARGE}
-                                                            </Text>
-                                                        </View>
-                                                    </View>
-                                                    <Ionicons name="chevron-forward" size={18} color="#2563eb" />
-                                                </TouchableOpacity>
+                                                        <Ionicons name="chevron-forward" size={18} color="#2563eb" />
+                                                    </TouchableOpacity>
+                                                ) : null}
                                             </>
-                                        )}
+                                        ) : null}
                                 </View>
                             </View>
                         </View>

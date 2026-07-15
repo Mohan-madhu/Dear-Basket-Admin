@@ -29,6 +29,7 @@ const AddVariantCard = ({ productData, editProductData }) => {
   const [fileInfo, setFileInfo] = useState(null);
   const [errors, setErrors] = useState({});
   const [imageUrl, setImageUrl] = useState('');
+  const [weightUnit, setWeightUnit] = useState('kg');
 
   const [formData, setFormData] = useState({
     variantname: '',
@@ -106,8 +107,19 @@ const AddVariantCard = ({ productData, editProductData }) => {
       setImageUri(null);
       setFileInfo(null);
       setImageUrl('');
+      setWeightUnit('kg');
     }
   };
+
+  const normalizeNumericText = (value) => String(value || '').replace(/[^0-9.]/g, '');
+
+  const convertWeightToKg = (value, unit) => {
+    const parsed = parseFloat(value);
+    if (!Number.isFinite(parsed)) return value || '';
+    return unit === 'g' ? (parsed / 1000).toString() : parsed.toString();
+  };
+
+  const getWeightPlaceholder = () => (weightUnit === 'g' ? '250' : '0.25');
 
   const validateForm = () => {
     const newErrors = {};
@@ -213,7 +225,7 @@ const AddVariantCard = ({ productData, editProductData }) => {
         productid: productData.productid,
         variantname: variantData?.variantname,
         sku: variantData?.sku || 'No SKU',
-        weight: variantData?.weight,
+        weight: convertWeightToKg(variantData?.weight, weightUnit),
         dimensions: variantData?.dimensions,
         packsize: variantData?.packsize,
         baseprice: variantData?.baseprice,
@@ -259,6 +271,7 @@ const AddVariantCard = ({ productData, editProductData }) => {
           discountpercentage: '0',
           stockquantity: '0',
         });
+        setWeightUnit('kg');
         setImageUri(null);
         setImageUrl('');
       } else {
@@ -433,14 +446,43 @@ const AddVariantCard = ({ productData, editProductData }) => {
 
                     <View className="flex-row space-x-3">
                       <View className="flex-1">
-                        <Text className="text-gray-600 mb-1 font-medium">Weight (kg)</Text>
+                        <View className="flex-row items-center justify-between mb-1 mr-2">
+                          <Text className="text-gray-600 font-medium">Weight</Text>
+                          <View className="flex-row bg-gray-100 rounded-lg p-0.5">
+                            {['kg', 'g'].map((unit) => (
+                              <TouchableOpacity
+                                key={unit}
+                                activeOpacity={0.85}
+                                onPress={() => setWeightUnit(unit)}
+                                className={`px-2.5 py-1 rounded-md ${
+                                  weightUnit === unit ? 'bg-blue-600' : 'bg-transparent'
+                                }`}
+                              >
+                                <Text
+                                  className={`text-xs font-bold ${
+                                    weightUnit === unit ? 'text-white' : 'text-gray-600'
+                                  }`}
+                                >
+                                  {unit === 'kg' ? 'Kg' : 'Gram'}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
                         <TextInput
-                          placeholder="0.25"
+                          placeholder={getWeightPlaceholder()}
                           keyboardType="numeric"
                           value={formData.weight?.toString() || ''}
-                          onChangeText={(text) => handleInputChange('weight', text)}
+                          onChangeText={(text) =>
+                            handleInputChange('weight', normalizeNumericText(text))
+                          }
                           className="border border-gray-300 rounded-lg p-3 mr-2"
                         />
+                        {weightUnit === 'g' && formData.weight ? (
+                          <Text className="text-xs text-gray-500 mt-1">
+                            Will be saved as {convertWeightToKg(formData.weight, 'g')} kg
+                          </Text>
+                        ) : null}
                       </View>
                       <View className="flex-1">
                         <Text className="text-gray-600 mb-1 font-medium">Dimensions</Text>

@@ -26,6 +26,20 @@ import {
 import { addToFavorites, removeFromFavorites } from '../Redux/FavouriteReducer';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
+const formatProductWeight = (weight) => {
+    const numericWeight = Number(weight);
+    if (!Number.isFinite(numericWeight) || numericWeight <= 0) return 'N/A';
+
+    if (numericWeight < 1) {
+        const grams = numericWeight * 1000;
+        const formattedGrams = Number.isInteger(grams) ? grams : Number(grams.toFixed(2));
+        return `${formattedGrams} g`;
+    }
+
+    const formattedKg = Number.isInteger(numericWeight) ? numericWeight : Number(numericWeight.toFixed(2));
+    return `${formattedKg} kg`;
+};
+
 
 const ProductView = ({ product, variants, selectedvariantid }) => {
 
@@ -710,7 +724,7 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
                                 </View>
                                 <View className="flex-row justify-between mb-2">
                                     <Text className="text-gray-600">Weight:</Text>
-                                    <Text>{selectedVariant?.weight} kg</Text>
+                                    <Text>{formatProductWeight(selectedVariant?.weight)}</Text>
                                 </View>
                                 <View className="flex-row justify-between mb-2">
                                     <Text className="text-gray-600">Dimensions:</Text>

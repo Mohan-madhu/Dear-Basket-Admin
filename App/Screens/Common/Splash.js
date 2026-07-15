@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, Dimensions } from "react-native";
+import React, { useEffect } from "react";
+import { View, Dimensions } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Animated, {
   useSharedValue,
@@ -7,15 +7,13 @@ import Animated, {
   withRepeat,
   withTiming,
   Easing,
-  ZoomIn,
-  FadeIn,
 } from "react-native-reanimated";
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import Toaster from "../../../App_Utils/Services/ToastService";
 import Storage from "../../../App_Utils/Services/StorageService";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 
 const emojiData = [
   { emoji: "🥦", top: 20, left: 20, speed: 2000 },
@@ -63,9 +61,6 @@ function PositionedEmoji({ emoji, speed, ...position }) {
 
 export default function Splash() {
   const navigation = useNavigation();
-  const [typedText, setTypedText] = useState("");
-  const slogan = "OOur goal is your Satisfaction";
-
   const gradientOffset = useSharedValue(0);
 
 
@@ -119,21 +114,6 @@ export default function Splash() {
   //   CheckAlreadyLoggedIn();
   // }, []);
 
-
-  useEffect(() => {
-    let index = 0;
-    const typeInterval = setInterval(() => {
-      if (index < slogan.length - 1) {
-        setTypedText((prev) => prev + slogan[index]);
-        index++;
-      } else {
-        clearInterval(typeInterval);
-      }
-    }, 100);
-
-    return () => clearInterval(typeInterval);
-  }, []);
-
   useEffect(() => {
     const timer = setTimeout(() => {
       CheckAlreadyLoggedIn()
@@ -168,45 +148,12 @@ export default function Splash() {
         />
       </Animated.View>
 
-      {/* Foreground Content */}
-      <View className="flex-1 justify-center items-center">
-        {emojiData.map((item, index) => (
-          <PositionedEmoji key={index} {...item} />
-        ))}
-
-        <Animated.View entering={ZoomIn.delay(100)}>
-          <Image cachePolicy="memory-disk"
-            source={require("../../../assets/logo.jpg")}
-            className="w-48 h-48 mb-6"
-            style={{ width: 192, height: 192, marginBottom: 24 }}
-
-            contentFit="contain"
-          />
-        </Animated.View>
-
-        <Animated.Text
-          entering={FadeIn.delay(300)}
-          className="text-4xl font-extrabold text-green-600 tracking-wider"
-          style={{
-            textShadowColor: "rgba(34,197,94,0.5)",
-            textShadowOffset: { width: 0, height: 2 },
-            textShadowRadius: 8,
-          }}
-        >
-          Dear Basket
-        </Animated.Text>
-
-        <Text
-          className="text-base text-gray-700 mt-2 tracking-wide font-medium text-center"
-          style={{
-            textShadowColor: "rgba(0,0,0,0.05)",
-            textShadowOffset: { width: 0, height: 1 },
-            textShadowRadius: 3,
-          }}
-        >
-          {typedText}
-        </Text>
-      </View>
+      <Image
+        cachePolicy="memory-disk"
+        source={require("../../../assets/logo.jpg")}
+        style={{ position: "absolute", width: "100%", height: "100%" }}
+        contentFit="cover"
+      />
     </View>
   );
 }

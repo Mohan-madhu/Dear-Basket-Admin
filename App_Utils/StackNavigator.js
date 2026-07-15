@@ -64,6 +64,7 @@ import DearKitchenCheckoutScreen from "../App/Screens/DearKitchen/DearKitchenChe
 import DailyMilkComplaintChatScreen from "../App/Screens/DailyMilkComplaint/DailyMilkComplaintChatScreen";
 import DailyMilkComplaintAdminInboxScreen from "../App/Screens/DailyMilkComplaint/DailyMilkComplaintAdminInboxScreen";
 import PartnerApplicationApprovalScreen from "../App/Screens/PartnerApplicationApprovalScreen";
+import AdminFeatureSettingsScreen from "../App/Screens/AdminFeatureSettingsScreen";
 
 const StackNavigator = () => {
   const Stack = createNativeStackNavigator();
@@ -118,6 +119,7 @@ const StackNavigator = () => {
 
       <Stack.Screen name="ManageUsersScreen" component={ManageUsersScreen} />
       <Stack.Screen name="PartnerApplicationApproval" component={PartnerApplicationApprovalScreen} />
+      <Stack.Screen name="AdminFeatureSettings" component={AdminFeatureSettingsScreen} />
       <Stack.Screen
         name="PartnerUserMappingScreen"
         component={PartnerUserMappingScreen}

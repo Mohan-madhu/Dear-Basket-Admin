@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
@@ -206,7 +208,11 @@ export default function UserDetailsUpdateScreen({ navigation }) {
   };
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <KeyboardAvoidingView
+      className="flex-1 bg-gray-50"
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
+    >
       <View className="px-5 pt-5 pb-4 bg-white border-b border-gray-200">
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center">
@@ -229,8 +235,10 @@ export default function UserDetailsUpdateScreen({ navigation }) {
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ padding: 16, paddingBottom: 28 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 180 }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
         <View className="bg-white rounded-2xl border border-gray-200 p-4 mb-4">
           <Text className="text-sm text-gray-500 mb-2">User ID (Read Only)</Text>
@@ -315,6 +323,6 @@ export default function UserDetailsUpdateScreen({ navigation }) {
           <Text className="text-white text-center font-bold text-base">Update Details</Text>
         </TouchableOpacity>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }

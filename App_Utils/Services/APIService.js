@@ -12,6 +12,14 @@ const headers = {
 
 const API_CACHE_PREFIX = "api_get_cache:";
 const API_CACHE_INDEX_KEY = "api_get_cache:index";
+const MAX_CACHE_BYTES = 250 * 1024;
+const CACHE_BYPASS_PATTERNS = [
+  /ProductOrder\/pending_orders_with_dailymilk/i,
+  /ProductOrder\/all-combined/i,
+  /DailyMilkStatus\/Dashboard/i,
+  /DailyMilkStatus\/DailyMilkAccountsDashboard/i,
+  /DearKitchen\/Orders/i,
+];
 const cacheListeners = new Set();
 
 export const getUserFacingErrorMessage = (
@@ -51,6 +59,14 @@ const normalizeEndpoint = (endpoint) => String(endpoint || "").replace(/^\/+/, "
 const buildCacheKey = (baseUrl, endpoint) =>
   `${API_CACHE_PREFIX}${baseUrl}/${normalizeEndpoint(endpoint)}`;
 
+const shouldBypassGetCache = (endpoint) => {
+  const normalizedEndpoint = normalizeEndpoint(endpoint);
+  return CACHE_BYPASS_PATTERNS.some((pattern) => pattern.test(normalizedEndpoint));
+};
+
+const isStorageFullError = (error) =>
+  /SQLITE_FULL|database or disk is full|quota/i.test(String(error?.message || error || ""));
+
 const notifyCacheListeners = (event) => {
   cacheListeners.forEach((listener) => {
     try {
@@ -81,26 +97,53 @@ const rememberCacheKey = async (cacheKey) => {
     const raw = await AsyncStorage.getItem(API_CACHE_INDEX_KEY);
     const keys = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(keys) || keys.includes(cacheKey)) return;
-    await AsyncStorage.setItem(API_CACHE_INDEX_KEY, JSON.stringify([...keys, cacheKey]));
+    const nextKeys = [...keys, cacheKey].slice(-80);
+    await AsyncStorage.setItem(API_CACHE_INDEX_KEY, JSON.stringify(nextKeys));
   } catch (error) {
     console.error("API cache index error:", error);
   }
 };
 
+const forgetCacheKey = async (cacheKey) => {
+  try {
+    await AsyncStorage.removeItem(cacheKey);
+    const raw = await AsyncStorage.getItem(API_CACHE_INDEX_KEY);
+    const keys = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(keys)) return;
+    await AsyncStorage.setItem(
+      API_CACHE_INDEX_KEY,
+      JSON.stringify(keys.filter((key) => key !== cacheKey))
+    );
+  } catch (error) {
+    console.error("API cache forget error:", error);
+  }
+};
+
 const writeCachedGet = async ({ cacheKey, baseUrl, endpoint, data }) => {
   try {
+    const payload = JSON.stringify({
+      data,
+      baseUrl,
+      endpoint: normalizeEndpoint(endpoint),
+      cachedAt: new Date().toISOString(),
+    });
+
+    if (payload.length > MAX_CACHE_BYTES) {
+      return;
+    }
+
     await AsyncStorage.setItem(
       cacheKey,
-      JSON.stringify({
-        data,
-        baseUrl,
-        endpoint: normalizeEndpoint(endpoint),
-        cachedAt: new Date().toISOString(),
-      })
+      payload
     );
     await rememberCacheKey(cacheKey);
     notifyCacheListeners({ cacheKey, baseUrl, endpoint: normalizeEndpoint(endpoint), data });
   } catch (error) {
+    if (isStorageFullError(error)) {
+      await clearApiGetCache();
+      console.warn("API GET cache cleared because device cache storage was full.");
+      return;
+    }
     console.error("API cache write error:", error);
   }
 };
@@ -198,6 +241,11 @@ const apiRequest = async (endpoint, method = "GET", body = null) => {
 
 const cachedApiGetRequest = async (baseUrl, endpoint, requestFn) => {
   const normalizedEndpoint = normalizeEndpoint(endpoint);
+  if (shouldBypassGetCache(normalizedEndpoint)) {
+    await forgetCacheKey(buildCacheKey(baseUrl, normalizedEndpoint));
+    return requestFn(normalizedEndpoint);
+  }
+
   const cacheKey = buildCacheKey(baseUrl, normalizedEndpoint);
   const cached = await readCachedGet(cacheKey);
 
@@ -228,6 +276,11 @@ const cachedApiGetRequest = async (baseUrl, endpoint, requestFn) => {
 
 const freshApiGetRequest = async (baseUrl, endpoint, requestFn) => {
   const normalizedEndpoint = normalizeEndpoint(endpoint);
+  if (shouldBypassGetCache(normalizedEndpoint)) {
+    await forgetCacheKey(buildCacheKey(baseUrl, normalizedEndpoint));
+    return requestFn(normalizedEndpoint);
+  }
+
   const cacheKey = buildCacheKey(baseUrl, normalizedEndpoint);
   const fresh = await requestFn(normalizedEndpoint);
   await writeCachedGet({ cacheKey, baseUrl, endpoint: normalizedEndpoint, data: fresh });

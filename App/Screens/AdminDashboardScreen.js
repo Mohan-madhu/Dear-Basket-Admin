@@ -376,6 +376,7 @@ const AdminDashboardScreen = () => {
   const userManagementCards = [
     { id: 101, title: 'Add New User', gradient: gradientPairs[0], screen: 'NewUser', icon: 'account-plus' },
     { id: 102, title: 'Manage Users', gradient: gradientPairs[1], screen: 'ManageUsersScreen', icon: 'account-group' },
+    { id: 108, title: 'App Settings', gradient: ['#0f172a', '#334155'], screen: 'AdminFeatureSettings', icon: 'cog-outline' },
     { id: 107, title: 'Partner Applications', gradient: ['#2563eb', '#1d4ed8'], screen: 'PartnerApplicationApproval', icon: 'account-check-outline' },
     { id: 103, title: 'User-Partner Mapping', gradient: gradientPairs[2], screen: 'PartnerUserMappingScreen', icon: 'account-switch' },
     { id: 104, title: 'View Mappings', gradient: gradientPairs[3], screen: 'ViewPartnerUserMappingScreen', icon: 'link' },

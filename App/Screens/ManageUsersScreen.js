@@ -19,7 +19,13 @@ import { API, getUserFacingErrorMessage } from "../../App_Utils/Services/APIServ
 import Storage from "../../App_Utils/Services/StorageService";
 
 const Tab = createMaterialTopTabNavigator();
-const ROLES = ["ADMIN", "PARTNER", "USER"];
+const ROLES = ["ADMIN", "PARTNER", "KITCHENPARTNER", "USER"];
+const ROLE_LABELS = {
+  ADMIN: "Admin",
+  PARTNER: "Delivery Partner",
+  KITCHENPARTNER: "Kitchen Partner",
+  USER: "User",
+};
 
 const emptyForm = {
   transid: "",
@@ -61,7 +67,12 @@ const RoleSelector = ({ value, onChange, disabled = false }) => (
           onPress={() => onChange(role)}
           className={`flex-1 min-h-10 rounded-lg items-center justify-center ${active ? "bg-blue-600" : "bg-transparent"}`}
         >
-          <Text className={`text-xs font-bold ${active ? "text-white" : "text-gray-600"}`}>{role}</Text>
+          <Text
+            className={`text-xs font-bold text-center ${active ? "text-white" : "text-gray-600"}`}
+            numberOfLines={2}
+          >
+            {ROLE_LABELS[role] || role}
+          </Text>
         </TouchableOpacity>
       );
     })}
@@ -87,10 +98,35 @@ const FormField = ({ label, value, onChangeText, placeholder, keyboardType, maxL
   </View>
 );
 
+const PasswordField = ({ label, value, onChangeText, placeholder }) => {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <View className="mb-3">
+      <Text className="text-xs font-bold text-gray-700 mb-1.5">{label}</Text>
+      <View className="border border-gray-300 bg-gray-50 rounded-xl px-3 min-h-12 flex-row items-center">
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder || "Enter password"}
+          placeholderTextColor="#9CA3AF"
+          secureTextEntry={!visible}
+          className="flex-1 text-sm text-gray-900"
+        />
+        <TouchableOpacity onPress={() => setVisible((current) => !current)} className="pl-3 py-2">
+          <Icon name={visible ? "visibility-off" : "visibility"} size={19} color="#6B7280" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
 const UserCard = ({ user, currentAdminId, onEdit, onToggleStatus, onDelete }) => {
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const image = profileUri(user?.profile);
   const active = Number(user?.status) === 1;
   const isCurrentAdmin = String(user?.transid) === String(currentAdminId);
+  const password = normalize(user?.password);
 
   return (
     <View className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
@@ -117,6 +153,16 @@ const UserCard = ({ user, currentAdminId, onEdit, onToggleStatus, onDelete }) =>
           <View className="mt-2">
             <Text className="text-xs text-gray-700">Mobile: {user?.mobile || "N/A"}</Text>
             <Text className="text-xs text-gray-600 mt-1">Username: {user?.username || user?.mobile || "N/A"}</Text>
+            <View className="flex-row items-center mt-1">
+              <Text className="text-xs text-gray-600 flex-1">
+                Password: {password ? (passwordVisible ? password : "••••••••") : "Not available"}
+              </Text>
+              {password ? (
+                <TouchableOpacity onPress={() => setPasswordVisible((current) => !current)} className="px-2 py-1">
+                  <Icon name={passwordVisible ? "visibility-off" : "visibility"} size={16} color="#2563EB" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
             <Text className="text-xs text-gray-600 mt-1">DOB: {formatDate(user?.dob)}</Text>
             <Text className="text-xs text-gray-600 mt-1" numberOfLines={2}>Address: {user?.address || "Not provided"}</Text>
           </View>
@@ -170,7 +216,7 @@ const UserList = ({ users, role, refreshing, onRefresh, currentAdminId, onEdit, 
       )) : (
         <View className="items-center py-20">
           <Icon name="person-off" size={44} color="#9CA3AF" />
-          <Text className="text-gray-700 font-bold mt-4">No {role.toLowerCase()} accounts found</Text>
+          <Text className="text-gray-700 font-bold mt-4">No {(ROLE_LABELS[role] || role).toLowerCase()} accounts found</Text>
         </View>
       )}
     </ScrollView>
@@ -192,7 +238,13 @@ export default function ManageUsersScreen() {
     try {
       if (pullToRefresh) setRefreshing(true);
       else setLoading(true, "Fetching users...");
-      const response = await API.GET("User");
+      let response = null;
+      try {
+        response = await API.GET("User/admin/accounts");
+      } catch (error) {
+        console.warn("Admin accounts endpoint unavailable, falling back to User:", error?.message || error);
+        response = await API.GET("User");
+      }
       setUsers(Array.isArray(response?.Response) ? response.Response : []);
     } catch (error) {
       console.error("Fetch users failed:", error);
@@ -233,7 +285,7 @@ export default function ManageUsersScreen() {
       profile: normalize(user?.profile),
       usertype: String(user?.usertype || "USER").toUpperCase(),
       status: Number(user?.status) === 1 ? 1 : 0,
-      password: "",
+      password: normalize(user?.password),
     });
     setEditorVisible(true);
   };
@@ -274,7 +326,12 @@ export default function ManageUsersScreen() {
           luu: actor?.transid || actor?.name || "ADMIN",
           ...(form.password.trim() ? { password: form.password.trim() } : {}),
         };
-        await API.PUT("User", payload);
+        try {
+          await API.PUT("User/admin/accounts", payload);
+        } catch (error) {
+          console.warn("Admin account update endpoint unavailable, falling back to User:", error?.message || error);
+          await API.PUT("User", payload);
+        }
       } else {
         await API.POST("UserSignUp", {
           ...common,
@@ -306,7 +363,13 @@ export default function ManageUsersScreen() {
           onPress: async () => {
             try {
               setLoading(true, "Updating account status...");
-              await API.PUT("User", { transid: user.transid, status: nextStatus, luu: currentAdminId || "ADMIN" });
+              const payload = { ...user, transid: user.transid, status: nextStatus, luu: currentAdminId || "ADMIN" };
+              try {
+                await API.PUT("User/admin/accounts", payload);
+              } catch (error) {
+                console.warn("Admin account status endpoint unavailable, falling back to User:", error?.message || error);
+                await API.PUT("User", { transid: user.transid, status: nextStatus, luu: currentAdminId || "ADMIN" });
+              }
               await fetchUsers();
             } catch (error) {
               Alert.alert("Update Failed", getUserFacingErrorMessage(error, "Unable to update account status"));
@@ -331,7 +394,12 @@ export default function ManageUsersScreen() {
           onPress: async () => {
             try {
               setLoading(true, "Deleting account...");
-              await API.DELETE("User", { transid: user.transid, luu: currentAdminId || "ADMIN" });
+              try {
+                await API.DELETE("User/admin/accounts", { transid: user.transid, luu: currentAdminId || "ADMIN" });
+              } catch (error) {
+                console.warn("Admin account delete endpoint unavailable, falling back to User:", error?.message || error);
+                await API.DELETE("User", { transid: user.transid, luu: currentAdminId || "ADMIN" });
+              }
               await fetchUsers();
               Alert.alert("Deleted", "Account deleted successfully.");
             } catch (error) {
@@ -378,9 +446,10 @@ export default function ManageUsersScreen() {
         </View>
       </View>
 
-      <Tab.Navigator screenOptions={{ tabBarActiveTintColor: "#2563EB", tabBarInactiveTintColor: "#6B7280", tabBarIndicatorStyle: { backgroundColor: "#2563EB", height: 3 }, tabBarLabelStyle: { fontSize: 12, fontWeight: "700" } }}>
+      <Tab.Navigator screenOptions={{ tabBarActiveTintColor: "#2563EB", tabBarInactiveTintColor: "#6B7280", tabBarIndicatorStyle: { backgroundColor: "#2563EB", height: 3 }, tabBarLabelStyle: { fontSize: 11, fontWeight: "700" }, tabBarScrollEnabled: true, tabBarItemStyle: { width: 118 } }}>
         <Tab.Screen name="Admins" component={renderRoleList("ADMIN")} />
         <Tab.Screen name="Partners" component={renderRoleList("PARTNER")} />
+        <Tab.Screen name="Kitchens" component={renderRoleList("KITCHENPARTNER")} />
         <Tab.Screen name="Users" component={renderRoleList("USER")} />
       </Tab.Navigator>
 
@@ -405,7 +474,12 @@ export default function ManageUsersScreen() {
               <FormField label="Date of Birth" value={form.dob} onChangeText={(value) => setField("dob", value)} placeholder="YYYY-MM-DD" />
               <FormField label="Address" value={form.address} onChangeText={(value) => setField("address", value)} multiline />
               <FormField label="Profile Image Path" value={form.profile} onChangeText={(value) => setField("profile", value)} placeholder="Optional image URL or stored path" />
-              <FormField label={editing ? "New Password (optional)" : "Password"} value={form.password} onChangeText={(value) => setField("password", value)} secureTextEntry />
+              <PasswordField
+                label={editing ? "Password" : "Password"}
+                value={form.password}
+                onChangeText={(value) => setField("password", value)}
+                placeholder={editing ? "View or change login password" : "Enter password"}
+              />
 
               <Text className="text-xs font-bold text-gray-700 mb-1.5">Account Role</Text>
               <RoleSelector

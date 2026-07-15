@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import {
+  KeyboardAvoidingView,
   View,
   Text,
   TextInput,
@@ -250,10 +251,17 @@ export default function RaiseTicketScreen({ navigation }) {
   };
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
+    >
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: 20 }}
+      contentContainerStyle={{ padding: 20, paddingBottom: 180 }}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      showsVerticalScrollIndicator={false}
     >
       <Text style={{ fontSize: 24, fontWeight: "800", color: colors.text }}>
         🛠️ Raise a Ticket
@@ -468,5 +476,6 @@ export default function RaiseTicketScreen({ navigation }) {
         </Text>
       </TouchableOpacity>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

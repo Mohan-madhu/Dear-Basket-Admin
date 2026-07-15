@@ -117,6 +117,24 @@ const matchesEntryFilter = (row, filterType) => {
 const normalizeDeliveryType = (value) =>
   `${value || ""}`.trim().toLowerCase().replace(/[\s_-]+/g, "");
 
+const getProductLabel = (row) =>
+  String(row?.productname || row?.product_name || row?.daily_milk_product || "Milk").trim() || "Milk";
+
+const getProductKey = (row) =>
+  String(
+    row?.productid ||
+      row?.product_id ||
+      row?.daily_milk_product_id ||
+      getProductLabel(row)
+  )
+    .trim()
+    .toLowerCase();
+
+const matchesProductFilter = (row, productFilter) => {
+  if (!productFilter || productFilter === "all") return true;
+  return getProductKey(row) === productFilter;
+};
+
 const matchesSessionFilter = (row, filterType) => {
   if (filterType === "all") return true;
 
@@ -252,6 +270,36 @@ const SESSION_FILTERS = [
   { key: "evening", label: "Evening", icon: "nights-stay" },
   { key: "other", label: "Other", icon: "more-horiz" },
 ];
+
+const buildProductFilters = (rows) => {
+  const map = new Map();
+
+  (rows || []).forEach((row) => {
+    const key = getProductKey(row);
+    if (!key) return;
+
+    const existing = map.get(key) || {
+      key,
+      label: getProductLabel(row),
+      litres: 0,
+      orders: 0,
+    };
+
+    existing.litres += getTotalQty(row);
+    existing.orders += 1;
+    map.set(key, existing);
+  });
+
+  return [
+    {
+      key: "all",
+      label: "All Products",
+      litres: (rows || []).reduce((sum, row) => sum + getTotalQty(row), 0),
+      orders: (rows || []).length,
+    },
+    ...Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label)),
+  ];
+};
 
 const QuickDateFilters = ({ selectedFilter, onChange }) => {
   return (
@@ -494,6 +542,71 @@ const SessionFilters = ({ selectedFilter, onChange }) => {
   );
 };
 
+const ProductFilters = ({ products, selectedFilter, onChange }) => {
+  if (!products?.length) return null;
+
+  return (
+    <View className="pb-3">
+      <View className="px-4 mb-2 flex-row items-center justify-between">
+        <Text className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+          Milk Product Filter
+        </Text>
+        <Text className="text-[11px] font-semibold text-gray-400">
+          {products.length - 1} products
+        </Text>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        className="px-4"
+        contentContainerStyle={{ paddingRight: 16 }}
+      >
+        {products.map((item) => {
+          const isActive = selectedFilter === item.key;
+
+          return (
+            <TouchableOpacity
+              key={item.key}
+              activeOpacity={0.85}
+              onPress={() => onChange(item.key)}
+              className={`mr-2 rounded-2xl border px-4 py-3 min-w-[130px] ${
+                isActive
+                  ? "bg-cyan-600 border-cyan-600"
+                  : "bg-white border-gray-200"
+              }`}
+            >
+              <View className="flex-row items-center mb-1">
+                <Icon
+                  name={isActive ? "check-circle" : "local-drink"}
+                  size={15}
+                  color={isActive ? "#fff" : "#0891b2"}
+                />
+                <Text
+                  numberOfLines={1}
+                  className={`ml-2 text-xs font-bold flex-1 ${
+                    isActive ? "text-white" : "text-gray-900"
+                  }`}
+                >
+                  {item.label}
+                </Text>
+              </View>
+
+              <Text
+                className={`text-[11px] font-semibold ${
+                  isActive ? "text-cyan-50" : "text-gray-500"
+                }`}
+              >
+                {litresText(item.litres)} • {item.orders} entries
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+};
+
 /* ----------------------------- ROW CARD ----------------------------- */
 
 const DailyEntryCard = ({ entry, showMeta = true }) => {
@@ -534,9 +647,14 @@ const DailyEntryCard = ({ entry, showMeta = true }) => {
       )}
 
       <View className="flex-row items-center justify-between">
-        <Text className="text-[11px] text-gray-600">
-          Qty <Text className="font-bold text-gray-900">{litresText(entry.displayQuantity)}</Text>
-        </Text>
+        <View className="flex-1 pr-2">
+          <Text className="text-[11px] font-bold text-gray-900" numberOfLines={1}>
+            {getProductLabel(entry)}
+          </Text>
+          <Text className="text-[11px] text-gray-600">
+            Qty <Text className="font-bold text-gray-900">{litresText(entry.displayQuantity)}</Text>
+          </Text>
+        </View>
         <Text className="text-[11px] text-gray-600">
           Amt <Text className={`font-bold ${entry.entryType === "pregnancy" ? "text-pink-700" : "text-gray-900"}`}>
             {entry.entryType === "pregnancy" ? "Free" : amountText(entry.displayAmount)}
@@ -1061,6 +1179,7 @@ const DailyMilk_Dashboard_Admin = () => {
   const [selectedDateFilter, setSelectedDateFilter] = useState("today");
   const [selectedEntryFilter, setSelectedEntryFilter] = useState("all");
   const [selectedSessionFilter, setSelectedSessionFilter] = useState("all");
+  const [selectedProductFilter, setSelectedProductFilter] = useState("all");
   const [selectedRange, setSelectedRange] = useState(getDateRangeByType("today"));
   const { setLoading } = useLoading();
 
@@ -1077,6 +1196,7 @@ const DailyMilk_Dashboard_Admin = () => {
       );
 
       setDashboardRows(res.Response || []);
+      setSelectedProductFilter("all");
     } catch (error) {
       console.error(error);
       Alert.alert("Error", "Failed to fetch dashboard data. Please try again.");
@@ -1099,6 +1219,23 @@ const DailyMilk_Dashboard_Admin = () => {
       matchesSessionFilter(row, selectedSessionFilter)
     );
   }, [dashboardRows, selectedSessionFilter]);
+
+  const productFilters = useMemo(
+    () => buildProductFilters(sessionFilteredRows),
+    [sessionFilteredRows]
+  );
+
+  useEffect(() => {
+    if (!productFilters.some((item) => item.key === selectedProductFilter)) {
+      setSelectedProductFilter("all");
+    }
+  }, [productFilters, selectedProductFilter]);
+
+  const productFilteredRows = useMemo(() => {
+    return sessionFilteredRows.filter((row) =>
+      matchesProductFilter(row, selectedProductFilter)
+    );
+  }, [selectedProductFilter, sessionFilteredRows]);
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -1133,7 +1270,7 @@ const DailyMilk_Dashboard_Admin = () => {
 
         {/* Summary */}
         <DashboardSummary
-          data={sessionFilteredRows}
+          data={productFilteredRows}
           entryFilter={selectedEntryFilter}
           rangeLabel={selectedRange.label}
           fromDate={selectedRange.from}
@@ -1152,9 +1289,16 @@ const DailyMilk_Dashboard_Admin = () => {
           onChange={setSelectedSessionFilter}
         />
 
+        {/* Product Filter */}
+        <ProductFilters
+          products={productFilters}
+          selectedFilter={selectedProductFilter}
+          onChange={setSelectedProductFilter}
+        />
+
         {/* Grouped Content */}
         <PartnerWiseDashboardList
-          rows={sessionFilteredRows}
+          rows={productFilteredRows}
           entryFilter={selectedEntryFilter}
         />
       </ScrollView>

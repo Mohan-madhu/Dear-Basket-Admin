@@ -30,6 +30,11 @@ import Toaster from "../../App_Utils/Services/ToastService";
 import OrderCard from "../Components_New/OrdersCard";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  FEATURE_KEYS,
+  getFeatureSettings,
+  isFeatureEnabled,
+} from "../../App_Utils/Services/FeatureSettingsService";
 
 const OVERLAY_Z = 9999;
 
@@ -154,6 +159,7 @@ const DailyMilkBookingScreen = ({
   const [UserStatus, setUserStatus] = useState(null);
   const [bookingStatus, setBookingStatus] = useState([]);
   const [userBookingStatus, setUserBookingStatus] = useState(null);
+  const [featureSettings, setFeatureSettings] = useState(null);
 
   const log = createLogger("DailyMilkBooking");
 
@@ -169,6 +175,16 @@ const DailyMilkBookingScreen = ({
     if (Array.isArray(routeUserBooked) && routeUserBooked.length > 0) return routeUserBooked;
     return [];
   }, [UserBooked, BookingData, UserBookings, routeUserBooked]);
+
+  useEffect(() => {
+    let mounted = true;
+    getFeatureSettings({ fresh: true }).then((settings) => {
+      if (mounted) setFeatureSettings(settings);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const routeBooking = Array.isArray(routeUserBooked) ? routeUserBooked[0] : null;
@@ -197,6 +213,8 @@ const DailyMilkBookingScreen = ({
     () => showBookingTerms || showDemoTerms,
     [showBookingTerms, showDemoTerms]
   );
+  const demoDailyMilkEnabled = isFeatureEnabled(featureSettings, FEATURE_KEYS.DEMO_DAILY_MILK);
+  const dailyMilkEnabled = isFeatureEnabled(featureSettings, FEATURE_KEYS.DAILY_MILK);
 
 
   const [address, setAddress] = useState("");
@@ -825,9 +843,13 @@ const DailyMilkBookingScreen = ({
                   You're not registered yet. Choose an option below.
                 </Text>
 
-                <PrimaryButton title="Ask for Demo Daily Milk" onPress={openDemo} />
+                {demoDailyMilkEnabled ? (
+                  <PrimaryButton title="Ask for Demo Daily Milk" onPress={openDemo} />
+                ) : null}
 
-                <GhostButton title="Book for Daily Milk" onPress={openBooking} />
+                {dailyMilkEnabled ? (
+                  <GhostButton title="Book for Daily Milk" onPress={openBooking} />
+                ) : null}
 
                 {/* Reveal booking UI only after agreeing  to terms */}
                 {showBookingUI && (
@@ -902,25 +924,29 @@ const DailyMilkBookingScreen = ({
                 Choose the next step for your subscription.
               </Text>
 
-              <ActionTile
-                icon="flask-outline"
-                title="Ask for Demo Daily Milk"
-                subtitle="Request a free 0.5L sample for morning or evening delivery."
-                badge="Free sample"
-                accentColor="#16a34a"
-                iconBg="#dcfce7"
-                onPress={openDemo}
-              />
+              {demoDailyMilkEnabled ? (
+                <ActionTile
+                  icon="flask-outline"
+                  title="Ask for Demo Daily Milk"
+                  subtitle="Request a free 0.5L sample for morning or evening delivery."
+                  badge="Free sample"
+                  accentColor="#16a34a"
+                  iconBg="#dcfce7"
+                  onPress={openDemo}
+                />
+              ) : null}
 
-              <ActionTile
-                icon="calendar-number-outline"
-                title="Book for Daily Milk"
-                subtitle="Start a monthly milk plan with your preferred product and date."
-                badge="New booking"
-                accentColor="#2563eb"
-                iconBg="#dbeafe"
-                onPress={openBooking}
-              />
+              {dailyMilkEnabled ? (
+                <ActionTile
+                  icon="calendar-number-outline"
+                  title="Book for Daily Milk"
+                  subtitle="Start a monthly milk plan with your preferred product and date."
+                  badge="New booking"
+                  accentColor="#2563eb"
+                  iconBg="#dbeafe"
+                  onPress={openBooking}
+                />
+              ) : null}
 
               <ActionTile
                 icon="card-outline"

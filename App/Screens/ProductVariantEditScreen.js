@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert, Switch, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert, Switch, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLoading } from '../../App_Utils/Contexts/LoadingContext';
 import { API } from '../../App_Utils/Services/APIService';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -18,11 +18,35 @@ const VariantEditScreen = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [errors, setErrors] = useState({});
     const [showAddAttributeModal, setShowAddAttributeModal] = useState(false);
+    const [weightUnit, setWeightUnit] = useState('kg');
     const [newAttribute, setNewAttribute] = useState({
         attributename: '',
         attributevalue: '',
         displayorder: ''
     });
+
+    const normalizeNumericText = (value) => String(value || '').replace(/[^0-9.]/g, '');
+
+    const convertWeightToKg = (value, unit) => {
+        const parsed = parseFloat(value);
+        if (!Number.isFinite(parsed)) return value || '';
+        return unit === 'g' ? (parsed / 1000).toString() : parsed.toString();
+    };
+
+    const switchWeightUnit = (nextUnit) => {
+        if (nextUnit === weightUnit || !isEditing) return;
+
+        setVariantData(prev => {
+            const parsed = parseFloat(prev?.weight);
+            if (!Number.isFinite(parsed)) return prev;
+
+            return {
+                ...prev,
+                weight: nextUnit === 'g' ? (parsed * 1000).toString() : (parsed / 1000).toString()
+            };
+        });
+        setWeightUnit(nextUnit);
+    };
 
     const handleInputChange = (field, value) => {
         setVariantData(prev => ({
@@ -139,12 +163,14 @@ const VariantEditScreen = () => {
         try {
             setLoading(true, "Saving changes...");
             const USER = await Storage.getData("USER");
+            const payload = {
+                ...variantData,
+                weight: convertWeightToKg(variantData.weight, weightUnit),
+                luu: USER
+            };
 
             // Update variant basic info
-            await API.PUT(`ProductVariant/${variant.variantid}`, {
-                ...variantData,
-                luu: USER
-            });
+            await API.PUT(`ProductVariant/${variant.variantid}`, payload);
 
             // Update variant attributes
             for (const attr of variantAttributes) {
@@ -223,7 +249,11 @@ const VariantEditScreen = () => {
     );
 
     return (
-        <View className="flex-1 bg-gray-50">
+        <KeyboardAvoidingView
+            className="flex-1 bg-gray-50"
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+        >
             {/* Header */}
             <View className="bg-white p-4 shadow-sm">
                 <View className="flex-row items-center justify-between">
@@ -239,7 +269,12 @@ const VariantEditScreen = () => {
                 <Text className="text-blue-600 font-semibold text-center">{variantData.variantname}</Text>
             </View>
 
-            <ScrollView className="flex-1 p-4">
+            <ScrollView
+                className="flex-1 p-4"
+                contentContainerStyle={{ paddingBottom: 180 }}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+            >
                 {/* Basic Information */}
                 <View className="bg-white rounded-lg p-4 mb-4 shadow-sm">
                     <Text className="text-lg font-bold text-gray-800 mb-3">Basic Information</Text>
@@ -268,14 +303,42 @@ const VariantEditScreen = () => {
 
                         <View className="flex-row space-x-3">
                             <View className="flex-1 mr-2">
-                                <Text className="text-gray-600 mb-1">Weight (kg)</Text>
+                                <View className="flex-row items-center justify-between mb-1">
+                                    <Text className="text-gray-600">Weight</Text>
+                                    <View className="flex-row bg-gray-100 rounded-lg p-0.5">
+                                        {['kg', 'g'].map((unit) => (
+                                            <TouchableOpacity
+                                                key={unit}
+                                                activeOpacity={0.85}
+                                                disabled={!isEditing}
+                                                onPress={() => switchWeightUnit(unit)}
+                                                className={`px-2.5 py-1 rounded-md ${
+                                                    weightUnit === unit ? 'bg-blue-600' : 'bg-transparent'
+                                                } ${!isEditing ? 'opacity-60' : ''}`}
+                                            >
+                                                <Text
+                                                    className={`text-xs font-bold ${
+                                                        weightUnit === unit ? 'text-white' : 'text-gray-600'
+                                                    }`}
+                                                >
+                                                    {unit === 'kg' ? 'Kg' : 'Gram'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                </View>
                                 <TextInput
                                     value={variantData.weight?.toString()}
-                                    onChangeText={(text) => handleInputChange('weight', text)}
+                                    onChangeText={(text) => handleInputChange('weight', normalizeNumericText(text))}
                                     editable={isEditing}
                                     keyboardType="numeric"
                                     className="border border-gray-300 rounded-lg p-3"
                                 />
+                                {weightUnit === 'g' && variantData.weight ? (
+                                    <Text className="text-xs text-gray-500 mt-1">
+                                        Will be saved as {convertWeightToKg(variantData.weight, 'g')} kg
+                                    </Text>
+                                ) : null}
                             </View>
                             <View className="flex-1 ml-2">
                                 <Text className="text-gray-600 mb-1">Dimensions</Text>
@@ -434,7 +497,7 @@ const VariantEditScreen = () => {
                     </View>
                 </View>
             </Modal>
-        </View>
+        </KeyboardAvoidingView>
     );
 };
 

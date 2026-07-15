@@ -47,6 +47,29 @@ const getISTDateString = () => {
   return `${year}-${month}-${day}`;
 };
 
+const getISTDateStringFromOffset = (offsetDays = 0) => {
+  const date = getISTNow();
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatDeliveryOptionDate = (dateString) => {
+  const match = String(dateString || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return dateString || "";
+  const [, year, month, day] = match;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  const label = date.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+  });
+  return label;
+};
+
 const parseSlotTimeToMinutes = (value) => {
   if (!value) return null;
   const text = String(value).trim();
@@ -88,8 +111,11 @@ const isEnabledValue = (value) => {
   return Number.isFinite(numberValue) ? numberValue === 1 : true;
 };
 
-const isSlotAvailableNow = (slot) => {
+const isSlotAvailableForDate = (slot, deliveryDate) => {
   if (!slot || !isEnabledValue(slot?.isactive) || !isEnabledValue(slot?.isavailable)) return false;
+
+  const today = getISTDateString();
+  if (deliveryDate && deliveryDate !== today) return true;
 
   const startMinutes = getSlotStartMinutes(slot);
   if (startMinutes == null) return true;
@@ -140,6 +166,7 @@ export default function DearKitchenCheckoutScreen() {
   const [kitchenDetail, setKitchenDetail] = useState(null);
   const [selectedMealTypeId, setSelectedMealTypeId] = useState(null);
   const [selectedSlotId, setSelectedSlotId] = useState(null);
+  const [selectedDeliveryDate, setSelectedDeliveryDate] = useState(getISTDateString());
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
@@ -155,6 +182,18 @@ export default function DearKitchenCheckoutScreen() {
 
   const mealTypes = kitchenDetail?.mealTypes || [];
   const timeslots = kitchenDetail?.timeslots || [];
+  const kitchenAllowsPrebooking = Number(kitchenDetail?.kitchen?.allowprebooking || 0) === 1;
+  const deliveryDateOptions = useMemo(() => {
+    const maxOffset = kitchenAllowsPrebooking ? 2 : 0;
+    return Array.from({ length: maxOffset + 1 }, (_, index) => {
+      const value = getISTDateStringFromOffset(index);
+      return {
+        value,
+        title: index === 0 ? "Today" : index === 1 ? "Tomorrow" : "Day After",
+        subtitle: formatDeliveryOptionDate(value),
+      };
+    });
+  }, [kitchenAllowsPrebooking]);
   const hasKitchenContextLoaded = !!kitchenDetail;
   const isCartMealTypeAvailable =
     !cartMealTypeId ||
@@ -182,18 +221,21 @@ export default function DearKitchenCheckoutScreen() {
     [selectedMealType?.mealtypeid, timeslots]
   );
 
-  const availableSlots = useMemo(() => mealSlots.filter(isSlotAvailableNow), [mealSlots]);
+  const availableSlots = useMemo(
+    () => mealSlots.filter((slot) => isSlotAvailableForDate(slot, selectedDeliveryDate)),
+    [mealSlots, selectedDeliveryDate]
+  );
   const displayMealSlots = useMemo(
     () =>
       [...mealSlots].sort((a, b) => {
-        const aAvailable = isSlotAvailableNow(a);
-        const bAvailable = isSlotAvailableNow(b);
+        const aAvailable = isSlotAvailableForDate(a, selectedDeliveryDate);
+        const bAvailable = isSlotAvailableForDate(b, selectedDeliveryDate);
         if (aAvailable === bAvailable) {
           return (getSlotStartMinutes(a) ?? 0) - (getSlotStartMinutes(b) ?? 0);
         }
         return aAvailable ? -1 : 1;
       }),
-    [mealSlots]
+    [mealSlots, selectedDeliveryDate]
   );
   const selectedSlot =
     availableSlots.find((slot) => String(slot.slotid) === String(selectedSlotId)) ||
@@ -256,6 +298,14 @@ export default function DearKitchenCheckoutScreen() {
   }, [cartMealTypeId]);
 
   useEffect(() => {
+    if (kitchenAllowsPrebooking) return;
+    const today = getISTDateString();
+    if (selectedDeliveryDate !== today) {
+      setSelectedDeliveryDate(today);
+    }
+  }, [kitchenAllowsPrebooking, selectedDeliveryDate]);
+
+  useEffect(() => {
     if (availableSlots.length === 0) {
       if (selectedSlotId) setSelectedSlotId(null);
       return;
@@ -307,7 +357,7 @@ export default function DearKitchenCheckoutScreen() {
     }
 
     const orderId = buildDearKitchenOrderId();
-    const deliveryDate = getISTDateString();
+    const deliveryDate = selectedDeliveryDate || getISTDateString();
     const payload = buildDearKitchenOrderPayload({
       userData,
       kitchenId,
@@ -504,12 +554,48 @@ export default function DearKitchenCheckoutScreen() {
               </View>
             ) : null}
 
+            <View className="mt-4">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-[12px] font-bold uppercase text-slate-500">Delivery Date</Text>
+                <Text className={`text-[11px] font-bold ${kitchenAllowsPrebooking ? "text-orange-700" : "text-slate-400"}`}>
+                  {kitchenAllowsPrebooking ? "Pre-order enabled" : "Today only"}
+                </Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
+                {deliveryDateOptions.map((option) => {
+                  const active = selectedDeliveryDate === option.value;
+                  return (
+                    <TouchableOpacity
+                      key={option.value}
+                      activeOpacity={0.85}
+                      className={`mr-2 min-w-[104px] rounded-2xl border px-3 py-3 ${
+                        active
+                          ? "border-orange-500 bg-orange-50"
+                          : "border-slate-200 bg-white"
+                      }`}
+                      onPress={() => {
+                        setSelectedDeliveryDate(option.value);
+                        setSelectedSlotId(null);
+                      }}
+                    >
+                      <Text className={`text-[13px] font-black ${active ? "text-orange-700" : "text-slate-800"}`}>
+                        {option.title}
+                      </Text>
+                      <Text className={`mt-0.5 text-[11px] font-semibold ${active ? "text-orange-600" : "text-slate-500"}`}>
+                        {option.subtitle}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
             {mealSlots.length > 0 ? (
               <View className="mt-4">
                 <Text className="text-[12px] font-bold uppercase text-slate-500">Delivery Slot</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
                   {displayMealSlots.map((slot) => {
-                    const available = isSlotAvailableNow(slot);
+                    const available = isSlotAvailableForDate(slot, selectedDeliveryDate);
                     const active = available && String(slot.slotid) === String(selectedSlot?.slotid);
                     return (
                       <TouchableOpacity

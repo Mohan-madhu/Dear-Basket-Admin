@@ -18,6 +18,7 @@ const Tab = createMaterialTopTabNavigator();
 
 const DURATION_FILTERS = [
   { key: "TODAY", label: "Today" },
+  { key: "YESTERDAY", label: "Yesterday" },
   { key: "TOMORROW", label: "Tomorrow" },
   { key: "WEEK", label: "Week" },
   { key: "MONTH", label: "Month" },

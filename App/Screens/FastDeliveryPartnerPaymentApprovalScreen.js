@@ -11,8 +11,11 @@ import {
   Alert,
   SafeAreaView,
   useWindowDimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API, getUserFacingErrorMessage } from "../../App_Utils/Services/APIService";
 import Storage from "../../App_Utils/Services/StorageService";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
@@ -68,8 +71,10 @@ const statusMeta = (status) => {
 const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
   const { setLoading } = useLoading();
   const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const loadingRef = useRef(setLoading);
   const detailScrollMaxHeight = Math.max(220, height * 0.52);
+  const modalBottomInset = Math.max(insets.bottom, 48);
 
   const [adminId, setAdminId] = useState("");
   const [adminName, setAdminName] = useState("");
@@ -638,9 +643,9 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
       </ScrollView>
 
       <Modal visible={showDetailModal} transparent animationType="slide" onRequestClose={() => setShowDetailModal(false)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end", paddingBottom: modalBottomInset }}>
           <SafeAreaView style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "88%" }}>
-          <View style={{ padding: 14, paddingBottom: 8 }}>
+          <View style={{ padding: 14, paddingBottom: 14 }}>
             <Text style={{ fontSize: 18, fontWeight: "900", color: "#111827" }}>Payout Application</Text>
 
             {selectedApplication ? (
@@ -719,7 +724,11 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
       </Modal>
 
       <Modal visible={showRejectModal} transparent animationType="fade" onRequestClose={() => setShowRejectModal(false)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 16 }}>
+        <KeyboardAvoidingView
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 16 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
+        >
           <View style={{ backgroundColor: "white", borderRadius: 18, padding: 14 }}>
             <Text style={{ fontSize: 17, fontWeight: "900", color: "#111827" }}>Reject Application</Text>
             <Text style={{ marginTop: 5, fontSize: 12, color: "#6b7280" }}>
@@ -760,7 +769,7 @@ const FastDeliveryPartnerPaymentApprovalScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

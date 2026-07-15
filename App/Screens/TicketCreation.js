@@ -1,6 +1,6 @@
 // TicketCreation.js
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 
 export default function TicketCreation({ navigation }) {
   const [title, setTitle] = useState('');
@@ -20,7 +20,17 @@ export default function TicketCreation({ navigation }) {
   };
 
   return (
-    <ScrollView style={{ flex: 1, padding: 20, backgroundColor: '#F9FAFB' }}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: '#F9FAFB' }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
+    <ScrollView
+      style={{ flex: 1, backgroundColor: '#F9FAFB' }}
+      contentContainerStyle={{ padding: 20, paddingBottom: 180 }}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+    >
       <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 20 }}>Raise a Ticket</Text>
       
       <Text style={{ marginBottom: 8 }}>Title</Text>
@@ -68,5 +78,6 @@ export default function TicketCreation({ navigation }) {
         <Text style={{ color: 'white', fontWeight: '600', fontSize: 16 }}>Submit Ticket</Text>
       </TouchableOpacity>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

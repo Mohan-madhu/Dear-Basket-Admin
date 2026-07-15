@@ -19,6 +19,7 @@ import Storage from '../../App_Utils/Services/StorageService';
 import OrderCard from '../Components_New/OrdersCard';
 import PartnerFastDeliveryPayoutAnalytics from './PartnerFastDeliveryPayoutAnalytics';
 import { matchesCustomerPhone } from '../../App_Utils/Utils/orderSearch';
+import { isDailyMilkCancelled } from '../../App_Utils/Utils/dailyMilkCancellation';
 
 const log = createLogger('PartnerLanding');
 
@@ -51,6 +52,31 @@ const getOrderType = (order) => {
   }
 };
 
+const parseDailyMilkRows = (order) => {
+  let milkData = order?.dailymilk_json;
+
+  try {
+    if (typeof milkData === 'string') {
+      milkData = JSON.parse(milkData);
+    }
+  } catch {
+    milkData = [];
+  }
+
+  if (Array.isArray(milkData)) return milkData;
+  return milkData ? [milkData] : [];
+};
+
+const isDailyMilkDeliveryCancelled = (order) => {
+  if (Number(order?.isdailymilkuser) !== 3) return false;
+  if (isDailyMilkCancelled(order?.cancelled)) return true;
+
+  const rows = parseDailyMilkRows(order);
+  if (!rows.length) return false;
+
+  return rows.every((row) => isDailyMilkCancelled(row?.cancelled));
+};
+
 const normalizeMilkOrderDataForCard = (order) => {
   let parsedOrderData = order?.orderdata;
 
@@ -65,16 +91,9 @@ const normalizeMilkOrderDataForCard = (order) => {
   const hasOrderItems = Array.isArray(parsedOrderData) && parsedOrderData.length > 0;
   if (hasOrderItems) return { ...order, orderdata: parsedOrderData };
 
-  let milkData = order?.dailymilk_json;
-  try {
-    if (typeof milkData === 'string') {
-      milkData = JSON.parse(milkData);
-    }
-  } catch {
-    milkData = [];
-  }
-
-  const milkRows = Array.isArray(milkData) ? milkData : milkData ? [milkData] : [];
+  const milkRows = parseDailyMilkRows(order).filter(
+    (row) => !isDailyMilkCancelled(row?.cancelled)
+  );
   if (!milkRows.length) return { ...order, orderdata: parsedOrderData || [] };
 
   const mappedItems = milkRows.map((row, idx) => {
@@ -102,6 +121,7 @@ const normalizeMilkOrderDataForCard = (order) => {
       extra_quantity: extraQty,
       cancelled_quantity: cancelledQty,
       total_quantity: totalQty,
+      cancelled: row?.cancelled,
       imageurl: row?.imageurl || null,
     };
   });
@@ -126,6 +146,7 @@ const matchesPartnerOrderScope = (order, partnerid) => {
   const outBy = order?.orderoutofdeliveryby ?? order?.outofdeliveryby ?? null;
   return (
     Number(order?.ordercancelled) !== 1 &&
+    !isDailyMilkDeliveryCancelled(order) &&
     Number(order?.orderdelivered) !== 1 &&
     Number(order?.orderpacked) === 1 &&
     (

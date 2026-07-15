@@ -17,6 +17,7 @@ import NetInfo, { useNetInfo } from "@react-native-community/netinfo";
 import NoInternetScreen from "./App_Utils/UI/NoInternetScreen";
 import ErrorScreen from "./App_Utils/UI/ErrorScreen";
 import GlobalErrorBoundary from "./App_Utils/UI/GlobalErrorBoundary";
+import DailyMilkDeliveryPromiseBanner from "./App/Components/DailyMilkDeliveryPromiseBanner";
 
 // ✅ NEW: Paper + dates locale
 import { Provider as PaperProvider } from "react-native-paper";
@@ -49,6 +50,7 @@ const safeStringify = (value) => {
 export default function App() {
   const netInfo = useNetInfo();
   const [globalError, setGlobalError] = useState(null);
+  const [currentRoute, setCurrentRoute] = useState(null);
   const routeNameRef = useRef(null);
 
   useEffect(() => {
@@ -113,20 +115,23 @@ export default function App() {
                   onError={(error) => setGlobalError(error)}
                   onRetry={() => setGlobalError(null)}
                 >
+                  <DailyMilkDeliveryPromiseBanner route={currentRoute} />
                   <NavigationContainer
                     ref={navigationRef}
                     onReady={() => {
                       try {
-                        routeNameRef.current =
-                          navigationRef.getCurrentRoute()?.name || null;
+                        const route = navigationRef.getCurrentRoute() || null;
+                        routeNameRef.current = route?.name || null;
+                        setCurrentRoute(route);
                       } catch (error) {
                         console.error("Navigation onReady tracking error:", error);
                       }
                     }}
                     onStateChange={() => {
                       try {
-                        routeNameRef.current =
-                          navigationRef.getCurrentRoute()?.name || null;
+                        const route = navigationRef.getCurrentRoute() || null;
+                        routeNameRef.current = route?.name || null;
+                        setCurrentRoute(route);
                       } catch (error) {
                         console.error(
                           "Navigation onStateChange tracking error:",

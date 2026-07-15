@@ -18,13 +18,42 @@ import Icon from "react-native-vector-icons/MaterialIcons";
 import { Image } from "expo-image";
 import Storage from "../../App_Utils/Services/StorageService";
 import { useNavigation } from "@react-navigation/native";
+import { isDailyMilkCancelled } from "../../App_Utils/Utils/dailyMilkCancellation";
 
 const formatNumber = (value) => {
   const n = Number(value || 0);
   return Number.isFinite(n) ? n : 0;
 };
 
-const isPendingOrder = (order) => Number(order?.ordercancelled) !== 1 && Number(order?.orderdelivered) !== 1;
+const parseDailyMilkRows = (order) => {
+  let milkData = order?.dailymilk_json;
+
+  try {
+    if (typeof milkData === "string") {
+      milkData = JSON.parse(milkData);
+    }
+  } catch {
+    milkData = [];
+  }
+
+  if (Array.isArray(milkData)) return milkData;
+  return milkData ? [milkData] : [];
+};
+
+const isDailyMilkDeliveryCancelled = (order) => {
+  if (Number(order?.isdailymilkuser) !== 3) return false;
+  if (isDailyMilkCancelled(order?.cancelled)) return true;
+
+  const rows = parseDailyMilkRows(order);
+  if (!rows.length) return false;
+
+  return rows.every((row) => isDailyMilkCancelled(row?.cancelled));
+};
+
+const isPendingOrder = (order) =>
+  Number(order?.ordercancelled) !== 1 &&
+  !isDailyMilkDeliveryCancelled(order) &&
+  Number(order?.orderdelivered) !== 1;
 
 const getOrderType = (order) => {
   switch (Number(order?.isdailymilkuser)) {
@@ -43,11 +72,25 @@ const getOrderType = (order) => {
   }
 };
 
-const isOrderMappedToPartner = (order, partnerId) => {
-  const mappedPartner = String(order?.mappedpartnerid || "");
-  const outBy = String(order?.orderoutofdeliveryby || order?.outofdeliveryby || "");
-  return mappedPartner === String(partnerId) || outBy === String(partnerId);
+const matchesPartnerOrderScope = (order, partnerId) => {
+  const outBy = order?.orderoutofdeliveryby ?? order?.outofdeliveryby ?? null;
+
+  return (
+    isPendingOrder(order) &&
+    Number(order?.orderpacked) === 1 &&
+    (
+      (Number(order?.isdailymilkuser) === 0 && (outBy === null || outBy === undefined || outBy === "")) ||
+      String(order?.mappedpartnerid || "") === String(partnerId) ||
+      String(order?.orderoutofdeliveryby || "") === String(partnerId) ||
+      String(order?.outofdeliveryby || "") === String(partnerId)
+    )
+  );
 };
+
+const isPartnerBacklogOrder = (order, partnerId) =>
+  isPendingOrder(order) &&
+  !matchesPartnerOrderScope(order, partnerId) &&
+  String(order?.mappedpartnerid || "") === String(partnerId);
 
 const ViewPartnerOrderScreen = () => {
   const [allusers, setAllUsers] = useState([]);
@@ -75,23 +118,43 @@ const ViewPartnerOrderScreen = () => {
     partners.forEach((partner) => {
       map.set(partner.transid, {
         total: 0,
+        ready: 0,
+        notReady: 0,
+        backlogFast: 0,
+        backlogDaily: 0,
         fast: 0,
         daily: 0,
       });
     });
 
     orders.forEach((order) => {
-      if (!isPendingOrder(order)) return;
       const type = getOrderType(order);
 
       partners.forEach((partner) => {
-        if (!isOrderMappedToPartner(order, partner.transid)) return;
+        const stats = map.get(partner.transid) || {
+          total: 0,
+          ready: 0,
+          notReady: 0,
+          backlogFast: 0,
+          backlogDaily: 0,
+          fast: 0,
+          daily: 0,
+        };
 
-        const stats = map.get(partner.transid) || { total: 0, fast: 0, daily: 0 };
-        stats.total += 1;
+        if (matchesPartnerOrderScope(order, partner.transid)) {
+          stats.ready += 1;
+          stats.total += 1;
+          if (type === "Fast Delivery") stats.fast += 1;
+          if (type === "Daily Milk Grocery" || type === "Milk" || type === "Demo Daily Milk") stats.daily += 1;
+          map.set(partner.transid, stats);
+          return;
+        }
 
-        if (type === "Fast Delivery") stats.fast += 1;
-        if (type === "Daily Milk Grocery" || type === "Milk" || type === "Demo Daily Milk") stats.daily += 1;
+        if (isPartnerBacklogOrder(order, partner.transid)) {
+          stats.notReady += 1;
+          if (type === "Fast Delivery") stats.backlogFast += 1;
+          if (type === "Daily Milk Grocery" || type === "Milk" || type === "Demo Daily Milk") stats.backlogDaily += 1;
+        }
 
         map.set(partner.transid, stats);
       });
@@ -103,7 +166,15 @@ const ViewPartnerOrderScreen = () => {
   const visiblePartners = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const base = partners.map((partner) => {
-      const stats = partnerStatsMap.get(partner.transid) || { total: 0, fast: 0, daily: 0 };
+      const stats = partnerStatsMap.get(partner.transid) || {
+        total: 0,
+        ready: 0,
+        notReady: 0,
+        backlogFast: 0,
+        backlogDaily: 0,
+        fast: 0,
+        daily: 0,
+      };
       return { ...partner, stats };
     });
 
@@ -116,12 +187,15 @@ const ViewPartnerOrderScreen = () => {
         })
       : base;
 
-    return filtered.sort((a, b) => b.stats.total - a.stats.total);
+    return filtered.sort((a, b) => {
+      if (b.stats.ready !== a.stats.ready) return b.stats.ready - a.stats.ready;
+      return b.stats.notReady - a.stats.notReady;
+    });
   }, [partners, partnerStatsMap, searchQuery]);
 
   const totalPendingOrders = useMemo(
-    () => orders.filter((order) => isPendingOrder(order)).length,
-    [orders]
+    () => visiblePartners.reduce((sum, partner) => sum + formatNumber(partner?.stats?.total), 0),
+    [visiblePartners]
   );
 
   const fetchPartners = useCallback(async () => {
@@ -142,9 +216,9 @@ const ViewPartnerOrderScreen = () => {
       const response = Array.isArray(res?.Response) ? res.Response : [];
 
       const apiresponse = userType === "ADMIN"
-        ? response.filter((order) => Number(order?.orderdelivered) !== 1)
+        ? response.filter((order) => isPendingOrder(order))
         : response.filter(
-            (order) => String(order?.mappedpartnerid || "") === String(USER) && Number(order?.orderdelivered) !== 1
+            (order) => matchesPartnerOrderScope(order, USER)
           );
 
       setOrders(apiresponse);
@@ -259,7 +333,7 @@ const ViewPartnerOrderScreen = () => {
 
           <View className="mt-1.5 px-0.5">
             <Text className="text-[11px] text-gray-600">
-              {visiblePartners.length} partners • {totalPendingOrders} pending orders
+              {visiblePartners.length} partners • {totalPendingOrders} ready orders
             </Text>
           </View>
         </View>
@@ -289,8 +363,11 @@ const ViewPartnerOrderScreen = () => {
             {visiblePartners.map((partner, index) => {
               const isActive = Number(partner?.status) === 1;
               const total = formatNumber(partner?.stats?.total);
+              const notReady = formatNumber(partner?.stats?.notReady);
               const fast = formatNumber(partner?.stats?.fast);
               const daily = formatNumber(partner?.stats?.daily);
+              const backlogFast = formatNumber(partner?.stats?.backlogFast);
+              const backlogDaily = formatNumber(partner?.stats?.backlogDaily);
 
               return (
                 <Animated.View
@@ -322,22 +399,36 @@ const ViewPartnerOrderScreen = () => {
                           </Text>
                         </View>
                         <View className="mt-2 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200">
-                          <Text className="text-[11px] font-bold text-blue-700">{total} pending</Text>
+                          <Text className="text-[11px] font-bold text-blue-700">{total} ready</Text>
+                        </View>
+                        <View className="mt-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200">
+                          <Text className="text-[10px] font-bold text-amber-700">{notReady} not ready</Text>
                         </View>
                       </View>
                     </View>
 
                     <View className="flex-row items-center mt-2.5">
                       <View className="bg-purple-50 px-2 py-1 rounded-full mr-1.5">
-                        <Text className="text-[10px] font-semibold text-purple-700">Fast {fast}</Text>
+                        <Text className="text-[10px] font-semibold text-purple-700">Ready Fast {fast}</Text>
                       </View>
                       <View className="bg-emerald-50 px-2 py-1 rounded-full mr-1.5">
-                        <Text className="text-[10px] font-semibold text-emerald-700">Daily Grocery {daily}</Text>
+                        <Text className="text-[10px] font-semibold text-emerald-700">Ready Daily {daily}</Text>
                       </View>
                       <View className="flex-1 items-end">
                         <Text className="text-[10px] text-blue-700 font-semibold">Open Partner Orders</Text>
                       </View>
                     </View>
+
+                    {notReady > 0 ? (
+                      <View className="flex-row items-center mt-2">
+                        <View className="bg-amber-50 px-2 py-1 rounded-full mr-1.5 border border-amber-100">
+                          <Text className="text-[10px] font-semibold text-amber-700">Waiting Fast {backlogFast}</Text>
+                        </View>
+                        <View className="bg-orange-50 px-2 py-1 rounded-full border border-orange-100">
+                          <Text className="text-[10px] font-semibold text-orange-700">Waiting Daily {backlogDaily}</Text>
+                        </View>
+                      </View>
+                    ) : null}
                   </TouchableOpacity>
                 </Animated.View>
               );

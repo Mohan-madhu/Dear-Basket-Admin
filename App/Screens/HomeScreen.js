@@ -172,6 +172,10 @@ export default function HomeScreen() {
     getRole();
   }, []);
 
+  useEffect(() => {
+    navigation.setParams?.({ activeMenuId: selected || null });
+  }, [navigation, selected]);
+
   async function fetchData() {
     try {
       setLoading(true, "Fetching Menu Data");

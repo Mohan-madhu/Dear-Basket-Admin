@@ -1,5 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
-import React, { useEffect, useState } from "react";
+import { Alert, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
 import ProductList from "./ProductList";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import { API } from "../../App_Utils/Services/APIService";
@@ -11,7 +11,32 @@ import {
   incrementQuantity,
   removeFromCart,
 } from "../Redux/CartReducer";
-const TypeListDetails = ({ item }) => {
+const getSearchText = (product) => {
+  const variants = Array.isArray(product?.variants) ? product.variants : [];
+  return [
+    product?.productname,
+    product?.productcode,
+    product?.shortdescription,
+    product?.fulldescription,
+    product?.typename,
+    product?.categoryname,
+    product?.sectionname,
+    product?.menuname,
+    ...variants.flatMap((variant) => [
+      variant?.variantname,
+      variant?.sku,
+      variant?.sellingprice,
+      variant?.baseprice,
+      variant?.packsize,
+      variant?.weight,
+    ]),
+  ]
+    .filter((value) => value !== null && value !== undefined)
+    .join(" ")
+    .toLowerCase();
+};
+
+const TypeListDetails = ({ item, searchQuery = "" }) => {
   const { setLoading } = useLoading();
   const [data, setData] = useState([]);
   const [ref, setrefresh] = useState(0);
@@ -47,6 +72,12 @@ const TypeListDetails = ({ item }) => {
     }
   }, [item?.transid, ref]);
 
+  const filteredProducts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return data;
+    return data.filter((product) => getSearchText(product).includes(query));
+  }, [data, searchQuery]);
+
   if (!item) {
     return (
       <View>
@@ -61,7 +92,8 @@ const TypeListDetails = ({ item }) => {
     <View className="">
       <ProductList
         type={item}
-        products={data}
+        products={filteredProducts}
+        searchQuery={searchQuery}
         onAdd={(p) => {
           console.log("Added Product : ", p)
           alert(`Added ${p.transid}`)

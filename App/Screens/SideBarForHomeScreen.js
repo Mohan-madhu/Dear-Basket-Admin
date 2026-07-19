@@ -32,6 +32,7 @@ export default function SidebarScreen(data) {
   const navigation = useNavigation();
   //console.log(CATEGORY)
   const [searchVisible, setSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [menuItems, setMenuItems] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [CatmodalMode, setCatModalMode] = useState("add");
@@ -132,6 +133,7 @@ export default function SidebarScreen(data) {
   const handleBackPress = () => {
     if (searchVisible) {
       setSearchVisible(false);
+      setSearchQuery("");
     } else {
       navigation.goBack();
     }
@@ -368,13 +370,21 @@ export default function SidebarScreen(data) {
         </View>
 
         {searchVisible && (
-          <View className="mt-2 bg-gray-100 rounded-md px-3 py-1">
+          <View className="mt-2 bg-gray-100 rounded-md px-3 py-1 flex-row items-center">
+            <Ionicons name="search" size={18} color="#6B7280" />
             <TextInput
               autoFocus
-              placeholder="Search…"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search products..."
               placeholderTextColor="#888"
-              className="text-gray-800"
+              className="flex-1 text-gray-800 ml-2"
             />
+            {searchQuery ? (
+              <TouchableOpacity onPress={() => setSearchQuery("")} className="p-1">
+                <Ionicons name="close-circle" size={18} color="#6B7280" />
+              </TouchableOpacity>
+            ) : null}
           </View>
         )}
       </View>
@@ -534,6 +544,7 @@ export default function SidebarScreen(data) {
         {/* <View style={{ width: "82%" }} className="bg-gray-50">
           <TypeListDetails
             item={menuItems.find((i) => i.transid === selectedId)}
+            searchQuery={searchQuery}
           />
         </View> */}
         {/* Right Pane */}
@@ -541,6 +552,7 @@ export default function SidebarScreen(data) {
           {/* <DetailsPane item={menuItems.find((i) => i.transid === selectedId)} /> */}
           <TypeListDetails
             item={menuItems.find((i) => i.transid === selectedId)}
+            searchQuery={searchQuery}
           />
         </View>
       </View>

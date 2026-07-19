@@ -12,7 +12,7 @@ import ProductCard from "./ProductCard";
 import { useNavigation } from "@react-navigation/native";
 import Storage from "../../App_Utils/Services/StorageService";
 import { Image } from "expo-image";
-export default function ProductList({ type, products, onAdd, setrefresh }) {
+export default function ProductList({ type, products, onAdd, setrefresh, searchQuery = "" }) {
   const nav = useNavigation();
   const [ROLE, setROLE] = useState(null);
   //const ROLE = "ADMIN";
@@ -29,11 +29,17 @@ export default function ProductList({ type, products, onAdd, setrefresh }) {
 
   //console.log(ROLE)
   if (products.length < 1 && ROLE !== "ADMIN") {
+    const isSearching = Boolean(searchQuery.trim());
     return (
-      <View>
-        <Text className="text-xl font-semibold text-center mt-10 text-gray-600">
-          No Products Available...
+      <View className="px-6 py-14 items-center">
+        <Text className="text-xl font-semibold text-center text-gray-600">
+          {isSearching ? "No matching products found" : "No Products Available..."}
         </Text>
+        {isSearching ? (
+          <Text className="text-sm text-gray-500 text-center mt-2">
+            Try another product name, code, description, or variant.
+          </Text>
+        ) : null}
       </View>
     );
   }

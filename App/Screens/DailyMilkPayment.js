@@ -28,6 +28,43 @@ const DailyMilkPayment = () => {
     const [paymentMethod, setPaymentMethod] = useState('');
     const [paymentAmount, setPaymentAmount] = useState('');
 
+    const toAmount = (value) => {
+        const amount = Number(value);
+        return Number.isFinite(amount) ? amount : 0;
+    };
+
+    const isPaidStatus = (value) => {
+        const normalized = String(value ?? "").trim().toLowerCase();
+        return normalized === "1" || normalized === "paid" || normalized === "completed";
+    };
+
+    const getPaymentState = (item) => {
+        const bookedAmount = toAmount(item?.totalamount);
+        const receivedAmount = item?.received_fullamount !== undefined && item?.received_fullamount !== null && item?.received_fullamount !== ""
+            ? toAmount(item.received_fullamount)
+            : toAmount(item?.received_baseamount) + toAmount(item?.received_extraamount);
+        const paidAmount = toAmount(item?.paidamount);
+        const payableAmount = receivedAmount;
+        const balanceAmount = Math.max(payableAmount - paidAmount, 0);
+        const hasDue = balanceAmount > 0.009;
+        const hasReceivedMilk = payableAmount > 0.009;
+        const paymentStatusPaid = isPaidStatus(item?.payment_status1 ?? item?.payment_status ?? item?.paid);
+        const isPaid = hasReceivedMilk && (paymentStatusPaid || paidAmount >= payableAmount - 0.009);
+
+        return {
+            bookedAmount,
+            payableAmount,
+            balanceAmount,
+            receivedAmount,
+            paidAmount,
+            hasDue,
+            hasReceivedMilk,
+            isPaid,
+        };
+    };
+
+    const formatAmount = (value) => toAmount(value).toFixed(2);
+
     // Get user data
     const getUserData = async () => {
         try {
@@ -66,8 +103,10 @@ const DailyMilkPayment = () => {
     }, []);
 
     const handlePay = (item) => {
+        const { balanceAmount } = getPaymentState(item);
+
         setSelectedPayment(item);
-        setPaymentAmount(item.balanceamount?.toString() || '0');
+        setPaymentAmount(balanceAmount.toFixed(2));
         setPaymentModalVisible(true);
     };
 
@@ -139,13 +178,21 @@ const DailyMilkPayment = () => {
     };
 
     const renderPaymentCard = (item, index) => {
-        const isPaid = item.payment_status1 === 1 || parseFloat(item.balanceamount || 0) === 0;
-        const hasBalance = parseFloat(item.balanceamount || 0) > 0;
+        const {
+            bookedAmount,
+            payableAmount,
+            balanceAmount,
+            receivedAmount,
+            paidAmount,
+            hasDue,
+            hasReceivedMilk,
+            isPaid,
+        } = getPaymentState(item);
 
         return (
             <View
                 key={index}
-                className={`border-2 rounded-xl p-4 mb-4 ${isPaid ? 'border-green-500 bg-green-50' : 'border-orange-500 bg-white'}`}
+                className={`border-2 rounded-xl p-4 mb-4 ${isPaid ? 'border-green-500 bg-green-50' : hasDue ? 'border-orange-500 bg-white' : 'border-gray-300 bg-white'}`}
             >
                 {/* Status Badge */}
                 <View className="flex-row justify-between items-center mb-3">
@@ -163,6 +210,11 @@ const DailyMilkPayment = () => {
                         {isPaid && (
                             <View className="bg-green-500 px-2 py-1 rounded-full">
                                 <Text className="text-xs font-bold text-white">PAID</Text>
+                            </View>
+                        )}
+                        {!isPaid && !hasDue && (
+                            <View className="bg-gray-500 px-2 py-1 rounded-full">
+                                <Text className="text-xs font-bold text-white">PENDING</Text>
                             </View>
                         )}
                     </View>
@@ -220,16 +272,23 @@ const DailyMilkPayment = () => {
                         </View>
 
                         <View className="flex-row justify-between border-t border-gray-300 pt-2 mt-1">
-                            <Text className="text-lg font-bold text-gray-800">Total Amount:</Text>
+                            <Text className="text-lg font-bold text-gray-800">Booked Total:</Text>
                             <Text className="text-lg font-bold text-green-600">
-                                ₹{item.totalamount || '0'}
+                                ₹{formatAmount(bookedAmount)}
+                            </Text>
+                        </View>
+
+                        <View className="flex-row justify-between pt-1">
+                            <Text className="text-gray-600">Payable Delivered Value:</Text>
+                            <Text className="font-bold text-blue-700">
+                                ₹{formatAmount(payableAmount)}
                             </Text>
                         </View>
 
                         <View className="flex-row justify-between border-t border-gray-300 pt-2 mt-1">
-                            <Text className="text-lg font-bold text-gray-800">Balance Amount:</Text>
-                            <Text className={`text-lg font-bold ${hasBalance ? 'text-orange-600' : 'text-green-600'}`}>
-                                ₹{item.balanceamount || '0'}
+                            <Text className="text-lg font-bold text-gray-800">Amount To Pay:</Text>
+                            <Text className={`text-lg font-bold ${hasDue ? 'text-orange-600' : 'text-green-600'}`}>
+                                ₹{formatAmount(balanceAmount)}
                             </Text>
                         </View>
                     </View>
@@ -237,33 +296,45 @@ const DailyMilkPayment = () => {
                     {/* Received Amounts (if any) */}
                     {(item.received_baseamount > 0 || item.received_extraamount > 0) && (
                         <View className="border-t border-gray-200 pt-2 mt-2">
-                            <Text className="text-sm font-semibold text-gray-700 mb-2">Received Amounts:</Text>
+                            <Text className="text-sm font-semibold text-gray-700 mb-2">Value of Milk Delivered:</Text>
                             <View className="flex-row justify-between">
-                                <Text className="text-gray-600">Received Base:</Text>
+                                <Text className="text-gray-600">Base Delivered Value:</Text>
                                 <Text className="font-semibold">₹{item.received_baseamount || '0'}</Text>
                             </View>
                             <View className="flex-row justify-between">
-                                <Text className="text-gray-600">Received Extra:</Text>
+                                <Text className="text-gray-600">Extra Delivered Value:</Text>
                                 <Text className="font-semibold">₹{item.received_extraamount || '0'}</Text>
                             </View>
                             <View className="flex-row justify-between">
-                                <Text className="text-gray-600">Received Total:</Text>
-                                <Text className="font-semibold">₹{item.received_fullamount || '0'}</Text>
+                                <Text className="text-gray-600">Total Delivered Value:</Text>
+                                <Text className="font-semibold">₹{formatAmount(receivedAmount)}</Text>
+                            </View>
+                            <View className="flex-row justify-between">
+                                <Text className="text-gray-600">Paid Amount:</Text>
+                                <Text className="font-semibold">₹{formatAmount(paidAmount)}</Text>
                             </View>
                         </View>
                     )}
                 </View>
 
                 {/* Pay Button - Only show if payment is pending and has balance */}
-                {!isPaid && hasBalance && (
+                {!isPaid && hasDue && (
                     <TouchableOpacity
                         onPress={() => handlePay(item)}
                         className="bg-orange-500 py-3 rounded-lg mt-4"
                     >
                         <Text className="text-white text-center font-bold text-lg">
-                            Pay Now - ₹{item.balanceamount}
+                            Pay Now - ₹{formatAmount(balanceAmount)}
                         </Text>
                     </TouchableOpacity>
+                )}
+
+                {!isPaid && !hasDue && (
+                    <View className="bg-gray-100 py-3 rounded-lg mt-4">
+                        <Text className="text-gray-700 text-center font-bold text-base">
+                            {hasReceivedMilk ? "No pending payment" : "No delivered milk amount due yet"}
+                        </Text>
+                    </View>
                 )}
 
                 {/* Show payment status if paid */}

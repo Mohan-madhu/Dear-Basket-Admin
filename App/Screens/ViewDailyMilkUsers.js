@@ -186,6 +186,18 @@ const calculateRangeValuesFromRecord = (record, range) => {
   };
 };
 
+const getDeliveredValue = (record) => {
+  if (record?.received_fullamount !== undefined && record?.received_fullamount !== null && record?.received_fullamount !== "") {
+    return Number(record.received_fullamount) || 0;
+  }
+  return Number(record?.received_baseamount || 0) + Number(record?.received_extraamount || 0);
+};
+
+const getPayableBalance = (record) => {
+  const balance = getDeliveredValue(record) - Number(record?.paidamount || 0);
+  return balance > 0 ? balance : 0;
+};
+
 const getPaymentStatusText = (status) => {
   if (status === 1) return "Paid";
   if (status === 0 || status === null) return "Pending";
@@ -381,7 +393,7 @@ const ViewDailyMilkUsers = ({ navigation }) => {
 
       map[key].totalLitres += values.litres;
       map[key].totalAmount += values.amount;
-      map[key].balanceAmount += Number(record.balanceamount || 0);
+      map[key].balanceAmount += getPayableBalance(record);
       map[key].bookingCount += 1;
       map[key].records.push(record);
 
@@ -997,7 +1009,7 @@ const ViewDailyMilkUsers = ({ navigation }) => {
                       <View className="w-[48%] bg-white rounded-xl p-3 border border-gray-100 mb-2">
                         <Text className="text-gray-400 text-xs">Balance</Text>
                         <Text className="text-red-600 font-bold mt-1">
-                          {formatCurrency(record.balanceamount || 0)}
+                          {formatCurrency(getPayableBalance(record))}
                         </Text>
                       </View>
                     </View>

@@ -34,6 +34,25 @@ const DailyMilkActiveBookings = () => {
         { key: 'pending', label: 'Pending Payment' },
     ];
 
+    const toAmount = (value) => {
+        const amount = Number(value);
+        return Number.isFinite(amount) ? amount : 0;
+    };
+
+    const getDeliveredValue = (booking) => {
+        if (booking?.received_fullamount !== undefined && booking?.received_fullamount !== null && booking?.received_fullamount !== "") {
+            return toAmount(booking.received_fullamount);
+        }
+        return toAmount(booking?.received_baseamount) + toAmount(booking?.received_extraamount);
+    };
+
+    const getPaymentSummary = (booking) => {
+        const payable = getDeliveredValue(booking);
+        const paid = toAmount(booking?.paidamount);
+        const pending = Math.max(payable - paid, 0);
+        return { payable, paid, pending };
+    };
+
     // Fetch active bookings from API
     const getActiveBookingsFromDB = async () => {
         setLoading(true, "Fetching Active Bookings");
@@ -167,18 +186,16 @@ const DailyMilkActiveBookings = () => {
         }
     };
 
-    // Calculate total amount and paid amount
+    // Calculate payable amount from delivered milk value, not booked total
     const getPaymentStatus = (booking) => {
-        const total = booking.totalamount || 0;
-        const paid = booking.paidamount || 0;
-        const pending = total - paid;
+        const { payable, paid, pending } = getPaymentSummary(booking);
 
-        if (paid >= total) {
+        if (payable > 0 && paid >= payable - 0.009) {
             return {
                 text: 'Paid',
                 color: '#10B981',
                 bgColor: '#D1FAE5',
-                amount: `₹${paid}/₹${total}`,
+                amount: `₹${paid}/₹${payable}`,
                 isPaid: true
             };
         }
@@ -188,7 +205,7 @@ const DailyMilkActiveBookings = () => {
                 text: 'Not Paid',
                 color: '#EF4444',
                 bgColor: '#FEE2E2',
-                amount: `₹0/₹${total}`,
+                amount: `₹0/₹${payable}`,
                 isPaid: false
             };
         }
@@ -197,7 +214,7 @@ const DailyMilkActiveBookings = () => {
             text: 'Partial Paid',
             color: '#F59E0B',
             bgColor: '#FEF3C7',
-            amount: `₹${paid}/₹${total}`,
+            amount: `₹${paid}/₹${payable}`,
             isPaid: false
         };
     };
@@ -529,8 +546,12 @@ const DailyMilkActiveBookings = () => {
                                 <Text className="text-sm font-semibold text-gray-700 mb-2">Payment Details</Text>
                                 <View className="bg-gray-50 p-3 rounded-lg">
                                     <View className="flex-row justify-between mb-2">
-                                        <Text className="text-sm font-medium text-gray-800">Total Amount</Text>
+                                        <Text className="text-sm font-medium text-gray-800">Booked Amount</Text>
                                         <Text className="text-sm font-bold text-gray-800">₹{selectedBooking.totalamount || 0}</Text>
+                                    </View>
+                                    <View className="flex-row justify-between mb-2">
+                                        <Text className="text-sm font-medium text-gray-800">Delivered Value</Text>
+                                        <Text className="text-sm text-gray-800">₹{getPaymentSummary(selectedBooking).payable.toFixed(2)}</Text>
                                     </View>
                                     <View className="flex-row justify-between mb-2">
                                         <Text className="text-sm font-medium text-gray-800">Paid Amount</Text>
@@ -539,7 +560,7 @@ const DailyMilkActiveBookings = () => {
                                     <View className="flex-row justify-between mb-2">
                                         <Text className="text-sm font-medium text-gray-800">Balance</Text>
                                         <Text className="text-sm font-bold text-emerald-600">
-                                            ₹{Math.max(0, (selectedBooking.totalamount || 0) - (selectedBooking.paidamount || 0))}
+                                            ₹{getPaymentSummary(selectedBooking).pending.toFixed(2)}
                                         </Text>
                                     </View>
                                     <View className="mt-2">
@@ -681,9 +702,9 @@ const DailyMilkActiveBookings = () => {
             return status.status === 'active' || status.status === 'ending-soon';
         }).length;
 
-        const totalRevenue = bookings.reduce((sum, b) => sum + (b.totalamount || 0), 0);
-        const totalPaid = bookings.reduce((sum, b) => sum + (b.paidamount || 0), 0);
-        const pendingPayment = totalRevenue - totalPaid;
+        const totalRevenue = bookings.reduce((sum, b) => sum + getPaymentSummary(b).payable, 0);
+        const totalPaid = bookings.reduce((sum, b) => sum + getPaymentSummary(b).paid, 0);
+        const pendingPayment = bookings.reduce((sum, b) => sum + getPaymentSummary(b).pending, 0);
 
         const morningDeliveries = bookings.filter(b => b.deliverytype?.toLowerCase() === 'morning').length;
         const eveningDeliveries = bookings.filter(b => b.deliverytype?.toLowerCase() === 'evening').length;

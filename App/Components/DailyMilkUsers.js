@@ -12,11 +12,33 @@ import { SlideInRight, FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const DailyMilk_Users_Component = ({ orders, paymentStatusFilter }) => {
+  const toAmount = (value) => {
+    const amount = Number(value);
+    return Number.isFinite(amount) ? amount : 0;
+  };
+
+  const getDeliveredValue = (order) => {
+    if (order?.received_fullamount !== undefined && order?.received_fullamount !== null && order?.received_fullamount !== "") {
+      return toAmount(order.received_fullamount);
+    }
+    return toAmount(order?.received_baseamount) + toAmount(order?.received_extraamount);
+  };
+
+  const getPayableBalance = (order) => Math.max(getDeliveredValue(order) - toAmount(order?.paidamount), 0);
+
+  const isPaymentPaid = (order) => {
+    const deliveredValue = getDeliveredValue(order);
+    const paidAmount = toAmount(order?.paidamount);
+    const status = String(order?.payment_status ?? "").trim().toLowerCase();
+    return deliveredValue > 0 && (status === "1" || status === "paid" || paidAmount >= deliveredValue - 0.009);
+  };
+
   // Filter orders based on payment status
   const filteredOrders = orders.filter(order => {
+    const balanceDue = getPayableBalance(order);
     if (paymentStatusFilter === 'all') return true;
-    if (paymentStatusFilter === 'paid') return order.payment_status === 1;
-    if (paymentStatusFilter === 'pending') return order.payment_status === 0 || order.payment_status === null;
+    if (paymentStatusFilter === 'paid') return isPaymentPaid(order);
+    if (paymentStatusFilter === 'pending') return !isPaymentPaid(order) && balanceDue > 0;
     return true;
   });
 
@@ -118,14 +140,18 @@ const DailyMilk_Users_Component = ({ orders, paymentStatusFilter }) => {
         </Animated.View>
       ) : (
         <View className="space-y-5 pb-6">
-          {filteredOrders.map((order, index) => (
+          {filteredOrders.map((order, index) => {
+            const payableBalance = getPayableBalance(order);
+            const paymentPaid = isPaymentPaid(order);
+
+            return (
             <Animated.View
               key={order.orderid || index}
               entering={FadeIn.delay(100 * index)}
               exiting={FadeOut}
               layout={Layout.springify()}
               className={`bg-white p-5 rounded-2xl shadow-sm border ${
-                order.payment_status === 1 
+                paymentPaid
                   ? "border-green-100" 
                   : "border-yellow-100"
               }`}
@@ -142,9 +168,9 @@ const DailyMilk_Users_Component = ({ orders, paymentStatusFilter }) => {
                 </View>
                 <View className="flex-row space-x-2">
                   <Text
-                    className={`text-xs px-2.5 py-1 rounded-full font-medium ${getPaymentStatusColor(order.payment_status)} border`}
+                    className={`text-xs px-2.5 py-1 rounded-full font-medium ${getPaymentStatusColor(paymentPaid ? 1 : 0)} border`}
                   >
-                    {getPaymentStatusText(order.payment_status)}
+                    {getPaymentStatusText(paymentPaid ? 1 : 0)}
                   </Text>
                   <Text
                     className={`text-xs px-2.5 py-1 rounded-full font-medium ${getBookingStatusColor(order.booking_status)} border`}
@@ -231,9 +257,9 @@ const DailyMilk_Users_Component = ({ orders, paymentStatusFilter }) => {
                 <View className="flex-row justify-between">
                   <Text className="text-gray-600">Balance Amount:</Text>
                   <Text className={`font-bold ${
-                    order.balanceamount > 0 ? "text-red-600" : "text-green-600"
+                    payableBalance > 0 ? "text-red-600" : "text-green-600"
                   }`}>
-                    ₹{order.balanceamount || 0}
+                    ₹{payableBalance.toFixed(2)}
                   </Text>
                 </View>
               </View>
@@ -250,7 +276,8 @@ const DailyMilk_Users_Component = ({ orders, paymentStatusFilter }) => {
                 </View>
               </View>
             </Animated.View>
-          ))}
+          );
+          })}
         </View>
       )}
     </Animated.ScrollView>

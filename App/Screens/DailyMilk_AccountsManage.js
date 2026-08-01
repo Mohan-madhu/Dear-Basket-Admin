@@ -85,6 +85,30 @@ const buildProductFilters = (orders) => {
   ];
 };
 
+const getActualBalanceDue = (order) => {
+  const price = Number(order?.price || 0);
+  const receivedValue = order?.received_fullamount !== undefined
+    ? Number(order.received_fullamount)
+    : (Number(order?.received_quantity || 0) * price);
+  const paidAmount = Number(order?.paidamount || 0);
+  const actualBalance = receivedValue - paidAmount;
+  return actualBalance > 0 ? actualBalance : 0;
+};
+
+const isDailyMilkPaymentPaid = (order) => {
+  const receivedValue = order?.received_fullamount !== undefined
+    ? Number(order.received_fullamount)
+    : (Number(order?.received_quantity || 0) * Number(order?.price || 0));
+  const paidAmount = Number(order?.paidamount || 0);
+  const status = String(order?.payment_status ?? "").trim().toLowerCase();
+
+  return receivedValue > 0 && (
+    status === "1" ||
+    status === "paid" ||
+    paidAmount >= receivedValue - 0.009
+  );
+};
+
 const ProductFilterBar = ({ products, selectedFilter, onChange }) => {
   if (!products?.length) return null;
 
@@ -367,12 +391,12 @@ const UserDetailsCard = ({ order, navigation }) => {
             <Text className="text-gray-600 font-medium">Balance Due</Text>
             <Text
               className={`font-bold text-lg ${
-                Number(order.balanceamount) > 0
+                getActualBalanceDue(order) > 0
                   ? "text-red-600"
                   : "text-green-600"
               }`}
             >
-              ₹{order.balanceamount || 0}
+              ₹{getActualBalanceDue(order)}
             </Text>
           </View>
 
@@ -446,10 +470,11 @@ const PartnerWiseOrderList = ({ orders, paymentStatusFilter, navigation }) => {
 
   const filteredOrders = useMemo(() => {
     return (orders || []).filter((order) => {
+      const actualBalance = getActualBalanceDue(order);
       if (paymentStatusFilter === "all") return true;
-      if (paymentStatusFilter === "paid") return order.payment_status === 1;
+      if (paymentStatusFilter === "paid") return isDailyMilkPaymentPaid(order);
       if (paymentStatusFilter === "pending")
-        return order.payment_status === 0 || order.payment_status === null;
+        return !isDailyMilkPaymentPaid(order) && actualBalance > 0;
       return true;
     });
   }, [orders, paymentStatusFilter]);
@@ -573,6 +598,7 @@ const PartnerWiseOrderList = ({ orders, paymentStatusFilter, navigation }) => {
                         `${partner.partnerId}-${order.orderid}-${userIndex}`;
 
                       const isUserExpanded = expandedUser === userKey;
+                      const paymentPaid = isDailyMilkPaymentPaid(order);
 
                       return (
                         <Animated.View
@@ -602,14 +628,14 @@ const PartnerWiseOrderList = ({ orders, paymentStatusFilter, navigation }) => {
                               <View className="items-end">
                                 <Text
                                   className={`text-xs px-2.5 py-1 rounded-full font-medium border ${getPaymentStatusColor(
-                                    order.payment_status
+                                    paymentPaid ? 1 : 0
                                   )}`}
                                 >
-                                  {getPaymentStatusText(order.payment_status)}
+                                  {getPaymentStatusText(paymentPaid ? 1 : 0)}
                                 </Text>
 
                                 <Text className="text-sm font-bold text-gray-800 mt-2">
-                                  ₹{order.balanceamount || 0}
+                                  ₹{getActualBalanceDue(order)}
                                 </Text>
 
                                 <Icon
@@ -711,11 +737,11 @@ const DailyMilk_AccountsManage = ({ navigation }) => {
   }, [DailyMilkAccounts, selectedProductFilter]);
 
   const pendingCount = productFilteredAccounts.filter(
-    (order) => order.payment_status === 0 || order.payment_status === null
+    (order) => !isDailyMilkPaymentPaid(order) && getActualBalanceDue(order) > 0
   ).length;
 
   const paidCount = productFilteredAccounts.filter(
-    (order) => order.payment_status === 1
+    (order) => isDailyMilkPaymentPaid(order)
   ).length;
 
   const totalCount = productFilteredAccounts.length;

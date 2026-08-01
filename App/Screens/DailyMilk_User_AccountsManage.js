@@ -119,13 +119,38 @@ const ProductFilterBar = ({ products, selectedFilter, onChange }) => {
   );
 };
 
+const getActualBalanceDue = (order) => {
+  const price = Number(order?.price || 0);
+  const receivedValue = order?.received_fullamount !== undefined
+    ? Number(order.received_fullamount)
+    : (Number(order?.received_quantity || 0) * price);
+  const paidAmount = Number(order?.paidamount || 0);
+  const actualBalance = receivedValue - paidAmount;
+  return actualBalance > 0 ? actualBalance : 0;
+};
+
+const isDailyMilkPaymentPaid = (order) => {
+  const receivedValue = order?.received_fullamount !== undefined
+    ? Number(order.received_fullamount)
+    : (Number(order?.received_quantity || 0) * Number(order?.price || 0));
+  const paidAmount = Number(order?.paidamount || 0);
+  const status = String(order?.payment_status ?? "").trim().toLowerCase();
+
+  return receivedValue > 0 && (
+    status === "1" ||
+    status === "paid" ||
+    paidAmount >= receivedValue - 0.009
+  );
+};
+
 // OrderList Component for Daily Milk Accounts
 const OrderList = ({ orders, paymentStatusFilter ,navigation }) => {
   // Filter orders based on payment status
   const filteredOrders = orders.filter(order => {
+    const actualBalance = getActualBalanceDue(order);
     if (paymentStatusFilter === 'all') return true;
-    if (paymentStatusFilter === 'paid') return order.payment_status === 1;
-    if (paymentStatusFilter === 'pending') return order.payment_status === 0 || order.payment_status === null;
+    if (paymentStatusFilter === 'paid') return isDailyMilkPaymentPaid(order);
+    if (paymentStatusFilter === 'pending') return !isDailyMilkPaymentPaid(order) && actualBalance > 0;
     return true;
   });
 
@@ -232,13 +257,16 @@ const OrderList = ({ orders, paymentStatusFilter ,navigation }) => {
         </Animated.View>
       ) : (
         <View className="space-y-5 pb-6">
-          {filteredOrders.map((order, index) => (
+          {filteredOrders.map((order, index) => {
+            const paymentPaid = isDailyMilkPaymentPaid(order);
+
+            return (
             <Animated.View
               key={order.orderid || index}
               entering={FadeIn.delay(100 * index)}
               exiting={FadeOut}
               layout={Layout.springify()}
-              className={`bg-white p-5 rounded-2xl shadow-sm border ${order.payment_status === 1
+              className={`bg-white p-5 rounded-2xl shadow-sm border ${paymentPaid
                 ? "border-green-100"
                 : "border-yellow-100"
                 }`}
@@ -255,9 +283,9 @@ const OrderList = ({ orders, paymentStatusFilter ,navigation }) => {
                 </View>
                 <View className="flex-row space-x-2">
                   <Text
-                    className={`text-xs px-2.5 py-1 rounded-full font-medium ${getPaymentStatusColor(order.payment_status)} border`}
+                    className={`text-xs px-2.5 py-1 rounded-full font-medium ${getPaymentStatusColor(paymentPaid ? 1 : 0)} border`}
                   >
-                    {getPaymentStatusText(order.payment_status)}
+                    {getPaymentStatusText(paymentPaid ? 1 : 0)}
                   </Text>
                 </View>
               </View>
@@ -394,9 +422,9 @@ const OrderList = ({ orders, paymentStatusFilter ,navigation }) => {
                 </View>
                 <View className="flex-row justify-between items-center">
                   <Text className="text-gray-600 font-medium">Balance Due:</Text>
-                  <Text className={`font-bold text-lg ${order.balanceamount > 0 ? "text-red-600" : "text-green-600"
+                  <Text className={`font-bold text-lg ${getActualBalanceDue(order) > 0 ? "text-red-600" : "text-green-600"
                     }`}>
-                    ₹{order.balanceamount || 0}
+                    ₹{getActualBalanceDue(order)}
                   </Text>
                 </View>
               </View>
@@ -415,7 +443,8 @@ const OrderList = ({ orders, paymentStatusFilter ,navigation }) => {
                 </View>
               )}
             </Animated.View>
-          ))}
+          );
+          })}
         </View>
       )}
     </Animated.ScrollView>
@@ -494,8 +523,8 @@ console.log(userid, " UserID in DailyMilk_User_AccountsManage Screen");
   }, [DailyMilkAccounts, selectedProductFilter]);
 
   // Calculate counts for summary
-  const pendingCount = productFilteredAccounts.filter(order => order.payment_status === 0 || order.payment_status === null).length;
-  const paidCount = productFilteredAccounts.filter(order => order.payment_status === 1).length;
+  const pendingCount = productFilteredAccounts.filter(order => !isDailyMilkPaymentPaid(order) && getActualBalanceDue(order) > 0).length;
+  const paidCount = productFilteredAccounts.filter(order => isDailyMilkPaymentPaid(order)).length;
   const totalCount = productFilteredAccounts.length;
 
   return (

@@ -44,13 +44,18 @@ const TypeListDetails = ({ item, searchQuery = "" }) => {
 
 
   const GetProductsData = async (id) => {
+    if (!id) {
+      setData([]);
+      return;
+    }
     setLoading(true, "Fetching Products");
     try {
       //.log("Product/Type/" + id);
       // const Data = await API.GET("Products_new/Type/" + id);
       const Data = await API.GET("Products_new/ProductsWithAllDataForType/" + id);
-      if (Data?.Response?.length > 0) {
-        setData(Data.Response);
+      const products = Array.isArray(Data?.Response) ? Data.Response : [];
+      if (products.length > 0) {
+        setData(products);
         // setMenuItems(Data.Response); // <- remove if not defined
         //console.log(Data.Response);
       } else {

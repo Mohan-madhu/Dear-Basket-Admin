@@ -16,6 +16,7 @@ const MAX_CACHE_BYTES = 250 * 1024;
 const CACHE_BYPASS_PATTERNS = [
   /ProductOrder\/pending_orders_with_dailymilk/i,
   /ProductOrder\/all-combined/i,
+  /DailyMilkProducts/i,
   /DailyMilkStatus\/Dashboard/i,
   /DailyMilkStatus\/DailyMilkAccountsDashboard/i,
   /DearKitchen\/Orders/i,

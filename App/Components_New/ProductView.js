@@ -477,8 +477,12 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
 
     // Add this function to check current stock
     const getCurrentStock = () => {
-        return selectedVariant?.stockquantity || 0;
+        return Number(selectedVariant?.stockquantity ?? 0);
     };
+
+    const isOutOfStock = () => getCurrentStock() <= 0;
+    const isLowStock = () => getCurrentStock() > 0 && getCurrentStock() < 10;
+    const canIncrementCart = () => !cartItem || Number(cartItem?.orderquantity || 0) < getCurrentStock();
 
     const handleAddToCart = () => {
         if (!selectedVariant) return;
@@ -732,8 +736,8 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
                                 </View>
                                 <View className="flex-row justify-between">
                                     <Text className="text-gray-600">In Stock:</Text>
-                                    <Text className={selectedVariant?.stockquantity > 10 ? 'text-green-600' : 'text-amber-600'}>
-                                        {selectedVariant?.stockquantity} units
+                                    <Text className={isOutOfStock() ? 'text-red-600' : isLowStock() ? 'text-amber-600' : 'text-green-600'}>
+                                        {isOutOfStock() ? 'Out of Stock' : isLowStock() ? `Low Stock: ${getCurrentStock()} units` : `${getCurrentStock()} units`}
                                     </Text>
                                 </View>
 
@@ -741,9 +745,9 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
                                 {/* <View className="mt-4 flex-row justify-center">
                                 {!cartItem ? (
                                     <TouchableOpacity
-                                        disabled={getCurrentStock() === 0}
+                                        disabled={isOutOfStock()}
                                         onPress={handleAddToCart}
-                                        className={`px-5 py-2 rounded-full ${getCurrentStock() === 0 ? "bg-gray-300" : "bg-green-500"
+                                        className={`px-5 py-2 rounded-full ${isOutOfStock() ? "bg-gray-300" : "bg-green-500"
                                             } shadow-sm`}
                                         activeOpacity={0.8}
                                     >
@@ -769,14 +773,15 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
                                         </Text>
 
                                         <Pressable
-                                            className="bg-gray-100 px-3 py-1.5 active:bg-gray-200"
+                                            disabled={!canIncrementCart()}
+                                            className={`${canIncrementCart() ? "bg-gray-100" : "bg-gray-50"} px-3 py-1.5 active:bg-gray-200`}
                                             onPress={() => dispatch(incrementQuantity({
                                                 ...product,
                                                 variantid: selectedVariant?.variantid
                                             }))}
                                             android_ripple={{ color: '#e5e7eb', borderless: false }}
                                         >
-                                            <Text className="text-base font-semibold text-green-600">+</Text>
+                                            <Text className={`text-base font-semibold ${canIncrementCart() ? "text-green-600" : "text-gray-300"}`}>+</Text>
                                         </Pressable>
                                     </View>
                                 )}
@@ -798,13 +803,13 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
 
                                     {!cartItem ? (
                                         <TouchableOpacity
-                                            disabled={getCurrentStock() === 0}
+                                            disabled={isOutOfStock()}
                                             onPress={handleAddToCart}
-                                            className={`px-5 py-3 rounded-full ${getCurrentStock() === 0 ? "bg-gray-300" : "bg-blue-600"} shadow-sm`}
+                                            className={`px-5 py-3 rounded-full ${isOutOfStock() ? "bg-gray-300" : "bg-blue-600"} shadow-sm`}
                                             activeOpacity={0.8}
                                         >
                                             <Text className="text-base font-semibold text-white">
-                                                {getCurrentStock() === 0 ? "Out of Stock" : "Add to Cart"}
+                                                {isOutOfStock() ? "Out of Stock" : "Add to Cart"}
                                             </Text>
                                         </TouchableOpacity>
                                     ) : (
@@ -825,14 +830,15 @@ const ProductView = ({ product, variants, selectedvariantid }) => {
                                             </Text>
 
                                             <Pressable
-                                                className="bg-gray-100 px-4 py-2 active:bg-gray-200"
+                                                disabled={!canIncrementCart()}
+                                                className={`${canIncrementCart() ? "bg-gray-100" : "bg-gray-50"} px-4 py-2 active:bg-gray-200`}
                                                 onPress={() => dispatch(incrementQuantity({
                                                     ...product,
                                                     variantid: selectedVariant?.variantid
                                                 }))}
                                                 android_ripple={{ color: '#e5e7eb', borderless: false }}
                                             >
-                                                <Text className="text-base font-semibold text-green-600">+</Text>
+                                                <Text className={`text-base font-semibold ${canIncrementCart() ? "text-green-600" : "text-gray-300"}`}>+</Text>
                                             </Pressable>
                                         </View>
                                     )}

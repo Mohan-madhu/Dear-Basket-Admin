@@ -55,30 +55,42 @@ const useSlideFade = (delay = 0, from = 40) => {
 };
 
 function normalizeDate(input) {
+  if (!input) return null;
   const d =
     typeof input === "string" || typeof input === "number"
       ? new Date(input)
       : input;
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return null;
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+function hasValidBookingDates(booking) {
+  if (!booking?.bookingstartdate || !booking?.bookingenddate) return false;
+  return Boolean(normalizeDate(booking.bookingstartdate) && normalizeDate(booking.bookingenddate));
 }
 
 function findActiveBooking(bookingsData) {
   const now = new Date();
   const currentDateNormalized = normalizeDate(now);
+  if (!currentDateNormalized) return null;
 
   const activeBookings = [];
 
   function normalizeToDateOnly(date) {
     const d = new Date(date);
+    if (Number.isNaN(d.getTime())) return null;
     d.setHours(0, 0, 0, 0);
     return d;
   }
 
-  for (const booking of bookingsData) {
+  for (const booking of Array.isArray(bookingsData) ? bookingsData : []) {
+    if (!hasValidBookingDates(booking)) continue;
     const startDate = normalizeToDateOnly(booking.bookingstartdate);
     const endDate = normalizeToDateOnly(booking.bookingenddate);
+    if (!startDate || !endDate) continue;
     const currentDateOnly = normalizeToDateOnly(currentDateNormalized);
+    if (!currentDateOnly) continue;
 
     const isActive =
       currentDateOnly.getTime() >= startDate.getTime() &&
@@ -98,12 +110,15 @@ function isBookingExpiringSoon(bookingData) {
 
   const now = new Date();
   const today = normalizeDate(now);
+  if (!today) return false;
 
   // Get the earliest end date from all active bookings
   let earliestEndDate = null;
 
-  for (const booking of bookingData) {
-    const endDate = normalizeDate(new Date(booking.bookingenddate));
+  for (const booking of Array.isArray(bookingData) ? bookingData : []) {
+    if (!hasValidBookingDates(booking)) continue;
+    const endDate = normalizeDate(booking.bookingenddate);
+    if (!endDate) continue;
     if (!earliestEndDate || endDate < earliestEndDate) {
       earliestEndDate = endDate;
     }
@@ -125,11 +140,14 @@ function getDaysRemaining(bookingData) {
 
   const now = new Date();
   const today = normalizeDate(now);
+  if (!today) return 0;
 
   let earliestEndDate = null;
 
-  for (const booking of bookingData) {
-    const endDate = normalizeDate(new Date(booking.bookingenddate));
+  for (const booking of Array.isArray(bookingData) ? bookingData : []) {
+    if (!hasValidBookingDates(booking)) continue;
+    const endDate = normalizeDate(booking.bookingenddate);
+    if (!endDate) continue;
     if (!earliestEndDate || endDate < earliestEndDate) {
       earliestEndDate = endDate;
     }
@@ -612,8 +630,8 @@ const DailyMilkRegistrationScreen = ({ refreshKey }) => {
   }, []);
 
   const [DailyMilkRegistrationID, setDailyMilkRegistrationID] = useState(null);
-  const [UserBooked, setUserBooked] = useState({});
-  const [UserBookings, setUserBookings] = useState({});
+  const [UserBooked, setUserBooked] = useState([]);
+  const [UserBookings, setUserBookings] = useState([]);
 
   // Check and show birthday (no blocking)
   const checkAndShowBirthday = (userData) => {
@@ -716,11 +734,14 @@ const DailyMilkRegistrationScreen = ({ refreshKey }) => {
 
 
   function hasValidBookings(bookings) {
+    if (!Array.isArray(bookings) || bookings.length === 0) return false;
     const today = new Date();
     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
 
     for (const b of bookings) {
-      const endDate = new Date(b.bookingenddate);
+      if (!hasValidBookingDates(b)) continue;
+      const endDate = normalizeDate(b.bookingenddate);
+      if (!endDate) continue;
 
       if (endDate - today > sevenDaysMs) {
         return false; // ❌ Found a booking ending more than 7 days ahead
@@ -746,21 +767,24 @@ const DailyMilkRegistrationScreen = ({ refreshKey }) => {
         "DailyMilkRegistration/CheckUserForRegistration/" + USER
       );
       console.log("Registration Check Response:", res);
+      const registrations = Array.isArray(res?.Response) ? res.Response : [];
+      const registration = registrations[0];
 
-      if (res.Response.length === 0) {
+      if (registrations.length === 0) {
         setUserStatus(0);
         setLoading(false);
-      } else if (res.Response[0].status === 1) {
-        setDailyMilkRegistrationID(res.Response[0].transid);
+      } else if (registration?.status === 1) {
+        setDailyMilkRegistrationID(registration.transid);
 
         const { Response: bookings } = await API.GET(
-          "DailyMilkBooking/UserBookings/" + res.Response[0].transid
+          "DailyMilkBooking/UserBookings/" + registration.transid
         );
         console.log("User Bookings as soon as registration:", bookings);
         const active = findActiveBooking(bookings);
         console.log("Active Bookings:", active);
-        setUserBookings(bookings);
-        if (active) setUserBooked(active);
+        const validBookings = Array.isArray(bookings) ? bookings.filter(hasValidBookingDates) : [];
+        setUserBookings(validBookings);
+        setUserBooked(active || []);
         console.log("Active Bookings after registration:", active);
         setUserStatus(2);
 
@@ -770,15 +794,17 @@ const DailyMilkRegistrationScreen = ({ refreshKey }) => {
         }
 
         // Check birthday after registration data
-        checkAndShowBirthday(res.Response[0]);
-      } else if (res.Response[0].status === 0) {
+        checkAndShowBirthday(registration);
+      } else if (registration?.status === 0) {
         setUserStatus(1);
         setLoading(false);
-        checkAndShowBirthday(res.Response[0]);
-      } else if (res.Response[0].status === 2) {
+        checkAndShowBirthday(registration);
+      } else if (registration?.status === 2) {
         setUserStatus(3);
         setLoading(false);
-        checkAndShowBirthday(res.Response[0]);
+        checkAndShowBirthday(registration);
+      } else {
+        setUserStatus(0);
       }
     } catch (error) {
       console.error("Error in CheckAlreadyRegistered:", error);

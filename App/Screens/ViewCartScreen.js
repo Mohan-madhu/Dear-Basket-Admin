@@ -1,4 +1,5 @@
 import {
+    Alert,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -55,6 +56,19 @@ import { addToFavorites, removeFromFavorites } from "../Redux/FavouriteReducer";
 
 const NORMAL_DELIVERY_CHARGE = Number(Config.NORMAL_DELIVERY_CHARGE || 0);
 const NORMAL_DELIVERY_TAX_PERCENTAGE = Number(Config.NORMAL_DELIVERY_TAX_PERCENTAGE || 0);
+
+const formatCurrency = (value) => {
+    const number = Number(value) || 0;
+    return number.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+};
+
+const formatQuantity = (value) => {
+    const number = Number(value) || 0;
+    return number.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+};
+
+const isEnabledValue = (value) =>
+    value === true || value === 1 || value === "1" || String(value).toLowerCase() === "true";
 
 const getPartnerLetter = (mappedpartnerid) => {
     if (!mappedpartnerid || typeof mappedpartnerid !== "string") return null;
@@ -118,7 +132,7 @@ const ViewCartScreen = () => {
                     <Text className="text-lg font-bold">{item.productname}</Text>
                     <Text className="text-sm text-gray-500">{item.variantname}</Text>
                     <Text className="text-lg font-bold mt-1">
-                        ₹{item.price} x {item.orderquantity}
+                        ₹{formatCurrency(item.price)} x {formatCurrency(item.orderquantity)}
                     </Text>
                 </View>
 
@@ -339,6 +353,90 @@ const ViewCartScreen = () => {
         }
     }, [isdailymilkuser, deliveryOption]);
 
+    const validateCartStockBeforeOrder = async () => {
+        const variantIds = cart
+            .map((item) => item?.variantid)
+            .filter(Boolean)
+            .map(String);
+
+        if (variantIds.length === 0) {
+            return { isValid: true, message: "", variantsById: new Map() };
+        }
+
+        const response = await API.GET("ProductVariant");
+        const variants = Array.isArray(response?.Response)
+            ? response.Response
+            : Array.isArray(response)
+                ? response
+                : [];
+        const variantsById = new Map(
+            variants
+                .filter((variant) => variant?.variantid)
+                .map((variant) => [String(variant.variantid), variant])
+        );
+
+        const stockIssues = cart.reduce((issues, item) => {
+            const variantid = String(item?.variantid || "");
+            if (!variantid) return issues;
+
+            const latestVariant = variantsById.get(variantid);
+            const requestedQty = Number(item?.orderquantity || 0);
+            const availableQty = Number(latestVariant?.stockquantity ?? 0);
+            const isActive = latestVariant ? latestVariant?.isactive == null || isEnabledValue(latestVariant?.isactive) : false;
+
+            if (!latestVariant || !isActive || availableQty <= 0 || requestedQty > availableQty) {
+                issues.push({
+                    name: [item?.productname, item?.variantname].filter(Boolean).join(" - ") || "Product",
+                    requestedQty,
+                    availableQty: latestVariant && isActive ? Math.max(availableQty, 0) : 0,
+                });
+            }
+
+            return issues;
+        }, []);
+
+        if (!stockIssues.length) {
+            return { isValid: true, message: "", variantsById };
+        }
+
+        const lines = stockIssues
+            .slice(0, 6)
+            .map((item, index) =>
+                `${index + 1}. ${item.name}\nRequested: ${formatQuantity(item.requestedQty)} | Available now: ${formatQuantity(item.availableQty)}`
+            )
+            .join("\n\n");
+        const extraCount = stockIssues.length > 6 ? `\n\n+${stockIssues.length - 6} more items need changes.` : "";
+
+        return {
+            isValid: false,
+            message: `Some items are no longer available in the selected quantity. Please reduce or remove them.\n\n${lines}${extraCount}`,
+            variantsById,
+        };
+    };
+
+    const reduceVariantStockAfterOrder = async (variantsById = new Map()) => {
+        const quantityByVariantId = cart.reduce((map, item) => {
+            const variantid = String(item?.variantid || "");
+            if (!variantid) return map;
+            map.set(variantid, (map.get(variantid) || 0) + Number(item?.orderquantity || 0));
+            return map;
+        }, new Map());
+
+        for (const [variantid, orderedQty] of quantityByVariantId.entries()) {
+            const latestVariant = variantsById.get(variantid);
+            if (!latestVariant) continue;
+
+            const currentStock = Number(latestVariant?.stockquantity ?? 0);
+            const nextStock = Math.max(0, currentStock - orderedQty);
+
+            await API.PUT("ProductVariant/stock", {
+                variantid,
+                stockquantity: nextStock,
+                luu: userData?.name || userData?.transid || "USER",
+            });
+        }
+    };
+
 
 
     const ProceeedToPay = async () => {
@@ -388,6 +486,18 @@ const ViewCartScreen = () => {
                 return;
             }
 
+            setLoading(true, "Checking latest stock availability...");
+            const stockCheck = await validateCartStockBeforeOrder();
+            if (!stockCheck.isValid) {
+                setLoading(false);
+                Alert.alert(
+                    "Stock Changed",
+                    stockCheck.message,
+                    [{ text: "OK" }]
+                );
+                return;
+            }
+
             log("All Requirements Met");
 
             let ProductOrderid = uuidv4();
@@ -416,7 +526,7 @@ const ViewCartScreen = () => {
                 console.log("Current IST Hour:", pad2(hour));
                 console.log(
                     "Daily Milk Delivery Type:",
-                    `${selectedDeliveryType} (${pad2(schedule.startHour)}:00-${pad2(schedule.endHour)}:00, cutoff ${pad2(schedule.cutoffHour)}:00)`
+                    `${selectedDeliveryType} (${pad2(schedule.startHour)}:${pad2(schedule.startMinute || 0)}-${pad2(schedule.endHour)}:${pad2(schedule.endMinute || 0)}, cutoff ${pad2(schedule.cutoffHour)}:${pad2(schedule.cutoffMinute || 0)})`
                 );
 
                 const orderidnumberres = await API.POST(
@@ -513,6 +623,9 @@ const ViewCartScreen = () => {
                 var msg = res.message || res.Response;
                 log("Product Order Details Response :", msg);
             }
+
+            setLoading(true, "Updating product stock...");
+            await reduceVariantStockAfterOrder(stockCheck.variantsById);
 
             Toaster.successtop("Order Created Successfully");
             dispatch(clearNormalCart());
@@ -619,7 +732,7 @@ const ViewCartScreen = () => {
                                     Item Total
                                 </Text>
                                 <Text className="text-base font-normal">
-                                    ₹{total}
+                                    ₹{formatCurrency(total)}
                                 </Text>
                             </View>
 
@@ -628,7 +741,7 @@ const ViewCartScreen = () => {
                                     Delivery Fee
                                 </Text>
                                 <Text className="text-base font-bold text-orange-500">
-                                    {deliveryfee === "FREE" ? "FREE" : `₹${deliveryfee}`}
+                                    {deliveryfee === "FREE" ? "FREE" : `₹${formatCurrency(deliveryfee)}`}
                                 </Text>
                             </View>
 
@@ -637,7 +750,7 @@ const ViewCartScreen = () => {
                                     Taxes & Charges
                                 </Text>
                                 <Text className="text-base font-bold text-orange-500">
-                                    {`${taxpercentage}% - ₹${(total * taxpercentage) / 100}`}
+                                    {`${formatCurrency(taxpercentage)}% - ₹${formatCurrency((total * taxpercentage) / 100)}`}
                                 </Text>
                             </View>
 
@@ -648,7 +761,7 @@ const ViewCartScreen = () => {
                                     To Pay
                                 </Text>
                                 <Text className="text-lg font-bold">
-                                    ₹{total + (total * taxpercentage) / 100 + (deliveryfee === "FREE" ? 0 : NORMAL_DELIVERY_CHARGE)}
+                                    ₹{formatCurrency(total + (total * taxpercentage) / 100 + (deliveryfee === "FREE" ? 0 : NORMAL_DELIVERY_CHARGE))}
                                 </Text>
                             </View>
 
@@ -692,7 +805,7 @@ const ViewCartScreen = () => {
                                                                     Fast Delivery
                                                                 </Text>
                                                                 <Text className="text-sm font-bold text-blue-600">
-                                                                    ₹{NORMAL_DELIVERY_CHARGE}
+                                                                    ₹{formatCurrency(NORMAL_DELIVERY_CHARGE)}
                                                                 </Text>
                                                             </View>
                                                             <Text className="text-xs text-gray-500 mt-1">
@@ -785,7 +898,7 @@ const ViewCartScreen = () => {
                                                                     Switch to Fast Delivery
                                                                 </Text>
                                                                 <Text className="text-xs text-blue-700 mt-0.5">
-                                                                    Send separately for ₹{NORMAL_DELIVERY_CHARGE}
+                                                                    Send separately for ₹{formatCurrency(NORMAL_DELIVERY_CHARGE)}
                                                                 </Text>
                                                             </View>
                                                         </View>

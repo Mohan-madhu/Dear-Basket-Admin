@@ -155,7 +155,7 @@ const DailyMilkBookingScreen = ({
   const [DailyMilkRegistrationID, setDailyMilkRegistrationID] = useState(
     DailyMilkRegistrationID_Parent
   );
-  const [UserBooked, setUserBooked] = useState({});
+  const [UserBooked, setUserBooked] = useState([]);
   const [UserStatus, setUserStatus] = useState(null);
   const [bookingStatus, setBookingStatus] = useState([]);
   const [userBookingStatus, setUserBookingStatus] = useState(null);
@@ -169,10 +169,17 @@ const DailyMilkBookingScreen = ({
   const route = useRoute();
   const routeUserBooked = route?.params?.UserBooked;
   const effectiveBookingData = useMemo(() => {
-    if (Array.isArray(UserBooked) && UserBooked.length > 0) return UserBooked;
-    if (Array.isArray(BookingData) && BookingData.length > 0) return BookingData;
-    if (Array.isArray(UserBookings) && UserBookings.length > 0) return UserBookings;
-    if (Array.isArray(routeUserBooked) && routeUserBooked.length > 0) return routeUserBooked;
+    const hasValidDateRange = (booking) => booking?.transid && booking?.bookingstartdate && booking?.bookingenddate;
+    const normalizeList = (value) => Array.isArray(value) ? value.filter(hasValidDateRange) : [];
+    const userBookedList = normalizeList(UserBooked);
+    const bookingDataList = normalizeList(BookingData);
+    const userBookingsList = normalizeList(UserBookings);
+    const routeUserBookedList = normalizeList(routeUserBooked);
+
+    if (userBookedList.length > 0) return userBookedList;
+    if (bookingDataList.length > 0) return bookingDataList;
+    if (userBookingsList.length > 0) return userBookingsList;
+    if (routeUserBookedList.length > 0) return routeUserBookedList;
     return [];
   }, [UserBooked, BookingData, UserBookings, routeUserBooked]);
 
@@ -367,10 +374,12 @@ const DailyMilkBookingScreen = ({
 
   // --------- helpers ---------
   const normalizeDate = (input) => {
+    if (!input) return null;
     const d =
       typeof input === "string" || typeof input === "number"
         ? new Date(input)
         : input;
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return null;
     d.setHours(0, 0, 0, 0);
     return d;
   };
@@ -378,8 +387,10 @@ const DailyMilkBookingScreen = ({
   const findActiveBooking = (bookingsData) => {
     const now = new Date();
     const currentDateNormalized = normalizeDate(now);
+    if (!currentDateNormalized) return null;
     const normalizeToDateOnly = (date) => {
       const d = new Date(date);
+      if (Number.isNaN(d.getTime())) return null;
       d.setHours(0, 0, 0, 0);
       return d;
     };
@@ -389,8 +400,9 @@ const DailyMilkBookingScreen = ({
       if (!booking?.bookingstartdate || !booking?.bookingenddate) continue;
       const startDate = normalizeToDateOnly(booking.bookingstartdate);
       const endDate = normalizeToDateOnly(booking.bookingenddate);
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) continue;
+      if (!startDate || !endDate) continue;
       const current = normalizeToDateOnly(currentDateNormalized);
+      if (!current) continue;
       const isActive =
         current.getTime() >= startDate.getTime() &&
         current.getTime() <= endDate.getTime();
@@ -508,25 +520,27 @@ const DailyMilkBookingScreen = ({
       const res = await API.GET(
         "DailyMilkBooking/CheckUser1/" + DailyMilkRegistrationID
       );
+      const bookingCheck = Array.isArray(res?.Response) ? res.Response : [];
+      const bookingRegistration = bookingCheck[0];
 
 
-      if (res.Response?.length > 0) {
+      if (bookingCheck.length > 0) {
         setIsBooked(true);
       }
 
-      if (!res.Response || res.Response.length === 0) {
+      if (bookingCheck.length === 0) {
         setUserStatus(0); // not registered
-      } else if (res.Response[0].status === 1) {
+      } else if (bookingRegistration?.status === 1) {
         setUserStatus(2); // approved
         const { Response: bookings2 } = await API.GET(
-          "DailyMilkBooking/UserBookings/" + res.Response[0].transid
+          "DailyMilkBooking/UserBookings/" + bookingRegistration.transid
         );
         const active = findActiveBooking(bookings2 || []);
 
-        if (active) setUserBooked(active);
-      } else if (res.Response[0].status === 0) {
+        setUserBooked(active || []);
+      } else if (bookingRegistration?.status === 0) {
         setUserStatus(1); // pending
-      } else if (res.Response[0].status === 2) {
+      } else if (bookingRegistration?.status === 2) {
         setUserStatus(3); // rejected
       }
     } catch (e) {
@@ -562,8 +576,9 @@ const DailyMilkBookingScreen = ({
         const ProductOrderid = uuidv4();
 
         const res1 = await API.GET("DailyMilkRegistration/CheckUserForRegistration/" + userData?.transid);
-        log("User Registration Check:", res1.Response);
-        var dailymilkregistrationdata = res1.Response[0];
+        const registrations = Array.isArray(res1?.Response) ? res1.Response : [];
+        log("User Registration Check:", registrations);
+        var dailymilkregistrationdata = registrations[0];
 
         if (!dailymilkregistrationdata || !dailymilkregistrationdata.transid) {
           Alert.alert("Not Registered", "You need to register first before requesting a demo.");
@@ -582,8 +597,8 @@ const DailyMilkBookingScreen = ({
           "deliverycity": city,
           "deliverystate": state || "TAMIL NADU",
           "deliverypincode": postalcode,
-          "latitude": dailymilkregistrationdata.latitude.toString(),
-          "longitude": dailymilkregistrationdata.longitude.toString(),
+          "latitude": dailymilkregistrationdata?.latitude != null ? dailymilkregistrationdata.latitude.toString() : "",
+          "longitude": dailymilkregistrationdata?.longitude != null ? dailymilkregistrationdata.longitude.toString() : "",
 
           "orderstatus": "Demo Milk Order Placed by " + userData.name,
           "orderplaced": 1,

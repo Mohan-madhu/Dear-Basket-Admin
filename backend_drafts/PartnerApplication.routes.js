@@ -41,8 +41,12 @@ router.post('/', async (req, res, next) => {
       .input('vehicle', sql.VarChar(50), vehicle)
       .input('licence', sql.VarChar(100), licence)
       .query(`
-        IF EXISTS (SELECT 1 FROM dbo.tbl_login WHERE username=@mobile OR mobile=@mobile)
-            OR EXISTS (SELECT 1 FROM dbo.tbl_user WHERE mobile=@mobile)
+        IF EXISTS (
+          SELECT 1
+          FROM dbo.tbl_login
+          WHERE ISNULL(isdeleted, 0) = 0
+            AND (username=@mobile OR mobile=@mobile)
+        )
             THROW 50001, 'An account already exists for this mobile number.', 1;
         IF EXISTS (SELECT 1 FROM dbo.tbl_partner_applications WHERE mobile=@mobile AND applicationstatus='PENDING')
             THROW 50002, 'A partner application is already pending for this mobile number.', 1;
@@ -116,8 +120,12 @@ router.put('/status', async (req, res, next) => {
             FROM dbo.tbl_partner_applications a
             WHERE a.applicationid=@applicationid
               AND (
-                EXISTS (SELECT 1 FROM dbo.tbl_user u WHERE u.mobile=a.mobile)
-                OR EXISTS (SELECT 1 FROM dbo.tbl_login l WHERE l.username=a.mobile OR l.mobile=a.mobile)
+                EXISTS (
+                  SELECT 1
+                  FROM dbo.tbl_login l
+                  WHERE ISNULL(l.isdeleted, 0) = 0
+                    AND (l.username=a.mobile OR l.mobile=a.mobile)
+                )
               )
           ) THROW 50005, 'A user account already exists for this mobile number.', 1;
 

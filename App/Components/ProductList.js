@@ -15,6 +15,9 @@ import { Image } from "expo-image";
 export default function ProductList({ type, products, onAdd, setrefresh, searchQuery = "" }) {
   const nav = useNavigation();
   const [ROLE, setROLE] = useState(null);
+  const safeProducts = Array.isArray(products)
+    ? products.filter((item) => item && (item.productid || item.transid))
+    : [];
   //const ROLE = "ADMIN";
   const getRole = async () => {
     var ROLE = await Storage.getData("ROLE");
@@ -28,7 +31,7 @@ export default function ProductList({ type, products, onAdd, setrefresh, searchQ
   }, []);
 
   //console.log(ROLE)
-  if (products.length < 1 && ROLE !== "ADMIN") {
+  if (safeProducts.length < 1 && ROLE !== "ADMIN") {
     const isSearching = Boolean(searchQuery.trim());
     return (
       <View className="px-6 py-14 items-center">
@@ -58,8 +61,8 @@ export default function ProductList({ type, products, onAdd, setrefresh, searchQ
 
       <View className="pb-0">
         <FlatList
-          data={products}
-          keyExtractor={(item) => item.productid}
+          data={safeProducts}
+          keyExtractor={(item, index) => String(item?.productid || item?.transid || index)}
           renderItem={({ item }) => <ProductCard product={item} onAdd={onAdd} setrefresh={setrefresh} />}
           numColumns={2}
           contentContainerStyle={{ padding: 0, paddingBottom: 20 }}

@@ -47,7 +47,7 @@ const ProductCard = ({ product, setrefresh }) => {
     transform: [{ scale: heartScale.value }],
   }));
 
-  const { favorites } = useSelector((state) => state.favorites); // Adjust based on your Redux structure
+  const favorites = useSelector((state) => state.favorites?.favorites || []); // Adjust based on your Redux structure
   //console.log("FAVORITES:", JSON.stringify(favorites, null, 2));
 
   const log = createLogger("ProductCard");
@@ -55,7 +55,11 @@ const ProductCard = ({ product, setrefresh }) => {
   const { setLoading } = useLoading();
 
 
-  const isFavorite = favorites.some(fav =>
+  const safeVariants = Array.isArray(product?.variants)
+    ? product.variants.filter((variant) => variant?.variantid)
+    : [];
+
+  const isFavorite = (Array.isArray(favorites) ? favorites : []).some(fav =>
     fav.variantid === selectedVariant?.variantid
   );
 
@@ -68,8 +72,10 @@ const ProductCard = ({ product, setrefresh }) => {
 
   // Set default selected variant
   useEffect(() => {
-    if (product?.variants && product.variants.length > 0) {
-      setSelectedVariant(product.variants[0]);
+    if (safeVariants.length > 0) {
+      setSelectedVariant(safeVariants[0]);
+    } else {
+      setSelectedVariant(null);
     }
   }, [product]);
 
@@ -121,32 +127,39 @@ const ProductCard = ({ product, setrefresh }) => {
   };
 
   const calcMrp = (price, discount) => {
-    if (!discount || discount <= 0) return price;
-    return Math.round((price * 100) / (100 - discount));
+    const numericPrice = Number(price || 0);
+    const numericDiscount = Number(discount || 0);
+    if (!numericDiscount || numericDiscount <= 0) return numericPrice;
+    return Math.round((numericPrice * 100) / (100 - numericDiscount));
   };
 
   const getCurrentMrp = () => {
     if (!selectedVariant) return calcMrp(product?.price, product?.discount);
-    return calcMrp(selectedVariant.sellingprice, selectedVariant.discountpercentage);
+    return calcMrp(selectedVariant?.sellingprice, selectedVariant?.discountpercentage);
   };
 
   const getCurrentPrice = () => {
-    if (!selectedVariant) return product?.price;
-    return selectedVariant.sellingprice;
+    if (!selectedVariant) return Number(product?.price || 0);
+    return Number(selectedVariant?.sellingprice || 0);
   };
 
   const getCurrentDiscount = () => {
-    if (!selectedVariant) return product?.discount;
-    return selectedVariant.discountpercentage;
+    if (!selectedVariant) return Number(product?.discount || 0);
+    return Number(selectedVariant?.discountpercentage || 0);
   };
 
   const getCurrentStock = () => {
-    if (!selectedVariant) return product?.quantity;
-    return selectedVariant.stockquantity;
+    if (!selectedVariant) return Number(product?.quantity ?? 0);
+    return Number(selectedVariant.stockquantity ?? 0);
   };
+
+  const isOutOfStock = () => getCurrentStock() <= 0;
+  const isLowStock = () => getCurrentStock() > 0 && getCurrentStock() < 10;
+  const canIncrementCart = () => !cartItem || Number(cartItem.orderquantity || 0) < getCurrentStock();
 
   const getImageURI = (imagePath) => {
     if (!imagePath) return null;
+    if (typeof imagePath !== "string") return null;
     if (imagePath.startsWith("file://")) return imagePath;
     if (imagePath.startsWith("http")) return imagePath;
     return getImageUrl(imagePath);
@@ -363,7 +376,7 @@ const ProductCard = ({ product, setrefresh }) => {
         scale.value = withSpring(1, { damping: 0 });
       }}
       onPress={() => {
-        if (!showActions) {
+        if (!showActions && selectedVariant) {
           nav.navigate("ProductAndVariantScreen", {
             prod: product,
             selectedVariant: selectedVariant
@@ -418,10 +431,14 @@ const ProductCard = ({ product, setrefresh }) => {
         )}
 
         {/* Stock Quantity */}
-        <View className="absolute top-2 left-2 bg-white/90 px-2 py-1 rounded-lg shadow-sm flex-row items-center">
-          <Ionicons name="pricetag" size={12} color="#4b5563" />
-          <Text className="text-xs font-medium text-gray-800 ml-1">
-            {getCurrentStock()}
+        <View className={`absolute top-2 left-2 px-2 py-1 rounded-lg shadow-sm flex-row items-center ${isOutOfStock() ? "bg-red-50" : isLowStock() ? "bg-amber-50" : "bg-white/90"}`}>
+          <Ionicons
+            name={isOutOfStock() ? "close-circle" : isLowStock() ? "alert-circle" : "pricetag"}
+            size={12}
+            color={isOutOfStock() ? "#dc2626" : isLowStock() ? "#d97706" : "#4b5563"}
+          />
+          <Text className={`text-xs font-medium ml-1 ${isOutOfStock() ? "text-red-700" : isLowStock() ? "text-amber-700" : "text-gray-800"}`}>
+            {isOutOfStock() ? "Out of Stock" : isLowStock() ? `Low Stock: ${getCurrentStock()}` : getCurrentStock()}
           </Text>
         </View>
 
@@ -467,9 +484,9 @@ const ProductCard = ({ product, setrefresh }) => {
         ) : null}
 
         {/* Variant Pills */}
-        {product?.variants && product.variants.length > 1 && (
+        {safeVariants.length > 1 && (
           <View className="flex-row flex-wrap mt-2 gap-1">
-            {product.variants.map((variant) => (
+            {safeVariants.map((variant) => (
               <TouchableOpacity
                 key={variant.variantid}
                 onPress={() => handleVariantSelect(variant)}
@@ -496,7 +513,7 @@ const ProductCard = ({ product, setrefresh }) => {
           {/* {renderStars(product?.rating)} */}
           <AnimatedStars rating={product?.rating ?? 0} />
           <Text className="text-[10px] text-gray-500 ml-1">
-            ({product?.rating?.toFixed(1)})
+            ({Number(product?.rating || 0).toFixed(1)})
           </Text>
         </View>
 
@@ -517,13 +534,13 @@ const ProductCard = ({ product, setrefresh }) => {
           {/* Action: Add / Quantity Controls */}
           {!cartItem ? (
             <TouchableOpacity
-              disabled={getCurrentStock() === 0}
+              disabled={isOutOfStock()}
               onPress={handleAddToCart}
-              className={`px-5 py-2 rounded-full ${getCurrentStock() === 0 ? "bg-gray-300" : "bg-green-500"
+              className={`px-5 py-2 rounded-full ${isOutOfStock() ? "bg-gray-300" : "bg-green-500"
                 } shadow-sm`}
               activeOpacity={0.8}
             >
-              <Text className="text-xs font-semibold text-white">ADD</Text>
+              <Text className="text-xs font-semibold text-white">{isOutOfStock() ? "OUT" : "ADD"}</Text>
             </TouchableOpacity>
           ) : (
             <View className="flex-row items-center border border-gray-200 rounded-full overflow-hidden shadow-sm bg-white">
@@ -546,14 +563,15 @@ const ProductCard = ({ product, setrefresh }) => {
 
               {/* Increment */}
               <Pressable
-                className="bg-gray-100 px-3 py-1.5 active:bg-gray-200"
+                disabled={!canIncrementCart()}
+                className={`${canIncrementCart() ? "bg-gray-100" : "bg-gray-50"} px-3 py-1.5 active:bg-gray-200`}
                 onPress={() => dispatch(incrementQuantity({
                   ...product,
                   variantid: selectedVariant?.variantid
                 }))}
                 android_ripple={{ color: '#e5e7eb', borderless: false }}
               >
-                <Text className="text-base font-semibold text-green-600">+</Text>
+                <Text className={`text-base font-semibold ${canIncrementCart() ? "text-green-600" : "text-gray-300"}`}>+</Text>
               </Pressable>
             </View>
           )}

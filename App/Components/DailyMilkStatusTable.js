@@ -12,6 +12,21 @@ const MilkStatusTable = ({ data, embedded = false }) => {
     return (item.amount / item.quantity) * item.extra;
   };
 
+  const isFutureDeliveryDate = (dateValue) => {
+    if (!dateValue) return false;
+    const datePart = String(dateValue).split("T")[0];
+    const [year, month, day] = datePart.split("-").map(Number);
+    if (!year || !month || !day) return false;
+
+    const deliveryDate = new Date(year, month - 1, day);
+    deliveryDate.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return deliveryDate.getTime() > today.getTime();
+  };
+
   let statusIcon = 'check-circle';
   let statusColor = '#9ca3af';
   let statusText = 'No Data';
@@ -66,10 +81,12 @@ const MilkStatusTable = ({ data, embedded = false }) => {
           const cancelled = isDailyMilkCancelled(item?.cancelled);
           const cancellationReason = getDailyMilkCancellationReason(item?.cancelled);
           const received = item?.received != null;
+          const futureDelivery = isFutureDeliveryDate(item?.date);
           const quantity = Number(item?.quantity || 0);
           const extra = Number(item?.extra || 0);
           const amount = Number(item?.amount || 0);
           const extraAmount = calculateExtraAmount(item);
+          const statusLabel = cancelled ? "Cancelled" : received ? "Done" : futureDelivery ? "-" : "Pending";
 
           return (
             <View
@@ -92,14 +109,16 @@ const MilkStatusTable = ({ data, embedded = false }) => {
                 {!cancelled && extra > 0 ? <Text className="text-[10px] text-green-400">+₹{extraAmount.toFixed(2)}</Text> : null}
               </View>
               <View className="flex-1 items-end">
-                <View className={`flex-row items-center px-2 py-1 rounded-full ${cancelled ? "bg-red-900" : received ? "bg-green-900" : "bg-amber-900"}`}>
-                  <MaterialIcons
-                    name={cancelled ? "block" : received ? "check" : "schedule"}
-                    size={11}
-                    color={cancelled ? "#fca5a5" : received ? "#86efac" : "#fcd34d"}
-                  />
-                  <Text className={`text-[9px] font-bold ml-1 ${cancelled ? "text-red-200" : received ? "text-green-200" : "text-amber-200"}`}>
-                    {cancelled ? "Cancelled" : received ? "Done" : "Pending"}
+                <View className={`flex-row items-center px-2 py-1 rounded-full ${cancelled ? "bg-red-900" : received ? "bg-green-900" : futureDelivery ? "bg-gray-800" : "bg-amber-900"}`}>
+                  {!futureDelivery ? (
+                    <MaterialIcons
+                      name={cancelled ? "block" : received ? "check" : "schedule"}
+                      size={11}
+                      color={cancelled ? "#fca5a5" : received ? "#86efac" : "#fcd34d"}
+                    />
+                  ) : null}
+                  <Text className={`text-[9px] font-bold ${futureDelivery ? "" : "ml-1"} ${cancelled ? "text-red-200" : received ? "text-green-200" : futureDelivery ? "text-gray-200" : "text-amber-200"}`}>
+                    {statusLabel}
                   </Text>
                 </View>
                 {cancelled && cancellationReason ? (

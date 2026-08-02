@@ -23,6 +23,13 @@ export default function CartScreen({ cart, favorites, onToggleFavorite }) {
 
     const AnimatedIonicons = Animated.createAnimatedComponent(Ionicons);
 
+    const getAvailableStock = (item = {}) => {
+        const stock = Number(item.stockquantity ?? item.quantity ?? item.product?.stockquantity);
+        return Number.isFinite(stock) ? stock : Infinity;
+    };
+
+    const canIncrementItem = (item) => Number(item?.orderquantity || 0) < getAvailableStock(item);
+
     const renderStars = (rating = 4) => {
         const fullStars = Math.floor(rating); // Full star count
         const hasHalfStar = rating % 1 >= 0.5; // Check if there's a half star
@@ -238,10 +245,11 @@ export default function CartScreen({ cart, favorites, onToggleFavorite }) {
                                     </Text>
 
                                     <Pressable
-                                        className="bg-green-50 px-2 py-1"
+                                        disabled={!canIncrementItem(item)}
+                                        className={`${canIncrementItem(item) ? "bg-green-50" : "bg-gray-50"} px-2 py-1`}
                                         onPress={() => dispatch(incrementQuantity(item))}
                                     >
-                                        <Text className="text-base font-semibold text-green-600">+</Text>
+                                        <Text className={`text-base font-semibold ${canIncrementItem(item) ? "text-green-600" : "text-gray-300"}`}>+</Text>
                                     </Pressable>
                                 </View>
 

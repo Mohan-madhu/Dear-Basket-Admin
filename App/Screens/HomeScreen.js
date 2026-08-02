@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View,
+  FlatList,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -16,6 +17,7 @@ import {
   Modal,
   Alert,
   Pressable,
+  ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -32,6 +34,7 @@ import throttle from "lodash.throttle";
 
 import AdminDashboard from "../Screens/AdminDashboard";
 import MenuViewScreen from "../Screens/MenuViewScreen";
+import ProductCard from "../Components/ProductCard";
 import { API, getUserFacingErrorMessage } from "../../App_Utils/Services/APIService";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import Storage from "../../App_Utils/Services/StorageService";
@@ -59,6 +62,94 @@ const getBrandTitle = (selectedMenuId) => {
   if (selectedMenuId === DAILY_MILK_MENU_ID) return "Dear Milk";
   if (selectedMenuId === DEAR_FOODIE_MENU_ID) return "Dear Kitchen";
   return "Dear Basket";
+};
+
+const collectTypeIdsFromMenus = (menus = []) => {
+  const typeIds = new Set();
+
+  const collect = (value, parentKey = "") => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach((child) => collect(child, parentKey));
+      return;
+    }
+    if (typeof value !== "object") return;
+
+    const possibleTypeId =
+      value.typeid ||
+      value.typeId ||
+      value.typenameid ||
+      value.typenameId ||
+      (/types?/i.test(parentKey) && value.transid) ||
+      (value.transid && String(value.typename || value.type || "").trim() ? value.transid : null);
+
+    if (possibleTypeId) {
+      typeIds.add(String(possibleTypeId));
+    }
+
+    Object.entries(value).forEach(([key, childValue]) => collect(childValue, key));
+  };
+
+  menus
+    .filter((menu) => menu?.id !== ADDNEWMENU.id && !SPECIAL_MENU_IDS_WITH_OWN_CART.has(menu?.id))
+    .forEach(collect);
+
+  return Array.from(typeIds);
+};
+
+const collectCategoryIdsFromMenus = (menus = []) => {
+  const categoryIds = new Set();
+
+  const collect = (value, parentKey = "") => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach((child) => collect(child, parentKey));
+      return;
+    }
+    if (typeof value !== "object") return;
+
+    const possibleCategoryId =
+      value.categoryid ||
+      value.categoryId ||
+      (/categories?/i.test(parentKey) && value.transid);
+
+    if (possibleCategoryId) {
+      categoryIds.add(String(possibleCategoryId));
+    }
+
+    Object.entries(value).forEach(([key, childValue]) => collect(childValue, key));
+  };
+
+  menus
+    .filter((menu) => menu?.id !== ADDNEWMENU.id && !SPECIAL_MENU_IDS_WITH_OWN_CART.has(menu?.id))
+    .forEach(collect);
+
+  return Array.from(categoryIds);
+};
+
+const getProductSearchText = (product) => {
+  const variants = Array.isArray(product?.variants) ? product.variants : [];
+  return [
+    product?.productname,
+    product?.productcode,
+    product?.shortdescription,
+    product?.fulldescription,
+    product?.typename,
+    product?.categoryname,
+    product?.sectionname,
+    product?.menuname,
+    ...variants.flatMap((variant) => [
+      variant?.variantname,
+      variant?.sku,
+      variant?.sellingprice,
+      variant?.baseprice,
+      variant?.packsize,
+      variant?.weight,
+    ]),
+  ]
+    .filter((value) => value !== null && value !== undefined)
+    .join(" ")
+    .toLowerCase();
 };
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -112,6 +203,11 @@ export default function HomeScreen() {
   const [menus, setMenus] = useState(menusData);
   const [ROLE, setROLE] = useState(null);
   const [selected, setSelected] = useState(menus[0]?.id ? menus[0].id : null);
+  const [menuSearchQuery, setMenuSearchQuery] = useState("");
+  const [searchedProducts, setSearchedProducts] = useState([]);
+  const [productSearchLoading, setProductSearchLoading] = useState(false);
+  const [productSearchLoaded, setProductSearchLoaded] = useState(false);
+  const [productSearchRefreshKey, setProductSearchRefreshKey] = useState(0);
   const [prevColors, setPrevColors] = useState(["#ffffff", "#000000"]);
   const [nextColors, setNextColors] = useState(["#ffffff", "#000000"]);
 
@@ -151,6 +247,15 @@ export default function HomeScreen() {
     .map((item) => item.price * item.orderquantity)
     .reduce((cur, prev) => cur + prev, 0);
 
+  const filteredProducts = useMemo(() => {
+    const query = menuSearchQuery.trim().toLowerCase();
+    if (!query) return [];
+
+    return searchedProducts.filter((product) =>
+      getProductSearchText(product).includes(query)
+    );
+  }, [searchedProducts, menuSearchQuery]);
+
 
 
 
@@ -180,13 +285,14 @@ export default function HomeScreen() {
     try {
       setLoading(true, "Fetching Menu Data");
       const menudata = await API.GET("MenuSectionCategory");
-      const ordered = menudata.Response.map((item) => ({
+      const menuRows = Array.isArray(menudata?.Response) ? menudata.Response : [];
+      const ordered = menuRows.filter((item) => item?.transid).map((item) => ({
         id: item.transid,
         transid: item.transid,
-        name: item.name,
-        colors: [item.startcolor, item.endcolor],
-        icon: item.icon,
-        sections: item.sections,
+        name: item.name || "Menu",
+        colors: [item.startcolor || "#ffffff", item.endcolor || "#000000"],
+        icon: item.icon || "grid",
+        sections: Array.isArray(item.sections) ? item.sections : [],
       }));
 
       if (ROLE === "ADMIN") {
@@ -213,6 +319,142 @@ export default function HomeScreen() {
   useEffect(() => {
     fetchData();
   }, [ROLE, dailyMilkRefreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchSearchProducts = async () => {
+      const query = menuSearchQuery.trim();
+      if (!query) {
+        setSearchedProducts([]);
+        setProductSearchLoaded(false);
+        setProductSearchLoading(false);
+        return;
+      }
+
+      if (menus.length < 1) return;
+      if (productSearchLoaded) return;
+
+      try {
+        setProductSearchLoading(true);
+        const typeIds = new Set(collectTypeIdsFromMenus(menus));
+        const categoryIds = collectCategoryIdsFromMenus(menus);
+        const productMap = new Map();
+
+        if (categoryIds.length > 0) {
+          const typeResponses = await Promise.all(
+            categoryIds.map((categoryId) =>
+              API.GET("Type/" + categoryId)
+                .catch((error) => {
+                  console.warn("Product search type list fetch failed:", categoryId, error?.message || error);
+                  return null;
+                })
+            )
+          );
+
+          typeResponses.forEach((response) => {
+            const types = Array.isArray(response?.Response) ? response.Response : [];
+            types.forEach((type) => {
+              if (type?.transid) typeIds.add(String(type.transid));
+            });
+          });
+        }
+
+        if (typeIds.size > 0) {
+          const responses = await Promise.all(
+            Array.from(typeIds).map((typeId) =>
+              API.GET("Products_new/ProductsWithAllDataForType/" + typeId)
+                .catch((error) => {
+                  console.warn("Product search type fetch failed:", typeId, error?.message || error);
+                  return null;
+                })
+            )
+          );
+
+          responses.forEach((response) => {
+            const products = Array.isArray(response?.Response) ? response.Response : [];
+            products.forEach((product) => {
+              const key = product?.productid || product?.transid;
+              const variants = Array.isArray(product?.variants) ? product.variants : [];
+              if (key && variants.length > 0) productMap.set(String(key), product);
+            });
+          });
+        }
+
+        if (productMap.size === 0) {
+          const response = await API.GET("ProductVariant/detailed");
+          const variants = Array.isArray(response?.Response) ? response.Response : [];
+          variants.forEach((variant) => {
+            if (!variant?.productid || !variant?.variantid) return;
+
+            const productKey = String(variant.productid);
+            const currentProduct = productMap.get(productKey) || {
+              productid: variant.productid,
+              productname: variant.productname,
+              productcode: variant.productcode,
+              shortdescription: variant.shortdescription || "",
+              fulldescription: variant.fulldescription || "",
+              isfeatured: variant.isfeatured || false,
+              isactive: variant.productisactive ?? true,
+              typename: variant.typename,
+              typeid: variant.typeid,
+              categoryname: variant.categoryname,
+              categoryid: variant.categoryid,
+              sectionname: variant.sectionname,
+              sectionid: variant.sectionid,
+              menuname: variant.menuname,
+              menuid: variant.menuid,
+              imageurl: variant.imageurl,
+              variants: [],
+            };
+
+            currentProduct.variants.push({
+              variantid: variant.variantid,
+              variantname: variant.variantname,
+              images: Array.isArray(variant.images) ? variant.images : [variant.variantimage || variant.imageurl].filter(Boolean),
+              sku: variant.sku,
+              weight: variant.weight,
+              dimensions: variant.dimensions,
+              packsize: variant.packsize,
+              baseprice: variant.baseprice,
+              sellingprice: variant.sellingprice,
+              discountpercentage: variant.discountpercentage,
+              stockquantity: variant.stockquantity,
+              minstocklevel: variant.minstocklevel,
+              maxorderquantity: variant.maxorderquantity,
+            });
+
+            productMap.set(productKey, currentProduct);
+          });
+        }
+
+        if (!cancelled) {
+          setSearchedProducts(
+            Array.from(productMap.values()).filter(
+              (product) => Array.isArray(product?.variants) && product.variants.length > 0
+            )
+          );
+          setProductSearchLoaded(true);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Product search failed:", error);
+          setSearchedProducts([]);
+          setProductSearchLoaded(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setProductSearchLoading(false);
+        }
+      }
+    };
+
+    fetchSearchProducts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [menus, menuSearchQuery, productSearchLoaded, productSearchRefreshKey]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Gradient Animation on Tab Change
@@ -376,6 +618,11 @@ export default function HomeScreen() {
   // ─────────────────────────────────────────────────────────────────────────
   const onTabPress = (cat, idx) => {
     try {
+      if (!cat?.id) {
+        console.warn("Skipped menu selection because menu id is missing", cat);
+        return;
+      }
+
       if (cat.id === "add_new") {
         setShowAddPopup(true);
         setEditingId(null);
@@ -414,6 +661,58 @@ export default function HomeScreen() {
       showError(error, "Failed to render menu");
       return null;
     }
+  };
+
+  const renderProductSearchScreen = () => {
+    const query = menuSearchQuery.trim();
+
+    if (productSearchLoading && !productSearchLoaded) {
+      return (
+        <View style={styles.emptySearchContent}>
+          <ActivityIndicator size="large" color="#0F766E" />
+          <Text style={styles.emptySearchTitle}>Searching products</Text>
+          <Text style={styles.emptySearchSubtitle}>
+            Checking all available grocery products.
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <FlatList
+        data={filteredProducts}
+        keyExtractor={(item, index) => String(item?.productid || item?.transid || index)}
+        numColumns={2}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.productSearchList}
+        ListHeaderComponent={
+          <View style={styles.productSearchHeader}>
+            <Text style={styles.productSearchTitle}>Product Search</Text>
+            <Text style={styles.productSearchSubtitle}>
+              {filteredProducts.length} result{filteredProducts.length === 1 ? "" : "s"} for "{query}"
+            </Text>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <ProductCard
+            product={item}
+            setrefresh={() => {
+              setProductSearchLoaded(false);
+              setProductSearchRefreshKey((prev) => prev + 1);
+            }}
+          />
+        )}
+        ListEmptyComponent={
+          <View style={styles.emptySearchContentInline}>
+            <Ionicons name="search-outline" size={42} color="#94A3B8" />
+            <Text style={styles.emptySearchTitle}>No products found</Text>
+            <Text style={styles.emptySearchSubtitle}>
+              Try another product name, code, description, category, or variant.
+            </Text>
+          </View>
+        }
+      />
+    );
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -457,13 +756,25 @@ export default function HomeScreen() {
         <View className="flex-row items-center justify-between border-black h-0  mb-2" >
 
         </View>
-        {/* <View style={styles.searchBox}>
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={18} color="#64748B" />
           <TextInput
-            placeholder="Search…"
-            placeholderTextColor="#888"
-            style={{ color: "#000" }}
+            value={menuSearchQuery}
+            onChangeText={setMenuSearchQuery}
+            placeholder="Search products..."
+            placeholderTextColor="#64748B"
+            returnKeyType="search"
+            style={styles.searchInput}
           />
-        </View> */}
+          {menuSearchQuery ? (
+            <TouchableOpacity
+              onPress={() => setMenuSearchQuery("")}
+              style={styles.searchClearButton}
+            >
+              <Ionicons name="close-circle" size={18} color="#64748B" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
         <ScrollView
           ref={scrollViewRef}
           horizontal
@@ -473,7 +784,7 @@ export default function HomeScreen() {
             paddingHorizontal: 50,
           }}
         >
-          {menus?.map((cat, idx) => (
+          {(Array.isArray(menus) ? menus : []).map((cat, idx) => (
             <View
               key={cat.id || idx}
               onLayout={(e) => {
@@ -506,7 +817,7 @@ export default function HomeScreen() {
                 ) : (
                   <Ionicons
                     name={
-                      selected === cat?.id ? cat?.icon : `${cat?.icon}-outline`
+                      selected === cat?.id ? (cat?.icon || "grid") : `${cat?.icon || "grid"}-outline`
                     }
                     size={24}
                     color={selected === cat?.id ? activeColor : idleColor}
@@ -557,7 +868,9 @@ export default function HomeScreen() {
       </View>
 
       {/* Content */}
-      <View style={styles.content}>{renderMenuScreen()}</View>
+      <View style={styles.content}>
+        {menuSearchQuery.trim() ? renderProductSearchScreen() : renderMenuScreen()}
+      </View>
 
       {/* Add/Edit Popup */}
       {showAddPopup && (
@@ -809,8 +1122,69 @@ const styles = StyleSheet.create({
   searchBox: {
     backgroundColor: "#fff",
     borderRadius: 12,
-    padding: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.12)",
+  },
+  searchInput: {
+    flex: 1,
+    color: "#0F172A",
+    marginLeft: 8,
+    paddingVertical: 2,
+    fontSize: 14,
+  },
+  searchClearButton: {
+    padding: 2,
+  },
+  emptySearchContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+    backgroundColor: "#F8FAFC",
+  },
+  emptySearchTitle: {
+    marginTop: 12,
+    color: "#0F172A",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  emptySearchSubtitle: {
+    marginTop: 6,
+    color: "#64748B",
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 19,
+  },
+  emptySearchContentInline: {
+    minHeight: 320,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+  },
+  productSearchList: {
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 150,
+    backgroundColor: "#F8FAFC",
+  },
+  productSearchHeader: {
+    paddingHorizontal: 4,
+    paddingVertical: 10,
+  },
+  productSearchTitle: {
+    color: "#0F172A",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  productSearchSubtitle: {
+    color: "#64748B",
+    fontSize: 12,
+    marginTop: 3,
   },
   tabItem: {
     width: 80,

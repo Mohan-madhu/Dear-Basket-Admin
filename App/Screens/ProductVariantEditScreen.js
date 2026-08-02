@@ -170,7 +170,7 @@ const VariantEditScreen = () => {
             };
 
             // Update variant basic info
-            await API.PUT(`ProductVariant/${variant.variantid}`, payload);
+            await API.PUT("ProductVariant", payload);
 
             // Update variant attributes
             for (const attr of variantAttributes) {

@@ -108,9 +108,6 @@ export default function DailyMilkDeliveryPromiseBanner({ route }) {
           {promise.headline}
         </Text>
       </View>
-      <Text className="text-emerald-50 text-[10px] font-semibold text-center mt-0.5">
-        {promise.subtext}
-      </Text>
     </View>
   );
 }

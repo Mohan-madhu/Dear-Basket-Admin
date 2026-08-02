@@ -41,6 +41,7 @@ const emptyForm = {
 };
 
 const normalize = (value) => value === null || value === undefined ? "" : String(value);
+const isDeletedAccount = (user) => Number(user?.isdeleted || 0) === 1;
 const formatDate = (value) => {
   if (!value) return "N/A";
   const date = new Date(value);
@@ -197,7 +198,7 @@ const UserCard = ({ user, currentAdminId, onEdit, onToggleStatus, onDelete }) =>
 };
 
 const UserList = ({ users, role, refreshing, onRefresh, currentAdminId, onEdit, onToggleStatus, onDelete }) => {
-  const filtered = users.filter((user) => String(user?.usertype || "").toUpperCase() === role);
+  const filtered = users.filter((user) => !isDeletedAccount(user) && String(user?.usertype || "").toUpperCase() === role);
   return (
     <ScrollView
       className="flex-1 bg-gray-100 px-3 pt-3"
@@ -245,7 +246,8 @@ export default function ManageUsersScreen() {
         console.warn("Admin accounts endpoint unavailable, falling back to User:", error?.message || error);
         response = await API.GET("User");
       }
-      setUsers(Array.isArray(response?.Response) ? response.Response : []);
+      const nextUsers = Array.isArray(response?.Response) ? response.Response : [];
+      setUsers(nextUsers.filter((user) => !isDeletedAccount(user)));
     } catch (error) {
       console.error("Fetch users failed:", error);
       Alert.alert("Error", getUserFacingErrorMessage(error, "Failed to fetch users"));

@@ -47,10 +47,12 @@ const CARD_SIZE = (width - 32 - 0) / 4;
  * @returns {Array[]} - Array of chunks.
  */
 const chunkArray = (array, size) =>
-  array.reduce((acc, _, i) => {
+  (Array.isArray(array) ? array : []).reduce((acc, _, i) => {
     if (i % size === 0) acc.push(array.slice(i, i + size));
     return acc;
   }, []);
+
+const isAddNewCategory = (item) => item?.name === "Add New Category";
 
 // ==========================
 // MenuCard Component
@@ -75,9 +77,9 @@ function MenuCard({
   const nav = useNavigation();
   const [loaded, setLoaded] = useState(false);
   const imagePath =
-    item?.image && typeof item.image === "string" ? item.image.slice(2) : "";
+    item?.image && typeof item.image === "string" ? item.image : "";
   var uri = { uri: getImageUrl(imagePath) };
-  if (item.name == "Add New Category" && ROLE == "ADMIN") {
+  if (isAddNewCategory(item) && ROLE == "ADMIN") {
     uri = item.image;
   }
   return (
@@ -88,21 +90,39 @@ function MenuCard({
     >
       <TouchableOpacity
         onPress={() => {
-          setcatSectionId(SECTION.transid);
-          setcatSectionName(SECTION.name);
+          try {
+            const sectionId = SECTION?.transid;
+            const categoryId = item?.transid;
 
-          if (item.name != "Add New Category") {
+            if (!isAddNewCategory(item) && (!sectionId || !categoryId)) {
+              console.warn("Skipped category navigation because data is incomplete", {
+                sectionId,
+                categoryId,
+                categoryName: item?.name,
+              });
+              Alert.alert("Please wait", "This category is still loading. Try again in a moment.");
+              return;
+            }
+
+            setcatSectionId(sectionId || null);
+            setcatSectionName(SECTION?.name || "");
+
+            if (!isAddNewCategory(item)) {
             nav.navigate("TypeListScreen", {
               SECTION,
               CATEGORY: item,
             });
-          } else {
+            } else {
             setCatTransid(null);
             setName(null);
             setBackground(null);
             setImageUri(null);
             setCatModalMode("add");
             setCatModalVisible(true);
+            }
+          } catch (error) {
+            console.error("Category press failed:", error);
+            Alert.alert("Unable to open category", "Please try again.");
           }
         }}
       >
@@ -130,19 +150,31 @@ function MenuCard({
               style={{ width: "100%", height: "100%" }}
             />
 
-            {ROLE == "ADMIN" && item.name != "Add New Category" && (
+            {ROLE == "ADMIN" && !isAddNewCategory(item) && (
               <TouchableOpacity
                 onPress={() => {
-                  console.log(item);
-                  // setEditingId(cat.id);
-                  setcatSectionId(SECTION.transid);
-                  setcatSectionName(SECTION.name);
-                  setName(item.name);
-                  setBackground(item?.background);
-                  setImageUri(item.image);
-                  setCatTransid(item.transid);
-                  setCatModalMode("edit");
-                  setCatModalVisible(true);
+                  try {
+                    if (!SECTION?.transid || !item?.transid) {
+                      console.warn("Skipped category edit because data is incomplete", {
+                        section: SECTION,
+                        category: item,
+                      });
+                      Alert.alert("Please wait", "This category is still loading. Try again in a moment.");
+                      return;
+                    }
+
+                    setcatSectionId(SECTION.transid);
+                    setcatSectionName(SECTION?.name || "");
+                    setName(item?.name || "");
+                    setBackground(item?.background || null);
+                    setImageUri(item?.image || null);
+                    setCatTransid(item.transid);
+                    setCatModalMode("edit");
+                    setCatModalVisible(true);
+                  } catch (error) {
+                    console.error("Category edit failed:", error);
+                    Alert.alert("Unable to edit category", "Please try again.");
+                  }
                 }}
                 className="absolute top-1 right-1 w-8 h-8 rounded-lg justify-center items-center bg-red-500"
               >
@@ -239,7 +271,7 @@ export default function MenuViewComponent({ MENU, loading }) {
         menusectioncategorysdata.Response.length > 0 &&
         menusectioncategorysdata.Response[0].sections
       ) {
-        setSectionsData(menusectioncategorysdata.Response[0].sections);
+        setSectionsData(Array.isArray(menusectioncategorysdata.Response[0].sections) ? menusectioncategorysdata.Response[0].sections : []);
       } else {
         setSectionsData([]);
         console.warn("No sections data found for menu ID:", id);
@@ -552,10 +584,11 @@ export default function MenuViewComponent({ MENU, loading }) {
     image: require("../../assets/addnewcategory.webp"),
   };
 
-  const sections = sectionsData?.map((section) => {
+  const sections = (Array.isArray(sectionsData) ? sectionsData : []).map((section) => {
     // Filter matching items
-    const filteredCategories = section.categories.filter((item) =>
-      item.name.toLowerCase().includes(search.toLowerCase())
+    const categories = Array.isArray(section?.categories) ? section.categories : [];
+    const filteredCategories = categories.filter((item) =>
+      String(item?.name || "").toLowerCase().includes(search.toLowerCase())
     );
 
     var updatedCategories = filteredCategories;
@@ -564,9 +597,9 @@ export default function MenuViewComponent({ MENU, loading }) {
       updatedCategories = [addNewCategoryItem, ...filteredCategories];
     }
     return {
-      transid: section.transid,
-      name: section.name,
-      image: section.image,
+      transid: section?.transid,
+      name: section?.name || "Section",
+      image: section?.image,
       data: chunkArray(updatedCategories, 4),
     };
   });
@@ -592,7 +625,7 @@ export default function MenuViewComponent({ MENU, loading }) {
       <SectionList
         sections={sections}
         keyExtractor={(row, i) =>
-          row.map((it) => it.transid + row.name + row.id).join("_") + i
+          (Array.isArray(row) ? row : []).map((it) => it?.transid || it?.name || "category").join("_") + i
         }
         renderSectionHeader={({ section, index }) => (
           <View className="flex-row justify-between items-center mb-2">
@@ -628,9 +661,10 @@ export default function MenuViewComponent({ MENU, loading }) {
             }}
           >
             {true &&
-              rowItems.map((card, idx) => (
+              (Array.isArray(rowItems) ? rowItems : []).map((card, idx) => (
                 <MenuCard
-                  name={card.name}
+                  key={card?.transid || card?.name || idx}
+                  name={card?.name || ""}
                   item={card}
                   index={idx}
                   setCatModalVisible={setCatModalVisible}

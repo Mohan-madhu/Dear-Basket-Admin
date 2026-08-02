@@ -301,6 +301,35 @@ const buildProductFilters = (rows) => {
   ];
 };
 
+const buildProductBreakdown = (rows, entryFilter = "all") => {
+  const map = new Map();
+
+  (rows || []).forEach((row) => {
+    const entries = splitRowToEntries(row).filter(
+      (entry) => entryFilter === "all" || entry.entryType === entryFilter
+    );
+    const litres = entries.reduce((sum, entry) => sum + toNumber(entry.displayQuantity), 0);
+    const amount = entries.reduce((sum, entry) => sum + toNumber(entry.displayAmount), 0);
+    if (litres <= 0 && amount <= 0) return;
+
+    const key = getProductKey(row);
+    const existing = map.get(key) || {
+      key,
+      label: getProductLabel(row),
+      litres: 0,
+      amount: 0,
+      entries: 0,
+    };
+
+    existing.litres += litres;
+    existing.amount += amount;
+    existing.entries += entries.length;
+    map.set(key, existing);
+  });
+
+  return Array.from(map.values()).sort((a, b) => b.litres - a.litres);
+};
+
 const QuickDateFilters = ({ selectedFilter, onChange }) => {
   return (
     <ScrollView
@@ -436,6 +465,11 @@ const DashboardSummary = ({ data, entryFilter, rangeLabel, fromDate, toDate }) =
     };
   }, [data, entryFilter]);
 
+  const productBreakdown = useMemo(
+    () => buildProductBreakdown(data, entryFilter),
+    [data, entryFilter]
+  );
+
   return (
     <View className="px-4 pt-2 pb-2">
       <View className="bg-white border border-gray-200 rounded-3xl p-4">
@@ -498,6 +532,23 @@ const DashboardSummary = ({ data, entryFilter, rangeLabel, fromDate, toDate }) =
             />
           </View>
         </View>
+
+        {productBreakdown.length ? (
+          <View className="border-t border-gray-100 mt-3 pt-3">
+            <Text className="text-[11px] font-bold text-gray-500 uppercase mb-2">
+              Product Wise
+            </Text>
+            <View className="flex-row flex-wrap">
+              {productBreakdown.map((item) => (
+                <View key={item.key} className="bg-cyan-50 border border-cyan-100 px-2.5 py-1.5 rounded-full mr-1.5 mb-1.5">
+                  <Text className="text-[10px] font-bold text-cyan-800">
+                    {item.label}: {litresText(item.litres)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -705,6 +756,11 @@ const UserDetailsCard = ({ userData, entryFilter }) => {
     };
   }, [filteredEntries]);
 
+  const productBreakdown = useMemo(
+    () => buildProductBreakdown(userData.rows || [], entryFilter),
+    [entryFilter, userData.rows]
+  );
+
   const isSameEntryGroup = (current, previous) => {
     if (!current || !previous) return false;
     if (current.transid && previous.transid) {
@@ -753,6 +809,18 @@ const UserDetailsCard = ({ userData, entryFilter }) => {
             <Text className="text-[10px] font-semibold text-red-700">C {litresText(summary.cancelledLitres)}</Text>
           </View>
         </View>
+
+        {productBreakdown.length > 1 ? (
+          <View className="flex-row flex-wrap mb-2">
+            {productBreakdown.map((item) => (
+              <View key={item.key} className="bg-cyan-50 border border-cyan-100 px-2 py-1 rounded-full mr-1.5 mb-1.5">
+                <Text className="text-[10px] font-semibold text-cyan-800">
+                  {item.label} {litresText(item.litres)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {filteredEntries.length === 0 ? (
           <View className="bg-gray-50 border border-gray-100 rounded-xl py-4 items-center">
@@ -977,6 +1045,10 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
         mappedpartnerid: partner.mappedpartnerid,
         partnername: partner.partnername,
         users,
+        productBreakdown: buildProductBreakdown(
+          users.flatMap((user) => user.rows || []),
+          entryFilter
+        ),
         partnerDailyLitres,
         partnerExtraLitres,
         partnerPregnancyLitres,
@@ -1048,6 +1120,11 @@ const PartnerWiseDashboardList = ({ rows, entryFilter }) => {
                   <Text className="text-xs text-gray-500 mt-1">
                     {partner.partnername}
                   </Text>
+                  {partner.productBreakdown?.length ? (
+                    <Text className="text-[10px] text-cyan-700 mt-1" numberOfLines={1}>
+                      {partner.productBreakdown.map((item) => `${item.label} ${litresText(item.litres)}`).join(" • ")}
+                    </Text>
+                  ) : null}
                 </View>
 
                 <View className="items-end">
@@ -1255,7 +1332,7 @@ const DailyMilk_Dashboard_Admin = () => {
                   Daily Milk Dashboard
                 </Text>
                 <Text className="text-xs text-gray-500 mt-1">
-                  Admin overview by date and entry type
+                  Admin overview by date, route, product and entry type
                 </Text>
               </View>
             </View>

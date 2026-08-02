@@ -28,10 +28,17 @@ const emptyForm = {
   quantity: "litre",
   image: "",
   increment: "0.50",
+  minimumquantity: "0.50",
 };
 
 const parseNumber = (value) => Number(value || 0);
 const formatCurrency = (value) => `₹${parseNumber(value).toFixed(2)}`;
+const getMinimumQuantity = (product) => {
+  const min = Number(product?.minimumquantity ?? product?.minimumqty ?? product?.minquantity);
+  if (Number.isFinite(min) && min > 0) return min;
+  const increment = Number(product?.increment);
+  return Number.isFinite(increment) && increment > 0 ? increment : 0.5;
+};
 
 const getCurrentUserName = async () => {
   const data = await Storage.getData("DATA");
@@ -216,6 +223,7 @@ const DailyMilkProductsManageScreen = () => {
       quantity: product?.quantity || "litre",
       image: product?.image || "",
       increment: String(product?.increment ?? "0.50"),
+      minimumquantity: String(getMinimumQuantity(product)),
     });
     setFileInfo(null);
     setPreviewUri("");
@@ -234,12 +242,20 @@ const DailyMilkProductsManageScreen = () => {
       Alert.alert("Validation", "Enter a valid increment.");
       return false;
     }
+    if (!form.minimumquantity || Number.isNaN(Number(form.minimumquantity))) {
+      Alert.alert("Validation", "Enter a valid minimum quantity.");
+      return false;
+    }
     if (Number(form.price) <= 0) {
       Alert.alert("Validation", "Price must be greater than zero.");
       return false;
     }
     if (Number(form.increment) <= 0) {
       Alert.alert("Validation", "Increment must be greater than zero.");
+      return false;
+    }
+    if (Number(form.minimumquantity) <= 0) {
+      Alert.alert("Validation", "Minimum quantity must be greater than zero.");
       return false;
     }
     return true;
@@ -271,6 +287,7 @@ const DailyMilkProductsManageScreen = () => {
         quantity: form.quantity?.trim() || "litre",
         image: imagePath,
         increment: Number(form.increment),
+        minimumquantity: Number(form.minimumquantity),
         ...(isEditing
           ? { transid: form.transid, luu: currentUser }
           : { rcu: currentUser }),
@@ -372,7 +389,7 @@ const DailyMilkProductsManageScreen = () => {
             <View>
               <Text style={styles.sectionTitle}>{isEditing ? "Edit Product" : "New Product"}</Text>
               <Text style={styles.sectionSubTitle}>
-                Name, price, unit, image, and quantity increment.
+                Name, price, unit, image, quantity increment, and minimum booking quantity.
               </Text>
             </View>
             {isEditing ? (
@@ -422,6 +439,15 @@ const DailyMilkProductsManageScreen = () => {
               placeholderTextColor="#9ca3af"
             />
           </View>
+
+          <TextInput
+            placeholder="Minimum quantity, e.g. 0.5 or 1"
+            value={form.minimumquantity}
+            onChangeText={(value) => updateForm("minimumquantity", value)}
+            keyboardType="decimal-pad"
+            style={styles.input}
+            placeholderTextColor="#9ca3af"
+          />
 
           <TextInput
             placeholder="Unit label, e.g. litre"
@@ -480,7 +506,9 @@ const DailyMilkProductsManageScreen = () => {
                 <Text style={styles.productMeta}>
                   {formatCurrency(product?.price)} per {product?.quantity || "unit"}
                 </Text>
-                <Text style={styles.productMeta}>Step: {product?.increment || "-"}</Text>
+                <Text style={styles.productMeta}>
+                  Step: {product?.increment || "-"} | Min: {getMinimumQuantity(product)}
+                </Text>
                 <Text style={styles.productId} numberOfLines={1}>
                   {product?.transid || "-"}
                 </Text>

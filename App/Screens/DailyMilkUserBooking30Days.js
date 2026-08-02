@@ -29,6 +29,16 @@ const getDaysInMonth = (monthValue, yearValue) => {
     return Array.from({ length: numDays }, (_, i) => i + 1);
 };
 
+const getProductMinimumQuantity = (product) => {
+    const min = Number(product?.minimumquantity ?? product?.minimumqty ?? product?.minquantity);
+    if (Number.isFinite(min) && min > 0) return min;
+    const increment = Number(product?.increment);
+    return Number.isFinite(increment) && increment > 0 ? increment : 0.5;
+};
+
+const getProductMinimumAmount = (product) =>
+    getProductMinimumQuantity(product) * (Number(product?.price || 0) || 0);
+
 const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegistered, isrenewal }) => {
     const { setLoading } = useLoading();
     const isSubmittingRef = useRef(false);
@@ -107,13 +117,15 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
 
         setLoading(true, "Loading Products...");
         try {
-            const { Response } = await API.GET("DailyMilkProducts");
+            const { Response } = await API.GET_FRESH("DailyMilkProducts");
             const safeProducts = Array.isArray(Response) ? Response : [];
             setProducts(safeProducts);
             setSelectedProductId(safeProducts[0]?.transid || null);
             const initialQtys = safeProducts.reduce((acc, prod) => {
                 if (prod?.transid) {
-                    acc[prod.transid] = 0;
+                    acc[prod.transid] = prod.transid === safeProducts[0]?.transid
+                        ? getProductMinimumQuantity(prod)
+                        : 0;
                 }
                 return acc;
             }, {});
@@ -136,10 +148,12 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
             if (!productId) return;
 
             setSelectedProductId(productId);
+            const selectedProduct = products.find((prod) => prod?.transid === productId);
+            const minQty = getProductMinimumQuantity(selectedProduct);
             // Reset quantities so only the selected product stays active
             const resetQtys = products.reduce((acc, prod) => {
                 if (prod?.transid) {
-                    acc[prod.transid] = 0;
+                    acc[prod.transid] = prod.transid === productId ? minQty : 0;
                 }
                 return acc;
             }, {});
@@ -152,9 +166,13 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
     const changeQuantity = (productId, increment) => {
         try {
             if (!productId || typeof increment !== "number") return;
+            const product = products.find((prod) => prod?.transid === productId);
+            const minQty = getProductMinimumQuantity(product);
             setQuantities((prev) => {
                 const current = Number(prev?.[productId] || 0);
-                const newQty = Math.max(0, current + increment);
+                const newQty = increment > 0 && current <= 0
+                    ? minQty
+                    : Math.max(minQty, current + increment);
                 return { ...prev, [productId]: parseFloat(newQty.toFixed(2)) };
             });
         } catch (error) {
@@ -226,8 +244,10 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
 
             const qty = Number(quantities?.[currentProd.transid] || 0);
 
-            if (qty <= 0) {
-                Alert.alert("Error", "Please select a quantity.");
+            const minQty = getProductMinimumQuantity(currentProd);
+
+            if (qty < minQty) {
+                Alert.alert("Error", `Minimum quantity for ${currentProd.name} is ${minQty}.`);
                 return;
             }
             if (!timeSlot) {
@@ -322,7 +342,7 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
                                     {product.name}
                                 </Text>
                                 <Text className="text-xs text-gray-500 text-center mt-1">
-                                    ₹ {Number(product.price || 0).toFixed(2)}
+                                    ₹ {getProductMinimumAmount(product).toFixed(2)}
                                 </Text>
                                 {isSelected && (
                                     <Text className="text-[11px] text-blue-600 font-semibold text-center mt-2">
@@ -348,15 +368,16 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
                         {currentProduct.name}
                     </Text>
                     <Text className="text-sm text-gray-500 font-medium">
-                        ₹ {Number(currentProduct.price || 0).toFixed(2)}
+                        ₹ {getProductMinimumAmount(currentProduct).toFixed(2)}
                     </Text>
                     <Text className="mt-2 text-xs text-gray-500 text-center">
-                        Adjust quantity for the selected product
+                        Minimum quantity: {getProductMinimumQuantity(currentProduct)}
                     </Text>
 
                     <View className="flex-row items-center mt-4">
                         <TouchableOpacity
-                            className="w-10 h-10 rounded-full bg-red-500 justify-center items-center shadow-sm"
+                            className={`w-10 h-10 rounded-full justify-center items-center shadow-sm ${(quantities[currentProduct.transid] || 0) <= getProductMinimumQuantity(currentProduct) ? "bg-gray-300" : "bg-red-500"}`}
+                            disabled={(quantities[currentProduct.transid] || 0) <= getProductMinimumQuantity(currentProduct)}
                             onPress={() => changeQuantity(currentProduct.transid, -Number(currentProduct.increment || 1))}
                         >
                             <Text className="text-white text-xl font-bold">−</Text>

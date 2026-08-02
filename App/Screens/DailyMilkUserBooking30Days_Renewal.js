@@ -15,7 +15,7 @@ import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 
 import "react-native-get-random-values";
 import { v4 as uuidv4 } from "uuid";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { CommonActions, useNavigation, useRoute } from "@react-navigation/native";
 
 // ──────────────────────────────────────────────────────────
 // HELPERS
@@ -30,6 +30,22 @@ const getDaysInMonth = (monthValue, yearValue) => {
     return Array.from({ length: numDays }, (_, i) => i + 1);
 };
 
+const getProductMinimumQuantity = (product) => {
+    const min = Number(product?.minimumquantity ?? product?.minimumqty ?? product?.minquantity);
+    if (Number.isFinite(min) && min > 0) return min;
+    const increment = Number(product?.increment);
+    return Number.isFinite(increment) && increment > 0 ? increment : 0.5;
+};
+
+const getProductMinimumAmount = (product) =>
+    getProductMinimumQuantity(product) * (Number(product?.price || 0) || 0);
+
+const isValidDateValue = (value) => {
+    if (!value) return false;
+    const date = new Date(value);
+    return !Number.isNaN(date.getTime());
+};
+
 const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
     const { setLoading } = useLoading();
     const route = useRoute();
@@ -40,6 +56,7 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
 
     const navigation = useNavigation();
     const isSubmittingRef = useRef(false);
+    const isMountedRef = useRef(true);
 
     // Product States
     const [products, setProducts] = useState([]);
@@ -82,10 +99,23 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
     // ──────────────────────────────────────────────────────────
     // INITIALIZATION
     // ──────────────────────────────────────────────────────────
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
+    const safeSetLoading = (flag, message) => {
+        if (isMountedRef.current) {
+            setLoading(flag, message);
+        }
+    };
+
     const getRole = async () => {
         try {
             const data = await Storage.getData("DATA");
-            if (data?.transid) {
+            if (isMountedRef.current && data?.transid) {
                 setUSER(data.transid);
             }
         } catch (error) {
@@ -133,7 +163,7 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
                 setSelectedProductId(booking.productid);
                 setQuantities((prev) => ({
                     ...prev,
-                    [booking.productid]: booking.quantity
+                    [booking.productid]: Number(booking.quantity || 0)
                 }));
             }
         } catch (error) {
@@ -144,9 +174,10 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
     const getDailyMilkProducts = async () => {
         if (!USER) return;
 
-        setLoading(true, "Loading Products...");
+        safeSetLoading(true, "Loading Products...");
         try {
-            const { Response } = await API.GET("DailyMilkProducts");
+            const { Response } = await API.GET_FRESH("DailyMilkProducts");
+            if (!isMountedRef.current) return;
             const safeProducts = Array.isArray(Response) ? Response : [];
             setProducts(safeProducts);
             setSelectedProductId((prev) =>
@@ -157,9 +188,10 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
             const renewalBooking = UserBooked?.[0];
             const initialQtys = safeProducts.reduce((acc, prod) => {
                 if (prod?.transid) {
+                    const renewalQty = Number(renewalBooking?.quantity || 0);
                     acc[prod.transid] =
                         prod.transid === renewalBooking?.productid
-                            ? Number(renewalBooking?.quantity || 0)
+                            ? Math.max(getProductMinimumQuantity(prod), renewalQty)
                             : 0;
                 }
                 return acc;
@@ -167,10 +199,11 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
             setQuantities(initialQtys);
         } catch (err) {
             console.error("getDailyMilkProducts error:", err);
+            if (!isMountedRef.current) return;
             setProducts([]);
             setQuantities({});
         } finally {
-            setLoading(false);
+            safeSetLoading(false);
         }
     };
 
@@ -183,10 +216,12 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
             if (!productId) return;
 
             setSelectedProductId(productId);
+            const selectedProduct = products.find((prod) => prod?.transid === productId);
+            const minQty = getProductMinimumQuantity(selectedProduct);
             // Reset quantities so only the selected product stays active
             const resetQtys = products.reduce((acc, prod) => {
                 if (prod?.transid) {
-                    acc[prod.transid] = 0;
+                    acc[prod.transid] = prod.transid === productId ? minQty : 0;
                 }
                 return acc;
             }, {});
@@ -199,9 +234,13 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
     const changeQuantity = (productId, increment) => {
         try {
             if (!productId || typeof increment !== "number") return;
+            const product = products.find((prod) => prod?.transid === productId);
+            const minQty = getProductMinimumQuantity(product);
             setQuantities((prev) => {
                 const current = Number(prev?.[productId] || 0);
-                const newQty = Math.max(0, current + increment);
+                const newQty = increment > 0 && current <= 0
+                    ? minQty
+                    : Math.max(minQty, current + increment);
                 return { ...prev, [productId]: parseFloat(newQty.toFixed(2)) };
             });
         } catch (error) {
@@ -234,24 +273,27 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
     };
 
     const safeNavigateAfterSubmit = () => {
+        const refreshKey = Date.now();
         try {
-            navigation.reset({
-                index: 0,
-                routes: [
-                    {
-                        name: "Main",
-                        params: {
-                            screen: "Home",
-                            params: { dailyMilkRefreshKey: Date.now() },
+            navigation.dispatch(
+                CommonActions.reset({
+                    index: 0,
+                    routes: [
+                        {
+                            name: "Main",
+                            params: {
+                                screen: "Home",
+                                params: { dailyMilkRefreshKey: refreshKey },
+                            },
                         },
-                    },
-                ],
-            });
+                    ],
+                })
+            );
         } catch (error) {
             console.error("safeNavigateAfterSubmit error:", error);
             navigation.navigate("Main", {
                 screen: "Home",
-                params: { dailyMilkRefreshKey: Date.now() },
+                params: { dailyMilkRefreshKey: refreshKey },
             });
         }
     };
@@ -268,9 +310,10 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
             }
 
             const qty = Number(quantities?.[currentProd.transid] || 0);
+            const minQty = getProductMinimumQuantity(currentProd);
 
-            if (qty <= 0) {
-                Alert.alert("Error", "Please select a quantity.");
+            if (qty < minQty) {
+                Alert.alert("Error", `Minimum quantity for ${currentProd.name} is ${minQty}.`);
                 return;
             }
             if (!timeSlot) {
@@ -283,10 +326,17 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
             }
 
             const USERID = await Storage.getData("USERID");
-            const bookingSource = UserBooked?.[0];
+            const bookingSource = Array.isArray(UserBooked)
+                ? UserBooked.find((item) => item?.dailymilkregistrationid && isValidDateValue(item?.bookingenddate))
+                : null;
 
             if (!bookingSource?.dailymilkregistrationid) {
                 Alert.alert("Error", "Renewal data is missing. Please reopen the page.");
+                return;
+            }
+
+            if (!USERID || !USER) {
+                Alert.alert("Error", "User session is missing. Please login again.");
                 return;
             }
 
@@ -340,18 +390,10 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
             console.warn("Booking Data:", JSON.stringify(bookingdata, null, 2));
             await API.POST("DailyMilkBooking", bookingdata);
 
-            Alert.alert(
-                "Success",
-                `Booking renewed successfully from ${dateString}.`,
-                [
-                    {
-                        text: "OK",
-                        onPress: () => {
-                            safeNavigateAfterSubmit();
-                        },
-                    },
-                ]
-            );
+            safeSetLoading(false);
+            isSubmittingRef.current = false;
+            safeNavigateAfterSubmit();
+            return;
 
             // Alert.alert("Success", `Booking renewed for ${dateString}!`, [
             //     {
@@ -411,7 +453,7 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
                                     {product.name}
                                 </Text>
                                 <Text className="text-xs text-gray-500 text-center mt-1">
-                                    ₹ {Number(product.price || 0).toFixed(2)}
+                                    ₹ {getProductMinimumAmount(product).toFixed(2)}
                                 </Text>
                                 {isSelected && (
                                     <Text className="text-[11px] text-blue-600 font-semibold text-center mt-2">
@@ -437,15 +479,16 @@ const DailyMilkBooking = ({ UserBooked: UserBookedProp }) => {
                         {currentProduct.name}
                     </Text>
                     <Text className="text-sm text-gray-500 font-medium">
-                        ₹ {Number(currentProduct.price || 0).toFixed(2)}
+                        ₹ {getProductMinimumAmount(currentProduct).toFixed(2)}
                     </Text>
                     <Text className="mt-2 text-xs text-gray-500 text-center">
-                        Adjust quantity for the selected product
+                        Minimum quantity: {getProductMinimumQuantity(currentProduct)}
                     </Text>
 
                     <View className="flex-row items-center mt-4">
                         <TouchableOpacity
-                            className="w-10 h-10 rounded-full bg-red-500 justify-center items-center shadow-sm"
+                            className={`w-10 h-10 rounded-full justify-center items-center shadow-sm ${(quantities[currentProduct.transid] || 0) <= getProductMinimumQuantity(currentProduct) ? "bg-gray-300" : "bg-red-500"}`}
+                            disabled={(quantities[currentProduct.transid] || 0) <= getProductMinimumQuantity(currentProduct)}
                             onPress={() => changeQuantity(currentProduct.transid, -Number(currentProduct.increment || 1))}
                         >
                             <Text className="text-white text-xl font-bold">−</Text>

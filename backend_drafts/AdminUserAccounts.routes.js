@@ -50,6 +50,7 @@ router.get('/admin/accounts', async (req, res, next) => {
 
     const result = await pool.request().query(`
       ${accountSelectSql}
+      WHERE l.transid IS NOT NULL
       ORDER BY
         CASE UPPER(ISNULL(u.usertype, '')) WHEN 'ADMIN' THEN 1 WHEN 'PARTNER' THEN 2 WHEN 'KITCHENPARTNER' THEN 3 ELSE 4 END,
         u.rcm DESC,
@@ -104,14 +105,6 @@ router.put('/admin/accounts', async (req, res, next) => {
 
         IF NOT EXISTS (SELECT 1 FROM dbo.tbl_user WHERE transid = @transid)
           THROW 50001, 'Account not found.', 1;
-
-        IF EXISTS (
-          SELECT 1
-          FROM dbo.tbl_user
-          WHERE mobile = @mobile
-            AND transid <> @transid
-        )
-          THROW 50002, 'Another account already uses this mobile number.', 1;
 
         IF EXISTS (
           SELECT 1

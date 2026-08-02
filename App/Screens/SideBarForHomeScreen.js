@@ -28,7 +28,7 @@ const AnimatedImage = Animated.createAnimatedComponent(Image);
 export default function SidebarScreen(data) {
   const { setLoading } = useLoading();
   const route = useRoute();
-  const { SECTION, CATEGORY } = route.params;
+  const { SECTION = null, CATEGORY = null } = route.params || {};
   const navigation = useNavigation();
   //console.log(CATEGORY)
   const [searchVisible, setSearchVisible] = useState(false);
@@ -139,23 +139,35 @@ export default function SidebarScreen(data) {
     }
   };
 
-  const GetTypeData = async (id = CATEGORY.transid) => {
+  const GetTypeData = async (id = CATEGORY?.transid) => {
+    if (!id) {
+      console.warn("Type fetch skipped because category id is missing", CATEGORY);
+      setTypeData([]);
+      setMenuItems([]);
+      setSelectedId(null);
+      return;
+    }
     setLoading(true, "Fetching Types");
     try {
       const typedata = await API.GET("Type/" + id);
-      if (typedata && typedata.Response && typedata.Response.length > 0) {
-        setTypeData(typedata.Response);
-        setMenuItems(typedata.Response);
+      const types = Array.isArray(typedata?.Response) ? typedata.Response : [];
+      if (types.length > 0) {
+        setTypeData(types);
+        setMenuItems(types);
         //setSelectedId(typedata.Response[0].transid);
      //   console.log(typedata.Response);
       } else {
         setTypeData([]);
+        setMenuItems([]);
+        setSelectedId(null);
         console.warn("No Types data found for menu ID:", id);
       }
     } catch (error) {
       console.error("Error fetching Type data:", error);
       Alert.alert("Error", "Failed to fetch menu Types.");
       setTypeData([]);
+      setMenuItems([]);
+      setSelectedId(null);
     } finally {
       setLoading(false);
     }
@@ -172,11 +184,15 @@ export default function SidebarScreen(data) {
     getRole();
   }, []);
   useEffect(() => {
-    if (CATEGORY) {
+    if (CATEGORY?.transid) {
       getRole();
       GetTypeData(CATEGORY.transid);
+    } else {
+      setTypeData([]);
+      setMenuItems([]);
+      setSelectedId(null);
     }
-  }, [CATEGORY]);
+  }, [CATEGORY?.transid]);
 
   const pickImage = async () => {
     const result = await DocumentPicker.getDocumentAsync({
@@ -199,6 +215,10 @@ export default function SidebarScreen(data) {
 
   const addNewType = async () => {
     setCatModalVisible(false);
+    if (!CATEGORY?.transid) {
+      Alert.alert("Please wait", "Category details are still loading. Try again in a moment.");
+      return;
+    }
     if (name && imageUri) {
       try {
         let profilePath = "";
@@ -224,12 +244,12 @@ export default function SidebarScreen(data) {
         const data = {
           name: name,
           image: profilePath,
-          categoryname: CATEGORY.name,
+          categoryname: CATEGORY?.name || "",
           categoryid: CATEGORY.transid,
-          sectionid: CATEGORY.sectionid,
-          sectionname: CATEGORY.sectionname,
-          menuid: CATEGORY.menuid,
-          menuname: CATEGORY.menuname,
+          sectionid: CATEGORY?.sectionid || "",
+          sectionname: CATEGORY?.sectionname || "",
+          menuid: CATEGORY?.menuid || "",
+          menuname: CATEGORY?.menuname || "",
           rcu: "ADMIN",
         };
 
@@ -251,6 +271,10 @@ export default function SidebarScreen(data) {
   };
 
   const updateType = async (selectedId) => {
+    if (!CATEGORY?.transid || !selectedId) {
+      Alert.alert("Please wait", "Type details are still loading. Try again in a moment.");
+      return;
+    }
     try {
       var profilePath = "";
 
@@ -277,12 +301,12 @@ export default function SidebarScreen(data) {
         transid: selectedId,
         name: name,
         image: profilePath,
-        categoryname: CATEGORY.name,
+        categoryname: CATEGORY?.name || "",
         categoryid: CATEGORY.transid,
-        sectionid: CATEGORY.sectionid,
-        sectionname: CATEGORY.sectionname,
-        menuid: CATEGORY.menuname,
-        menuname: CATEGORY.menuid,
+        sectionid: CATEGORY?.sectionid || "",
+        sectionname: CATEGORY?.sectionname || "",
+        menuid: CATEGORY?.menuid || "",
+        menuname: CATEGORY?.menuname || "",
         luu: "ADMIN",
       };
 
@@ -473,8 +497,9 @@ export default function SidebarScreen(data) {
             );
           })} */}
 
-          {menuItems.map((item) => {
-            const isActive = item.transid === selectedId;
+          {(Array.isArray(menuItems) ? menuItems : []).map((item, idx) => {
+            if (!item) return null;
+            const isActive = item?.transid === selectedId;
             const imageAnimatedStyle = {
               transform: [
                 {
@@ -494,15 +519,22 @@ export default function SidebarScreen(data) {
 
             return (
               <TouchableOpacity
-                key={item.transid}
+                key={item?.transid || item?.name || idx}
                 className={`items-center mb-6 ${isActive ? "" : "opacity-90"}`}
-                onPress={() => setSelectedId(item.transid)}
+                onPress={() => {
+                  if (!item?.transid) {
+                    console.warn("Skipped type selection because type id is missing", item);
+                    Alert.alert("Please wait", "This type is still loading. Try again in a moment.");
+                    return;
+                  }
+                  setSelectedId(item.transid);
+                }}
               >
                 <View className="relative w-16 h-16 rounded-full mb-1 bg-transparent justify-center items-center">
                   {/* Background View */}
                   <AnimatedImage
                     source={{
-                      uri: getImageUrl(item.image),
+                      uri: getImageUrl(item?.image),
                     }}
                     className="w-full h-full rounded-full" // Make the image fill the container
                     style={[{ width: 64, height: 64, borderRadius: 32 }, imageAnimatedStyle]}
@@ -512,10 +544,10 @@ export default function SidebarScreen(data) {
                   {ROLE == "ADMIN" && (
                     <TouchableOpacity
                       onPress={() => {
-                        setName(item.name);
+                        setName(item?.name || "");
                         setFileInfo(null);
-                        setImageUri(item.image);
-                        settransid(item.transid);
+                        setImageUri(item?.image || null);
+                        settransid(item?.transid || null);
                         setCatModalMode("edit");
                         setCatModalVisible(true);
                       }}
@@ -533,7 +565,7 @@ export default function SidebarScreen(data) {
                   className={`text-center text-xs ${isActive ? "text-blue-600" : "text-gray-600"
                     }`}
                 >
-                  {item.name}
+                  {item?.name || "Type"}
                 </Text>
               </TouchableOpacity>
             );
@@ -543,7 +575,7 @@ export default function SidebarScreen(data) {
         {/* Right Pane */}
         {/* <View style={{ width: "82%" }} className="bg-gray-50">
           <TypeListDetails
-            item={menuItems.find((i) => i.transid === selectedId)}
+            item={(Array.isArray(menuItems) ? menuItems : []).find((i) => i?.transid === selectedId)}
             searchQuery={searchQuery}
           />
         </View> */}
@@ -551,7 +583,7 @@ export default function SidebarScreen(data) {
         <View style={{ width: "82%" }} className="bg-gray-50">
           {/* <DetailsPane item={menuItems.find((i) => i.transid === selectedId)} /> */}
           <TypeListDetails
-            item={menuItems.find((i) => i.transid === selectedId)}
+            item={(Array.isArray(menuItems) ? menuItems : []).find((i) => i?.transid === selectedId)}
             searchQuery={searchQuery}
           />
         </View>

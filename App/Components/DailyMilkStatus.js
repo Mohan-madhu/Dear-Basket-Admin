@@ -29,7 +29,9 @@ function formatDateYYYYMMDD(date) {
 
 // Format an ISO string as "Jun 07, 2025"
 function formatFriendly(dateString) {
+  if (!dateString) return "N/A";
   const d = new Date(dateString);
+  if (Number.isNaN(d.getTime())) return "N/A";
   return d.toLocaleDateString("en-US", {
     day: "2-digit",
     month: "short",
@@ -53,7 +55,7 @@ const DAILY_MILK_STATUS_THEME = {
 export default function DailyMilkStatus({ BookingData, FromAdmin }) {
   console.warn("BookingData in DailyMilkStatus:", BookingData);
   const activeBooking = Array.isArray(BookingData)
-    ? BookingData.find((item) => item?.transid && item?.bookingstartdate)
+    ? BookingData.find((item) => item?.transid && item?.bookingstartdate && item?.bookingenddate)
     : null;
   // --- 1) Booking-status state ---
   const { setLoading } = useLoading();

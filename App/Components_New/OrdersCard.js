@@ -358,6 +358,11 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
           cancelled: row?.cancelled,
           received: row?.received,
           cans_returned: row?.cans_returned,
+          deliverytype: row?.deliverytype,
+          milkdeliverytype: row?.milkdeliverytype,
+          delivery_type: row?.delivery_type,
+          shift: row?.shift,
+          batch: row?.batch,
           total_quantity: totalQty,
           imageurl: row?.imageurl || null,
         }, idx);
@@ -451,6 +456,13 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     return price * quantity;
   };
 
+  const formatDecimal = (value) => {
+    const number = Number(value) || 0;
+    return number.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+  };
+
+  const formatMoney = (value) => formatDecimal(value);
+
   const getMilkBreakdown = (item) => {
     const regular = Number(item?.regular_quantity ?? item?.quantity ?? 0) || 0;
     const extra = Number(item?.extra_quantity ?? item?.extra ?? 0) || 0;
@@ -460,6 +472,145 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
     const totalRaw = Number(item?.total_quantity);
     const total = Number.isFinite(totalRaw) ? totalRaw : (regular + extra);
     return { regular, extra, cancelled, cancellationReason, isCancelled, total };
+  };
+
+  const formatMilkQty = (value) => {
+    return `${formatDecimal(value)}L`;
+  };
+
+  const getMilkOrderSummary = () => {
+    const summary = orderItems.reduce(
+      (acc, item) => {
+        const breakdown = getMilkBreakdown(item);
+        acc.regular += breakdown.regular;
+        acc.extra += breakdown.extra;
+        acc.cancelled += breakdown.cancelled;
+        acc.total += breakdown.total;
+        if (breakdown.isCancelled) {
+          acc.isCancelled = true;
+          acc.cancellationReason = acc.cancellationReason || breakdown.cancellationReason;
+        }
+        if (item?.received) {
+          acc.received = true;
+          if (acc.cansReturned === null || acc.cansReturned === undefined) {
+            acc.cansReturned = item?.cans_returned;
+          }
+        }
+        return acc;
+      },
+      {
+        regular: 0,
+        extra: 0,
+        cancelled: 0,
+        total: 0,
+        isCancelled: false,
+        cancellationReason: '',
+        received: false,
+        cansReturned: null,
+      }
+    );
+
+    return {
+      ...summary,
+      total: summary.total > 0 ? summary.total : summary.regular + summary.extra,
+    };
+  };
+
+  const getMilkShiftConfig = (shift) => {
+    if (/evening/i.test(shift || '')) {
+      return {
+        label: 'Evening Delivery',
+        shortLabel: 'Evening',
+        icon: 'weather-night',
+        wrap: 'bg-indigo-50 border-indigo-200',
+        text: 'text-indigo-700',
+        iconColor: '#4338CA',
+      };
+    }
+
+    if (/morning/i.test(shift || '')) {
+      return {
+        label: 'Morning Delivery',
+        shortLabel: 'Morning',
+        icon: 'weather-sunny',
+        wrap: 'bg-amber-50 border-amber-200',
+        text: 'text-amber-700',
+        iconColor: '#D97706',
+      };
+    }
+
+    return null;
+  };
+
+  const getISTMinutesFromTimestamp = (value) => {
+    if (!value) return null;
+
+    const rawValue = String(value).trim();
+    const hasExplicitZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(rawValue);
+    const date = new Date(rawValue);
+    if (Number.isNaN(date.getTime())) return null;
+
+    if (hasExplicitZone) {
+      const istDate = new Date(date.getTime() + 330 * 60 * 1000);
+      return istDate.getUTCHours() * 60 + istDate.getUTCMinutes();
+    }
+
+    return date.getHours() * 60 + date.getMinutes();
+  };
+
+  const inferMilkShiftFromOrderTime = () => {
+    const timeCandidates = [
+      order?.receivedtime,
+      order?.orderdeliveredtime,
+      order?.orderoutofdeliverytime,
+      order?.orderpackedtime,
+      order?.ordertime,
+      order?.orderpalcedtime,
+      order?.orderplacedtime,
+      order?.rcm,
+      ...orderItems.flatMap((item) => [
+        item?.receivedtime,
+        item?.ordertime,
+        item?.orderplacedtime,
+        item?.orderpalcedtime,
+        item?.rcm,
+      ]),
+    ];
+
+    const minutes = timeCandidates
+      .map(getISTMinutesFromTimestamp)
+      .find((value) => value !== null);
+
+    if (minutes === null || minutes === undefined) return null;
+
+    if (minutes >= 7 * 60 && minutes < 10 * 60) return 'Morning';
+    if (minutes >= 16 * 60 && minutes < 21 * 60) return 'Evening';
+
+    return null;
+  };
+
+  const getMilkDeliveryShift = () => {
+    const candidates = [
+      order?.deliverytype,
+      order?.milkdeliverytype,
+      order?.delivery_type,
+      order?.shift,
+      order?.batch,
+      ...orderItems.flatMap((item) => [
+        item?.deliverytype,
+        item?.milkdeliverytype,
+        item?.delivery_type,
+        item?.shift,
+        item?.batch,
+      ]),
+    ];
+
+    const match = candidates
+      .filter(Boolean)
+      .map((value) => String(value).trim())
+      .find((value) => /morning|evening/i.test(value));
+
+    return getMilkShiftConfig(match) || getMilkShiftConfig(inferMilkShiftFromOrderTime());
   };
 
   const isDateWithinRange = (startDate, endDate) => {
@@ -989,6 +1140,9 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
   const style = getOrderColor(type);
   const statusStyle = getStatusStyle();
   const isMilkTypeOrder = [1, 2, 3].includes(Number(order?.isdailymilkuser || 0));
+  const isPureDailyMilkOrder = Number(order?.isdailymilkuser || 0) === 3;
+  const milkOrderSummary = isPureDailyMilkOrder && orderItems.length > 0 ? getMilkOrderSummary() : null;
+  const milkDeliveryShift = isMilkTypeOrder ? getMilkDeliveryShift() : null;
   const isKitchenTypeOrder =
     isKitchenOrderType(order);
   const kitchenSnapshot = isKitchenTypeOrder
@@ -1270,6 +1424,15 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                   <Text className="text-[10px] font-bold text-pink-700">Pregnancy Care</Text>
                 </View>
               ) : null}
+
+              {milkDeliveryShift ? (
+                <View className={`border px-2 py-[3px] rounded-full flex-row items-center ml-1.5 ${milkDeliveryShift.wrap}`}>
+                  <Icon name={milkDeliveryShift.icon} size={12} color={milkDeliveryShift.iconColor} />
+                  <Text className={`text-[10px] font-bold ml-1 ${milkDeliveryShift.text}`}>
+                    {milkDeliveryShift.shortLabel}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -1286,8 +1449,54 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
             {order?.name || 'Unknown User'}
           </Text>
           <Text className="text-[11px] text-gray-500 mt-0.5" numberOfLines={1}>
-            {formatDate(order?.ordertime || order?.orderpalcedtime || order?.orderplacedtime)} • {order?.isdailymilkuser === 2 ? 'Demo' : `${totalItems} item${totalItems !== 1 ? 's' : ''}`} • {order?.isdailymilkuser === 2 ? 'Demo Order' : `₹${totalAmount}`}
+            {formatDate(order?.ordertime || order?.orderpalcedtime || order?.orderplacedtime)} • {order?.isdailymilkuser === 2 ? 'Demo' : `${totalItems} item${totalItems !== 1 ? 's' : ''}`} • {order?.isdailymilkuser === 2 ? 'Demo Order' : `₹${formatMoney(totalAmount)}`}
           </Text>
+          {milkOrderSummary ? (
+            <View className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mt-2">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center flex-1">
+                  <Icon name="bottle-soda-classic-outline" size={15} color="#92400E" />
+                  <Text className="text-[11px] font-extrabold text-amber-900 ml-1" numberOfLines={1}>
+                    {milkDeliveryShift?.label || 'Daily Milk'}
+                  </Text>
+                </View>
+                {milkOrderSummary.total > 0 ? (
+                  <Text className="text-xs font-extrabold text-amber-900">
+                    {formatMilkQty(milkOrderSummary.total)}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View className="flex-row flex-wrap mt-1.5">
+                {milkOrderSummary.regular > 0 ? (
+                  <View className="bg-white border border-amber-200 px-2 py-0.5 rounded-full mr-1.5 mb-1">
+                    <Text className="text-[10px] font-bold text-amber-800">
+                      Milk {formatMilkQty(milkOrderSummary.regular)}
+                    </Text>
+                  </View>
+                ) : null}
+                {milkOrderSummary.extra > 0 ? (
+                  <View className="bg-orange-100 border border-orange-200 px-2 py-0.5 rounded-full mr-1.5 mb-1">
+                    <Text className="text-[10px] font-bold text-orange-700">
+                      Extra {formatMilkQty(milkOrderSummary.extra)}
+                    </Text>
+                  </View>
+                ) : null}
+                {milkOrderSummary.isCancelled ? (
+                  <View className="bg-red-50 border border-red-200 px-2 py-0.5 rounded-full mr-1.5 mb-1">
+                    <Text className="text-[10px] font-bold text-red-700" numberOfLines={1}>
+                      {milkOrderSummary.cancellationReason
+                        ? `Cancelled: ${milkOrderSummary.cancellationReason}`
+                        : `Cancelled${milkOrderSummary.cancelled > 0 ? ` ${formatMilkQty(milkOrderSummary.cancelled)}` : ''}`}
+                    </Text>
+                  </View>
+                ) : null}
+                {!milkOrderSummary.isCancelled && milkOrderSummary.received ? (
+                  <DailyMilkCanStatusBadge value={milkOrderSummary.cansReturned} compact />
+                ) : null}
+              </View>
+            </View>
+          ) : null}
           {isKitchenTypeOrder && kitchenScheduleText ? (
             <View className="flex-row items-center bg-pink-50 border border-pink-200 rounded-lg px-2.5 py-2 mt-2">
               <Icon name="calendar-clock" size={14} color="#BE185D" />
@@ -1371,7 +1580,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                       Pregnancy Care Active
                     </Text>
                     <Text className="text-[11px] text-amber-800 mt-1">
-                      Add complimentary +{pregnancyBenefitMl}ml ({pregnancyBenefitLitres.toFixed(2)}L) milk for this active order.
+                      Add complimentary +{pregnancyBenefitMl}ml ({formatMilkQty(pregnancyBenefitLitres)}) milk for this active order.
                     </Text>
                   </View>
                 ) : null}
@@ -1417,9 +1626,9 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
 
                         <View className="flex-row justify-between items-center mt-2">
                           <Text className="text-xs text-gray-500">
-                            ₹{item.price} × {item.orderquantity}
+                            ₹{formatMoney(item.price)} × {formatDecimal(item.orderquantity)}
                           </Text>
-                          <Text className="text-sm font-bold text-gray-900">₹{itemTotal}</Text>
+                          <Text className="text-sm font-bold text-gray-900">₹{formatMoney(itemTotal)}</Text>
                         </View>
 
                         {[1, 2, 3].includes(Number(order?.isdailymilkuser || 0)) ? (
@@ -1427,21 +1636,21 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                             {milkBreakdown.regular > 0 ? (
                               <View className="bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full mr-1.5 mb-1">
                                 <Text className="text-[10px] font-semibold text-blue-700">
-                                  Regular {milkBreakdown.regular}L
+                                  Regular {formatMilkQty(milkBreakdown.regular)}
                                 </Text>
                               </View>
                             ) : null}
                             {milkBreakdown.extra > 0 ? (
                               <View className="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full mr-1.5 mb-1">
                                 <Text className="text-[10px] font-semibold text-amber-700">
-                                  Extra {milkBreakdown.extra}L
+                                  Extra {formatMilkQty(milkBreakdown.extra)}
                                 </Text>
                               </View>
                             ) : null}
                             {effectivePregnancyExtra > 0 ? (
                               <View className="bg-pink-50 border border-pink-200 px-2 py-0.5 rounded-full mr-1.5 mb-1">
                                 <Text className="text-[10px] font-semibold text-pink-700">
-                                  Pregnancy +{effectivePregnancyExtra.toFixed(2)}L
+                                  Pregnancy +{formatMilkQty(effectivePregnancyExtra)}
                                 </Text>
                               </View>
                             ) : null}
@@ -1450,7 +1659,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                                 <Text className="text-[10px] font-semibold text-red-700">
                                   {milkBreakdown.cancellationReason
                                     ? `Cancelled: ${milkBreakdown.cancellationReason}`
-                                    : `Cancelled${milkBreakdown.cancelled > 0 ? ` ${milkBreakdown.cancelled}L` : ''}`}
+                                    : `Cancelled${milkBreakdown.cancelled > 0 ? ` ${formatMilkQty(milkBreakdown.cancelled)}` : ''}`}
                                 </Text>
                               </View>
                             ) : null}
@@ -1460,7 +1669,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                             {finalQtyWithPregnancy >= 0 ? (
                               <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mb-1">
                                 <Text className="text-[10px] font-semibold text-emerald-700">
-                                  Final {finalQtyWithPregnancy}L
+                                  Final {formatMilkQty(finalQtyWithPregnancy)}
                                 </Text>
                               </View>
                             ) : null}
@@ -1477,22 +1686,22 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
 
                 <View className="flex-row justify-between mb-2">
                   <Text className="text-sm text-gray-600">Item Total</Text>
-                  <Text className="text-sm font-medium text-gray-800">₹{itemSubtotal || 0}</Text>
+                  <Text className="text-sm font-medium text-gray-800">₹{formatMoney(itemSubtotal || 0)}</Text>
                 </View>
 
                 <View className="flex-row justify-between mb-2">
                   <Text className="text-sm text-gray-600">Delivery Charge</Text>
-                  <Text className="text-sm font-medium text-gray-800">₹{order.deliverycharge || 0}</Text>
+                  <Text className="text-sm font-medium text-gray-800">₹{formatMoney(order.deliverycharge || 0)}</Text>
                 </View>
 
                 <View className="flex-row justify-between mb-2">
                   <Text className="text-sm text-gray-600">Tax</Text>
-                  <Text className="text-sm font-medium text-gray-800">₹{order.tax || 0}</Text>
+                  <Text className="text-sm font-medium text-gray-800">₹{formatMoney(order.tax || 0)}</Text>
                 </View>
 
                 <View className="border-t border-gray-200 pt-3 mt-2 flex-row justify-between items-center">
                   <Text className="text-base font-bold text-gray-900">Total Amount</Text>
-                  <Text className="text-lg font-extrabold text-gray-900">₹{totalAmount}</Text>
+                  <Text className="text-lg font-extrabold text-gray-900">₹{formatMoney(totalAmount)}</Text>
                 </View>
               </View>
 
@@ -1761,7 +1970,7 @@ const OrderCard = ({ order, onOrderUpdate, enableReturnOrder = false, onReturnCr
                             {item?.productname || 'Product'}
                           </Text>
                           <Text className="text-xs text-gray-500 mt-0.5">
-                            Qty: {item?.orderquantity || 1} • ₹{item?.price || 0}
+                            Qty: {formatDecimal(item?.orderquantity || 1)} • ₹{formatMoney(item?.price || 0)}
                           </Text>
                         </View>
                       </TouchableOpacity>

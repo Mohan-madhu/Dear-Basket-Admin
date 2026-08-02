@@ -98,16 +98,34 @@ export default function LoginScreen({ navigation }) {
       console.log(res);
 
       if (res.Message.toLowerCase() === "login successful") {
+        const account = res.Response?.[0];
+        const isDisabled = Number(account?.status) !== 1;
+        const isLocked = Number(account?.islocked || 0) === 1;
+        const isDeleted = Number(account?.isdeleted || 0) === 1;
+
+        if (!account || isDisabled || isLocked || isDeleted) {
+          const message = isDeleted
+            ? "This account has been deleted. Please contact admin."
+            : isLocked || isDisabled
+              ? "This account is disabled. Please contact admin."
+              : "Unable to login. Please contact admin.";
+
+          Toaster.errortop(message);
+          Alert.alert("Login Blocked", message);
+          setTimeout(() => phoneRef.current?.focus(), 0);
+          return;
+        }
+
         dispatch(clearCart());
-        await Storage.storeData("USER", res.Response[0].name);
-        await Storage.storeData("USERID", res.Response[0].transid);
-        await Storage.storeData("ROLE", res.Response[0].usertype);
-        await Storage.storeData("DATA", res.Response[0]);
+        await Storage.storeData("USER", account.name);
+        await Storage.storeData("USERID", account.transid);
+        await Storage.storeData("ROLE", account.usertype);
+        await Storage.storeData("DATA", account);
 
 
         // navigation.replace("Main");
 
-        switch (res.Response[0].usertype.toUpperCase()) {
+        switch (account.usertype.toUpperCase()) {
           case "ADMIN":
             Toaster.successtop(res.Message);
             navigation.replace("AdminDashboardScreen");

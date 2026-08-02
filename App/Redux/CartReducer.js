@@ -7,6 +7,20 @@ const initialState = {
 };
 
 const isDearKitchenItem = (item) => item?.source === "dearkitchen";
+const getAvailableStock = (item = {}) => {
+  if (isDearKitchenItem(item)) return Infinity;
+
+  const stock = Number(item.stockquantity ?? item.quantity ?? item.product?.stockquantity);
+  return Number.isFinite(stock) ? stock : Infinity;
+};
+
+const canIncreaseCartItem = (item) => {
+  const availableStock = getAvailableStock(item);
+  return availableStock === Infinity || Number(item?.orderquantity || 0) < availableStock;
+};
+
+const canAddCartItem = (item) => getAvailableStock(item) > 0;
+
 const matchesCartItem = (item, payload = {}) => {
   if (item?.variantid !== payload?.variantid) return false;
 
@@ -136,9 +150,13 @@ export const CartSlice = createSlice({
         (item) => matchesCartItem(item, action.payload)
       );
       if (itemPresent) {
-        itemPresent.orderquantity++;
+        if (canIncreaseCartItem(itemPresent)) {
+          itemPresent.orderquantity++;
+        }
       } else {
-        state.cart.push({ ...action.payload, orderquantity: 1 });
+        if (canAddCartItem(action.payload)) {
+          state.cart.push({ ...action.payload, orderquantity: 1 });
+        }
       }
       saveCartToStorage(state.cart);
     },
@@ -156,7 +174,9 @@ export const CartSlice = createSlice({
         (item) => matchesCartItem(item, action.payload)
       );
       if (!itemPresent) return;
-      itemPresent.orderquantity++;
+      if (canIncreaseCartItem(itemPresent)) {
+        itemPresent.orderquantity++;
+      }
       saveCartToStorage(state.cart);
     },
 
@@ -200,12 +220,18 @@ export const CartSlice = createSlice({
         (item) => matchesCartItem(item, action.payload)
       );
       if (itemPresent) {
-        itemPresent.orderquantity++;
+        if (canIncreaseCartItem(itemPresent)) {
+          itemPresent.orderquantity++;
+        }
       } else {
-        state.cart.push({
-          ...action.payload,
-          orderquantity: Number(action.payload.minorderorderquantity),
-        });
+        const requestedQuantity = Number(action.payload.minorderorderquantity) || 1;
+        const availableStock = getAvailableStock(action.payload);
+        if (availableStock > 0) {
+          state.cart.push({
+            ...action.payload,
+            orderquantity: Math.min(requestedQuantity, availableStock),
+          });
+        }
       }
       saveCartToStorage(state.cart);
     },
@@ -214,7 +240,7 @@ export const CartSlice = createSlice({
       const { material, orderquantity } = action.payload;
       const itemPresent = state.cart.find((item) => matchesCartItem(item, material));
       if (!itemPresent) return;
-      itemPresent.orderquantity = orderquantity;
+      itemPresent.orderquantity = Math.min(Number(orderquantity) || 1, getAvailableStock(itemPresent));
       saveCartToStorage(state.cart);
     },
 

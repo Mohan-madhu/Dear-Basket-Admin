@@ -1,7 +1,7 @@
 // ParentScreen.jsx
 import React, { useState, useEffect } from "react";
 import SectionComponent from "../Components/SectionComponent";
-import DailyMilkRegistrationScreen from "./DailyMilkRegistrationScreen";
+import DailyMilkManagerScreen from "./DailyMilkManagement/DailyMilkManagerScreen";
 import Storage from "../../App_Utils/Services/StorageService";
 import ViewDailyMilkRegistration from "./ViewDailyMilkRegistration";
 import DearFoodieScreen from "./DearKitchen/DearFoodieScreen.js";
@@ -97,7 +97,7 @@ export default function MenuViewScreen({ MENU, dailyMilkRefreshKey }) {
     if (ROLE === "ADMIN") {
       return <ViewDailyMilkRegistration />;
     } else {
-      return <DailyMilkRegistrationScreen refreshKey={dailyMilkRefreshKey} />;
+      return <DailyMilkManagerScreen refreshKey={dailyMilkRefreshKey} />;
     }
   }
   return (

@@ -39,14 +39,55 @@ const getProductMinimumQuantity = (product) => {
 const getProductMinimumAmount = (product) =>
     getProductMinimumQuantity(product) * (Number(product?.price || 0) || 0);
 
-const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegistered, isrenewal }) => {
+const normalizeDailyMilkProduct = (product, index) => {
+    if (!product || typeof product !== "object") return null;
+    const transid = String(product.transid || product.productid || product.id || "").trim();
+    if (!transid) return null;
+
+    return {
+        ...product,
+        transid,
+        name: String(product.name || product.productname || `Daily Milk ${index + 1}`).trim(),
+        price: Number(product.price || 0) || 0,
+        increment: Number(product.increment || 0.5) || 0.5,
+        minimumquantity: getProductMinimumQuantity(product),
+        imageUrl: getImageUrl(product.image),
+    };
+};
+
+const ProductImage = ({ uri, style, className }) => {
+    if (!uri) {
+        return (
+            <View
+                className={`items-center justify-center bg-gray-100 ${className || ""}`}
+                style={style}
+            >
+                <Text className="text-gray-400 text-xs font-semibold">No Image</Text>
+            </View>
+        );
+    }
+
+    return (
+        <Image
+            source={{ uri }}
+            className={className}
+            style={style}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+        />
+    );
+};
+
+const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegistered, isrenewal, onBookingCompleted }) => {
     const { setLoading } = useLoading();
     const isSubmittingRef = useRef(false);
+    const isMountedRef = useRef(false);
 
     // Product States
     const [products, setProducts] = useState([]);
     const [selectedProductId, setSelectedProductId] = useState(null);
     const [quantities, setQuantities] = useState({});
+    const [productsLoading, setProductsLoading] = useState(false);
 
     // UI States
     const [timeSlot, setTimeSlot] = useState("Evening");
@@ -86,10 +127,23 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
     // ──────────────────────────────────────────────────────────
     // INITIALIZATION
     // ──────────────────────────────────────────────────────────
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
+    const safeSetLoading = (flag, message) => {
+        if (isMountedRef.current) {
+            setLoading(flag, message);
+        }
+    };
+
     const getRole = async () => {
         try {
             const data = await Storage.getData("DATA");
-            if (data?.transid) {
+            if (isMountedRef.current && data?.transid) {
                 setUSER(data.transid);
             }
         } catch (error) {
@@ -115,10 +169,14 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
     const getDailyMilkProducts = async () => {
         if (!USER) return;
 
-        setLoading(true, "Loading Products...");
+        setProductsLoading(true);
+        safeSetLoading(true, "Loading Products...");
         try {
             const { Response } = await API.GET_FRESH("DailyMilkProducts");
-            const safeProducts = Array.isArray(Response) ? Response : [];
+            if (!isMountedRef.current) return;
+            const safeProducts = Array.isArray(Response)
+                ? Response.map(normalizeDailyMilkProduct).filter(Boolean)
+                : [];
             setProducts(safeProducts);
             setSelectedProductId(safeProducts[0]?.transid || null);
             const initialQtys = safeProducts.reduce((acc, prod) => {
@@ -132,10 +190,14 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
             setQuantities(initialQtys);
         } catch (err) {
             console.error("getDailyMilkProducts error:", err);
+            if (!isMountedRef.current) return;
             setProducts([]);
             setQuantities({});
         } finally {
-            setLoading(false);
+            if (isMountedRef.current) {
+                setProductsLoading(false);
+            }
+            safeSetLoading(false);
         }
     };
 
@@ -274,7 +336,7 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
             const endDateString = `${enddate.getFullYear()}-${String(enddate.getMonth() + 1).padStart(2, '0')}-${String(enddate.getDate()).padStart(2, '0')}`;
             const BookingID = uuidv4();
 
-            setLoading(true, "Confirming Booking...");
+            safeSetLoading(true, "Confirming Booking...");
 
             const bookingdata = {
                 transid: uuidv4(),
@@ -295,15 +357,19 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
 
             Alert.alert("Success", `Booking confirmed for ${dateString}!`);
             setisConfirmButtonVisible(false);
-            await safePostSubmitRefresh();
-            safeNavigateAfterSubmit();
+            if (typeof onBookingCompleted === "function") {
+                await onBookingCompleted({ bookingdata, dateString });
+            } else {
+                await safePostSubmitRefresh();
+                safeNavigateAfterSubmit();
+            }
         } catch (err) {
             console.error("Submission error:", err);
             Alert.alert("Failed", "Could not complete booking.");
             setisConfirmButtonVisible(true);
         } finally {
             isSubmittingRef.current = false;
-            setLoading(false);
+            safeSetLoading(false);
         }
     };
 
@@ -322,21 +388,19 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
                 </Text>
 
                 <View className="flex-row flex-wrap justify-between">
-                    {products.map((product) => {
+                    {products.map((product, index) => {
                         const isSelected = product?.transid === selectedProductId;
                         return (
                             <TouchableOpacity
-                                key={product.transid}
+                                key={product.transid || `daily-milk-product-${index}`}
                                 onPress={() => handleProductChange(product.transid)}
                                 activeOpacity={0.9}
                                 className={`w-[48%] rounded-2xl p-3 mb-3 border ${isSelected ? "bg-blue-50 border-blue-500" : "bg-white border-gray-200"}`}
                             >
-                                <Image
-                                    source={{ uri: getImageUrl(product.image) }}
+                                <ProductImage
+                                    uri={product.imageUrl}
                                     className="w-full h-[100px] rounded-xl bg-gray-50"
                                     style={{ width: "100%", height: 100, borderRadius: 12, backgroundColor: "#f9fafb" }}
-                                    contentFit="contain"
-                                    cachePolicy="memory-disk"
                                 />
                                 <Text className={`mt-2 text-sm font-bold text-center ${isSelected ? "text-blue-700" : "text-gray-800"}`}>
                                     {product.name}
@@ -357,12 +421,10 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
 
             {currentProduct && (
                 <View className="rounded-3xl bg-white p-5 items-center shadow-2xl border border-gray-100 mb-4">
-                    <Image
-                        source={{ uri: getImageUrl(currentProduct.image) }}
+                    <ProductImage
+                        uri={currentProduct.imageUrl}
                         className="w-[140px] h-[140px] rounded-xl"
                         style={{ width: 140, height: 140, borderRadius: 12 }}
-                        contentFit="contain"
-                        cachePolicy="memory-disk"
                     />
                     <Text className="mt-3 text-lg font-bold text-gray-800 text-center">
                         {currentProduct.name}
@@ -398,10 +460,18 @@ const DailyMilkBooking = ({ DailyMilkRegistrationID, setupd, CheckAlreadyRegiste
                 </View>
             )}
 
-            {!currentProduct && (
+            {!currentProduct && !productsLoading && (
                 <View className="bg-white rounded-2xl border border-gray-200 p-4 mb-4">
                     <Text className="text-gray-600 text-center">
                         No product available right now.
+                    </Text>
+                </View>
+            )}
+
+            {!currentProduct && productsLoading && (
+                <View className="bg-white rounded-2xl border border-gray-200 p-4 mb-4">
+                    <Text className="text-gray-600 text-center">
+                        Loading Daily Milk products...
                     </Text>
                 </View>
             )}

@@ -525,6 +525,9 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
   );
   milkValueSummary.remainingLitres = Math.max(0, milkValueSummary.totalLitres - milkValueSummary.receivedLitres);
   milkValueSummary.remainingAmount = Math.max(0, milkValueSummary.totalAmount - milkValueSummary.receivedAmount);
+  const bookingQuantity = Number(activeBooking?.quantity || 0);
+  const bookingUnitPrice = Number(activeBooking?.price || 0);
+  const bookingDailyAmount = bookingQuantity * bookingUnitPrice;
   const deliveryBatch = String(activeBooking?.deliverytype || '').trim();
   const isEveningBatch = deliveryBatch.toLowerCase().includes('evening');
   const isMorningBatch = deliveryBatch.toLowerCase().includes('morning');
@@ -668,7 +671,13 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
               </View>
               <View className="flex-row items-center flex-wrap mt-1">
                 <Text className="text-xs mr-2" style={themedMutedTextStyle}>
-                  {activeBooking.quantity || 0} L • ₹{Number(activeBooking.price || 0).toFixed(2)}
+                  {bookingQuantity.toFixed(1)} L
+                </Text>
+                <Text className="text-xs mr-2" style={themedMutedTextStyle}>
+                  ₹{bookingUnitPrice.toFixed(2)}/L
+                </Text>
+                <Text className="text-xs font-bold mr-2" style={{ color: previewTheme.accent }}>
+                  ₹{bookingDailyAmount.toFixed(2)}/day
                 </Text>
                 <View className={`flex-row items-center border rounded-full px-2 py-1 ${batchWrapClass}`}>
                   <Icon name={batchIcon} size={11} color={batchIconColor} />
@@ -693,6 +702,18 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
                 <View className="flex-1">
                   <Text className="text-[10px] uppercase" style={themedSubtleTextStyle}>Registration</Text>
                   <Text className="text-xs font-semibold mt-0.5" style={themedMutedTextStyle} numberOfLines={1}>{activeBooking.dailymilkregistrationid || "N/A"}</Text>
+                </View>
+              </View>
+              <View className="flex-row mt-3">
+                <View className="flex-1 rounded-lg border px-2.5 py-2 mr-1" style={themedSoftCardStyle}>
+                  <Text className="text-[10px] uppercase" style={themedSubtleTextStyle}>Rate for 1 L</Text>
+                  <Text className="text-sm font-black mt-0.5" style={themedTextStyle}>₹{bookingUnitPrice.toFixed(2)}</Text>
+                </View>
+                <View className="flex-1 rounded-lg border px-2.5 py-2 ml-1" style={themedSoftCardStyle}>
+                  <Text className="text-[10px] uppercase" style={themedSubtleTextStyle}>Your daily amount</Text>
+                  <Text className="text-sm font-black mt-0.5" style={{ color: previewTheme.accent }}>
+                    ₹{bookingDailyAmount.toFixed(2)}
+                  </Text>
                 </View>
               </View>
               {Number(activeBooking.pregnancy_status || 0) === 1 ? (

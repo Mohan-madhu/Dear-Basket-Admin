@@ -18,7 +18,7 @@ export default function QR_Popup() {
   const { setLoading } = useLoading();
   const route = useRoute();
   const navigation = useNavigation();
-  const { type, data } = route.params; // from Scanner screen
+  const { type, data, date } = route.params || {}; // from Scanner screen
 
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orders, setOrders] = useState([]);
@@ -31,12 +31,25 @@ export default function QR_Popup() {
     laundry: false,
   });
 
+  const formatDate = (value) => {
+    const parsed = value ? new Date(value) : new Date();
+    if (Number.isNaN(parsed.getTime())) return null;
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const day = String(parsed.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
   const GetOrders = async () => {
     setLoading(true, "Fetching Daily Milk Orders");
 
     try {
-      // const startDateFormatted = getFormattedDateInTimezone(today, 5, 30); // IST: UTC+5:30
-      const startDateFormatted = "2025-06-23";
+      // Query the scanned delivery date when supplied; otherwise use today.
+      // The previous hard-coded 2025 date caused QR lookups to return no data.
+      const startDateFormatted = formatDate(date);
+      if (!startDateFormatted) {
+        throw new Error("Invalid QR delivery date");
+      }
 
       var { Response } = await API.POST("DailyMilkOrders", {
         // Ensure "DailyMilkOrders" is the correct endpoint
@@ -44,7 +57,7 @@ export default function QR_Popup() {
         endDate: startDateFormatted,
       });
 
-      const filteredOrders = Response.filter(
+      const filteredOrders = (Array.isArray(Response) ? Response : []).filter(
         (order) => order.RegistrationUserId === data
       );
       setSelectedOrder(filteredOrders[0]);

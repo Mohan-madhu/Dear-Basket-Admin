@@ -12,6 +12,9 @@ import {
 } from "react-native";
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
 import { Image } from "expo-image";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
+import QRCodeGenerator from "qrcode";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { Config } from "../../config";
 import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
@@ -32,6 +35,8 @@ const emptyForm = {
   name: "",
   mobile: "",
   username: "",
+  originalMobile: "",
+  originalUsername: "",
   dob: "",
   address: "",
   profile: "",
@@ -41,7 +46,27 @@ const emptyForm = {
 };
 
 const normalize = (value) => value === null || value === undefined ? "" : String(value);
+const escapeHtml = (value) =>
+  normalize(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 const isDeletedAccount = (user) => Number(user?.isdeleted || 0) === 1;
+const assertAccountResponse = (response, fallbackMessage) => {
+  const status = response?.Status ?? response?.status;
+  const responseCode = response?.ResponseCode ?? response?.responseCode;
+  const failed =
+    status === 0 ||
+    status === false ||
+    (responseCode && String(responseCode) !== "200" && String(responseCode).toLowerCase() !== "success");
+
+  if (failed) {
+    throw new Error(response?.Message || response?.message || response?.error || fallbackMessage);
+  }
+  return response;
+};
 const formatDate = (value) => {
   if (!value) return "N/A";
   const date = new Date(value);
@@ -80,7 +105,18 @@ const RoleSelector = ({ value, onChange, disabled = false }) => (
   </View>
 );
 
-const FormField = ({ label, value, onChangeText, placeholder, keyboardType, maxLength, multiline, secureTextEntry }) => (
+const FormField = ({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType,
+  maxLength,
+  multiline,
+  secureTextEntry,
+  editable = true,
+  helperText,
+}) => (
   <View className="mb-3">
     <Text className="text-xs font-bold text-gray-700 mb-1.5">{label}</Text>
     <TextInput
@@ -94,8 +130,11 @@ const FormField = ({ label, value, onChangeText, placeholder, keyboardType, maxL
       numberOfLines={multiline ? 3 : 1}
       textAlignVertical={multiline ? "top" : "center"}
       secureTextEntry={secureTextEntry}
-      className={`border border-gray-300 bg-gray-50 rounded-xl px-3 text-sm text-gray-900 ${multiline ? "py-3 min-h-20" : "min-h-12"}`}
+      editable={editable}
+      selectTextOnFocus={editable}
+      className={`border rounded-xl px-3 text-sm ${editable ? "border-gray-300 bg-gray-50 text-gray-900" : "border-gray-200 bg-gray-100 text-gray-500"} ${multiline ? "py-3 min-h-20" : "min-h-12"}`}
     />
+    {helperText ? <Text className="text-[10px] text-gray-500 mt-1">{helperText}</Text> : null}
   </View>
 );
 
@@ -122,7 +161,18 @@ const PasswordField = ({ label, value, onChangeText, placeholder }) => {
   );
 };
 
-const UserCard = ({ user, currentAdminId, onEdit, onToggleStatus, onDelete }) => {
+const UserCard = ({
+  user,
+  currentAdminId,
+  onEdit,
+  onToggleStatus,
+  onDelete,
+  qrSelectable = false,
+  qrSelected = false,
+  onToggleQrSelect,
+  onPrintQr,
+  qrExporting = false,
+}) => {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const image = profileUri(user?.profile);
   const active = Number(user?.status) === 1;
@@ -146,8 +196,19 @@ const UserCard = ({ user, currentAdminId, onEdit, onToggleStatus, onDelete }) =>
               <Text className="text-base font-bold text-gray-900">{user?.name || "Unnamed User"}</Text>
               <Text className="text-[11px] text-gray-500 mt-0.5" numberOfLines={1}>{user?.transid || "N/A"}</Text>
             </View>
-            <View className={`px-2 py-1 rounded-full border ${active ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
-              <Text className={`text-[10px] font-bold ${active ? "text-green-700" : "text-red-700"}`}>{active ? "Active" : "Inactive"}</Text>
+            <View className="items-end">
+              <View className={`px-2 py-1 rounded-full border ${active ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
+                <Text className={`text-[10px] font-bold ${active ? "text-green-700" : "text-red-700"}`}>{active ? "Active" : "Inactive"}</Text>
+              </View>
+              {qrSelectable ? (
+                <TouchableOpacity
+                  disabled={qrExporting}
+                  onPress={() => onToggleQrSelect?.(user)}
+                  className={`mt-2 w-8 h-8 rounded-lg border items-center justify-center ${qrSelected ? "bg-indigo-600 border-indigo-600" : "bg-white border-gray-300"}`}
+                >
+                  <Icon name={qrSelected ? "check" : "qr-code-2"} size={18} color={qrSelected ? "#FFFFFF" : "#4B5563"} />
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
 
@@ -192,19 +253,88 @@ const UserCard = ({ user, currentAdminId, onEdit, onToggleStatus, onDelete }) =>
           <Text className={`text-xs font-bold ml-1 ${isCurrentAdmin ? "text-gray-400" : "text-red-700"}`}>Delete</Text>
         </TouchableOpacity>
       </View>
+      {qrSelectable ? (
+        <TouchableOpacity
+          disabled={qrExporting}
+          onPress={() => onPrintQr?.([user])}
+          className={`mt-2 min-h-10 rounded-lg border flex-row items-center justify-center ${qrExporting ? "bg-gray-100 border-gray-200" : "bg-indigo-50 border-indigo-200"}`}
+        >
+          <Icon name="print" size={17} color={qrExporting ? "#9CA3AF" : "#4F46E5"} />
+          <Text className={`text-xs font-bold ml-1 ${qrExporting ? "text-gray-400" : "text-indigo-700"}`}>Print QR</Text>
+        </TouchableOpacity>
+      ) : null}
       {isCurrentAdmin ? <Text className="text-[10px] text-gray-400 mt-2 text-center">Your currently logged-in admin account is protected.</Text> : null}
     </View>
   );
 };
 
-const UserList = ({ users, role, refreshing, onRefresh, currentAdminId, onEdit, onToggleStatus, onDelete }) => {
+const UserList = ({
+  users,
+  role,
+  refreshing,
+  onRefresh,
+  currentAdminId,
+  onEdit,
+  onToggleStatus,
+  onDelete,
+  selectedQrUserIds = [],
+  onToggleQrSelect,
+  onSelectAllQrUsers,
+  onClearQrSelection,
+  onPrintQr,
+  qrExporting,
+}) => {
   const filtered = users.filter((user) => !isDeletedAccount(user) && String(user?.usertype || "").toUpperCase() === role);
+  const isUserRole = role === "USER";
+  const selectedCount = isUserRole
+    ? filtered.filter((user) => selectedQrUserIds.includes(String(user?.transid))).length
+    : 0;
+
   return (
     <ScrollView
       className="flex-1 bg-gray-100 px-3 pt-3"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#2563EB"]} />}
       contentContainerStyle={{ paddingBottom: 28 }}
     >
+      {isUserRole ? (
+        <View className="bg-white border border-indigo-100 rounded-xl p-3 mb-3">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1 mr-3">
+              <Text className="text-sm font-bold text-gray-900">Customer QR Print</Text>
+              <Text className="text-xs text-gray-500 mt-0.5">
+                {selectedCount} selected. One A4 page will be created for each customer.
+              </Text>
+            </View>
+            <TouchableOpacity
+              disabled={!selectedCount || qrExporting}
+              onPress={() => onPrintQr(filtered.filter((user) => selectedQrUserIds.includes(String(user?.transid))))}
+              className={`min-h-10 px-3 rounded-lg flex-row items-center justify-center ${selectedCount && !qrExporting ? "bg-indigo-600" : "bg-gray-300"}`}
+            >
+              {qrExporting ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Icon name="print" size={17} color="#FFFFFF" />}
+              <Text className="text-xs font-bold text-white ml-1">{qrExporting ? "Preparing" : "Print"}</Text>
+            </TouchableOpacity>
+          </View>
+          <View className="flex-row mt-3">
+            <TouchableOpacity
+              disabled={!filtered.length || qrExporting}
+              onPress={() => onSelectAllQrUsers(filtered)}
+              className="flex-1 min-h-9 rounded-lg bg-indigo-50 border border-indigo-200 flex-row items-center justify-center mr-1"
+            >
+              <Icon name="select-all" size={16} color="#4F46E5" />
+              <Text className="text-xs font-bold text-indigo-700 ml-1">Select All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={!selectedCount || qrExporting}
+              onPress={onClearQrSelection}
+              className="flex-1 min-h-9 rounded-lg bg-gray-50 border border-gray-200 flex-row items-center justify-center ml-1"
+            >
+              <Icon name="clear" size={16} color="#4B5563" />
+              <Text className="text-xs font-bold text-gray-700 ml-1">Clear</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
       {filtered.length ? filtered.map((user) => (
         <UserCard
           key={user?.transid}
@@ -213,6 +343,11 @@ const UserList = ({ users, role, refreshing, onRefresh, currentAdminId, onEdit, 
           onEdit={onEdit}
           onToggleStatus={onToggleStatus}
           onDelete={onDelete}
+          qrSelectable={isUserRole}
+          qrSelected={selectedQrUserIds.includes(String(user?.transid))}
+          onToggleQrSelect={onToggleQrSelect}
+          onPrintQr={onPrintQr}
+          qrExporting={qrExporting}
         />
       )) : (
         <View className="items-center py-20">
@@ -234,6 +369,8 @@ export default function ManageUsersScreen() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [selectedQrUserIds, setSelectedQrUserIds] = useState([]);
+  const [qrExporting, setQrExporting] = useState(false);
 
   const fetchUsers = async ({ pullToRefresh = false } = {}) => {
     try {
@@ -269,6 +406,192 @@ export default function ManageUsersScreen() {
       .some((value) => String(value || "").toLowerCase().includes(query)));
   }, [search, users]);
 
+  const getDailyMilkRegistrationId = async (userId) => {
+    if (!userId) return "";
+    try {
+      const response = await API.GET(`DailyMilkRegistration/CheckUser/${userId}`);
+      const registrations = Array.isArray(response?.Response) ? response.Response : [];
+      const activeRegistration = registrations.find((item) => Number(item?.status) === 1);
+      return activeRegistration?.transid || activeRegistration?.dailymilkregistrationid || "";
+    } catch (error) {
+      console.warn("Daily milk registration lookup failed:", userId, error?.message || error);
+      return "";
+    }
+  };
+
+  const buildQrPdfHtml = async (selectedUsers) => {
+    const preparedUsers = await Promise.all(
+      selectedUsers.map(async (user) => {
+        const qrValue = normalize(user?.transid);
+        const registrationId = await getDailyMilkRegistrationId(qrValue);
+        const qrSvg = await QRCodeGenerator.toString(qrValue || "N/A", {
+          type: "svg",
+          width: 620,
+          margin: 1,
+          errorCorrectionLevel: "M",
+          color: {
+            dark: "#111827",
+            light: "#FFFFFF",
+          },
+        });
+
+        return {
+          user,
+          qrSvg,
+          registrationId,
+        };
+      })
+    );
+
+    const pages = preparedUsers.map(({ user, qrSvg, registrationId }) => `
+      <section class="page">
+        <div class="brand">Dear Basket Customer QR</div>
+        <div class="qr-wrap">${qrSvg}</div>
+        <div class="details">
+          <div class="name">${escapeHtml(user?.name || "Unnamed User")}</div>
+          <div class="row"><span>Customer ID</span><strong>${escapeHtml(user?.transid || "N/A")}</strong></div>
+          <div class="row"><span>Phone Number</span><strong>${escapeHtml(user?.mobile || "N/A")}</strong></div>
+          <div class="row"><span>Daily Milk Registration ID</span><strong>${escapeHtml(registrationId || "Not subscribed")}</strong></div>
+        </div>
+      </section>
+    `).join("");
+
+    return `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            @page { size: A4; margin: 0; }
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              padding: 0;
+              font-family: Arial, Helvetica, sans-serif;
+              color: #111827;
+              background: #ffffff;
+            }
+            .page {
+              width: 210mm;
+              height: 297mm;
+              padding: 18mm 16mm;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              page-break-after: always;
+            }
+            .page:last-child { page-break-after: auto; }
+            .brand {
+              width: 100%;
+              text-align: center;
+              color: #166534;
+              font-size: 22px;
+              font-weight: 800;
+              letter-spacing: 0.4px;
+              margin-bottom: 16mm;
+            }
+            .qr-wrap {
+              width: 170mm;
+              height: 170mm;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              border: 3px solid #111827;
+              border-radius: 18px;
+              padding: 10mm;
+            }
+            .qr-wrap svg {
+              width: 148mm;
+              height: 148mm;
+              display: block;
+            }
+            .details {
+              width: 170mm;
+              margin-top: 16mm;
+              border: 2px solid #E5E7EB;
+              border-radius: 16px;
+              overflow: hidden;
+            }
+            .name {
+              text-align: center;
+              font-size: 30px;
+              font-weight: 900;
+              padding: 8mm 6mm;
+              background: #F0FDF4;
+              color: #14532D;
+              border-bottom: 2px solid #DCFCE7;
+            }
+            .row {
+              display: flex;
+              justify-content: space-between;
+              gap: 8mm;
+              padding: 5mm 7mm;
+              font-size: 18px;
+              border-bottom: 1px solid #E5E7EB;
+            }
+            .row:last-child { border-bottom: 0; }
+            .row span {
+              color: #6B7280;
+              font-weight: 700;
+            }
+            .row strong {
+              color: #111827;
+              text-align: right;
+              overflow-wrap: anywhere;
+            }
+          </style>
+        </head>
+        <body>${pages}</body>
+      </html>
+    `;
+  };
+
+  const printQrForUsers = async (selectedUsers) => {
+    const printableUsers = (selectedUsers || []).filter((user) => user?.transid);
+    if (!printableUsers.length) {
+      Alert.alert("Select Users", "Select at least one user to print QR.");
+      return;
+    }
+
+    try {
+      setQrExporting(true);
+      setLoading(true, "Preparing customer QR PDF...");
+      const html = await buildQrPdfHtml(printableUsers);
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          dialogTitle: "Print Customer QR PDF",
+          UTI: "com.adobe.pdf",
+        });
+      } else {
+        Alert.alert("PDF Ready", uri);
+      }
+    } catch (error) {
+      console.error("QR PDF export failed:", error);
+      Alert.alert("Export Failed", getUserFacingErrorMessage(error, "Unable to create QR PDF"));
+    } finally {
+      setQrExporting(false);
+      setLoading(false);
+    }
+  };
+
+  const toggleQrSelect = (user) => {
+    const userId = String(user?.transid || "");
+    if (!userId) return;
+    setSelectedQrUserIds((current) =>
+      current.includes(userId)
+        ? current.filter((id) => id !== userId)
+        : [...current, userId]
+    );
+  };
+
+  const selectAllQrUsers = (nextUsers) => {
+    setSelectedQrUserIds((nextUsers || []).map((user) => String(user?.transid || "")).filter(Boolean));
+  };
+
   const openCreate = () => {
     setEditing(false);
     setForm(emptyForm);
@@ -282,6 +605,8 @@ export default function ManageUsersScreen() {
       name: normalize(user?.name),
       mobile: normalize(user?.mobile),
       username: normalize(user?.username || user?.mobile),
+      originalMobile: normalize(user?.mobile),
+      originalUsername: normalize(user?.username || user?.mobile),
       dob: normalize(user?.dob).split("T")[0],
       address: normalize(user?.address),
       profile: normalize(user?.profile),
@@ -295,8 +620,8 @@ export default function ManageUsersScreen() {
   const setField = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const validate = () => {
     if (!form.name.trim()) return "Name is required.";
-    if (!/^\d{10}$/.test(form.mobile.trim())) return "Mobile must contain 10 digits.";
-    if (!form.username.trim()) return "Username is required.";
+    if (!editing && !/^\d{10}$/.test(form.mobile.trim())) return "Mobile must contain 10 digits.";
+    if (!editing && !form.username.trim()) return "Username is required.";
     if (form.dob && !/^\d{4}-\d{2}-\d{2}$/.test(form.dob.trim())) return "DOB must use YYYY-MM-DD.";
     if (!editing && !form.password.trim()) return "Password is required when creating an account.";
     return null;
@@ -312,8 +637,8 @@ export default function ManageUsersScreen() {
       const common = {
         fullname: form.name.trim(),
         name: form.name.trim(),
-        mobile: form.mobile.trim(),
-        username: form.username.trim(),
+        mobile: editing ? form.originalMobile.trim() : form.mobile.trim(),
+        username: editing ? form.originalUsername.trim() : form.username.trim(),
         dob: form.dob.trim() || null,
         address: form.address.trim(),
         profile: form.profile.trim() || "No File Uploaded",
@@ -328,18 +653,15 @@ export default function ManageUsersScreen() {
           luu: actor?.transid || actor?.name || "ADMIN",
           ...(form.password.trim() ? { password: form.password.trim() } : {}),
         };
-        try {
-          await API.PUT("User/admin/accounts", payload);
-        } catch (error) {
-          console.warn("Admin account update endpoint unavailable, falling back to User:", error?.message || error);
-          await API.PUT("User", payload);
-        }
+        const response = await API.PUT("User/admin/accounts", payload);
+        assertAccountResponse(response, "Unable to update this account.");
       } else {
-        await API.POST("UserSignUp", {
+        const response = await API.POST("UserSignUp", {
           ...common,
           password: form.password.trim(),
           rcu: actor?.transid || actor?.name || "ADMIN",
         });
+        assertAccountResponse(response, "Unable to create this account.");
       }
 
       setEditorVisible(false);
@@ -366,12 +688,8 @@ export default function ManageUsersScreen() {
             try {
               setLoading(true, "Updating account status...");
               const payload = { ...user, transid: user.transid, status: nextStatus, luu: currentAdminId || "ADMIN" };
-              try {
-                await API.PUT("User/admin/accounts", payload);
-              } catch (error) {
-                console.warn("Admin account status endpoint unavailable, falling back to User:", error?.message || error);
-                await API.PUT("User", { transid: user.transid, status: nextStatus, luu: currentAdminId || "ADMIN" });
-              }
+              const response = await API.PUT("User/admin/accounts", payload);
+              assertAccountResponse(response, "Unable to update account status.");
               await fetchUsers();
             } catch (error) {
               Alert.alert("Update Failed", getUserFacingErrorMessage(error, "Unable to update account status"));
@@ -396,12 +714,8 @@ export default function ManageUsersScreen() {
           onPress: async () => {
             try {
               setLoading(true, "Deleting account...");
-              try {
-                await API.DELETE("User/admin/accounts", { transid: user.transid, luu: currentAdminId || "ADMIN" });
-              } catch (error) {
-                console.warn("Admin account delete endpoint unavailable, falling back to User:", error?.message || error);
-                await API.DELETE("User", { transid: user.transid, luu: currentAdminId || "ADMIN" });
-              }
+              const response = await API.DELETE("User/admin/accounts", { transid: user.transid, luu: currentAdminId || "ADMIN" });
+              assertAccountResponse(response, "Unable to delete this account.");
               await fetchUsers();
               Alert.alert("Deleted", "Account deleted successfully.");
             } catch (error) {
@@ -425,6 +739,12 @@ export default function ManageUsersScreen() {
       onEdit={openEdit}
       onToggleStatus={toggleStatus}
       onDelete={deleteUser}
+      selectedQrUserIds={selectedQrUserIds}
+      onToggleQrSelect={toggleQrSelect}
+      onSelectAllQrUsers={selectAllQrUsers}
+      onClearQrSelection={() => setSelectedQrUserIds([])}
+      onPrintQr={printQrForUsers}
+      qrExporting={qrExporting}
     />
   );
 
@@ -471,8 +791,22 @@ export default function ManageUsersScreen() {
             <View className="bg-white border border-gray-200 rounded-xl p-4">
               {editing ? <View className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3"><Text className="text-[10px] text-gray-500">ACCOUNT ID</Text><Text className="text-xs font-bold text-gray-900 mt-1">{form.transid}</Text></View> : null}
               <FormField label="Full Name" value={form.name} onChangeText={(value) => setField("name", value)} />
-              <FormField label="Mobile" value={form.mobile} onChangeText={(value) => setField("mobile", value.replace(/\D/g, "").slice(0, 10))} keyboardType="phone-pad" maxLength={10} />
-              <FormField label="Username" value={form.username} onChangeText={(value) => setField("username", value)} />
+              <FormField
+                label="Mobile"
+                value={form.mobile}
+                onChangeText={(value) => setField("mobile", value.replace(/\D/g, "").slice(0, 10))}
+                keyboardType="phone-pad"
+                maxLength={10}
+                editable={!editing}
+                helperText={editing ? "Mobile number cannot be changed after account creation." : null}
+              />
+              <FormField
+                label="Username"
+                value={form.username}
+                onChangeText={(value) => setField("username", value)}
+                editable={!editing}
+                helperText={editing ? "Username cannot be changed after account creation." : null}
+              />
               <FormField label="Date of Birth" value={form.dob} onChangeText={(value) => setField("dob", value)} placeholder="YYYY-MM-DD" />
               <FormField label="Address" value={form.address} onChangeText={(value) => setField("address", value)} multiline />
               <FormField label="Profile Image Path" value={form.profile} onChangeText={(value) => setField("profile", value)} placeholder="Optional image URL or stored path" />

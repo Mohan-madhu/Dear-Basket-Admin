@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     View,
     Text,
@@ -27,6 +27,7 @@ const DailyMilkPayment = () => {
     const [confirmationModalVisible, setConfirmationModalVisible] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState('');
     const [paymentAmount, setPaymentAmount] = useState('');
+    const [expandedPaymentKey, setExpandedPaymentKey] = useState(null);
 
     const toAmount = (value) => {
         const amount = Number(value);
@@ -64,6 +65,45 @@ const DailyMilkPayment = () => {
     };
 
     const formatAmount = (value) => toAmount(value).toFixed(2);
+    const formatQty = (value) => toAmount(value).toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+    const getPaymentKey = (item, index) =>
+        String(
+            item?.dailymilkstatusid ||
+            item?.bookingid ||
+            item?.transid ||
+            `${item?.productname || "milk"}-${item?.bookingstartdate || ""}-${index}`
+        );
+    const firstNumber = (...values) => {
+        for (const value of values) {
+            if (value === null || value === undefined || value === "") continue;
+            const number = Number(value);
+            if (Number.isFinite(number)) return number;
+        }
+        return 0;
+    };
+    const getPaymentSortTime = (item) => {
+        const candidates = [
+            item?.bookingstartdate,
+            item?.bookingenddate,
+            item?.payment_time,
+            item?.receivedtime,
+            item?.rcm,
+            item?.lum,
+        ];
+
+        for (const value of candidates) {
+            if (!value) continue;
+            const time = new Date(value).getTime();
+            if (Number.isFinite(time)) return time;
+        }
+
+        return 0;
+    };
+
+    const sortedPaymentData = useMemo(
+        () => [...paymentData].sort((a, b) => getPaymentSortTime(b) - getPaymentSortTime(a)),
+        [paymentData]
+    );
 
     // Get user data
     const getUserData = async () => {
@@ -151,22 +191,6 @@ const DailyMilkPayment = () => {
     };
 
 
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'Match Found': return 'bg-green-100 border-green-500';
-            case 'No Match': return 'bg-red-100 border-red-500';
-            default: return 'bg-gray-100 border-gray-500';
-        }
-    };
-
-    const getStatusTextColor = (status) => {
-        switch (status) {
-            case 'Match Found': return 'text-green-800';
-            case 'No Match': return 'text-red-800';
-            default: return 'text-gray-800';
-        }
-    };
-
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
         const date = new Date(dateString);
@@ -178,6 +202,8 @@ const DailyMilkPayment = () => {
     };
 
     const renderPaymentCard = (item, index) => {
+        const paymentKey = getPaymentKey(item, index);
+        const expanded = expandedPaymentKey === paymentKey;
         const {
             bookedAmount,
             payableAmount,
@@ -188,40 +214,87 @@ const DailyMilkPayment = () => {
             hasReceivedMilk,
             isPaid,
         } = getPaymentState(item);
+        const displayDailyQuantity = firstNumber(item?.adjustedquantity, item?.adjusted_quantity, item?.quantity);
+        const selectedQuantityAmount = toAmount(item?.price) * displayDailyQuantity;
+        const bookedQuantity = firstNumber(
+            item?.adjusted_total_quantity,
+            item?.total_adjusted_quantity,
+            item?.total_booked_quantity,
+            item?.booked_quantity,
+            item?.total_qty
+        );
+        const extraQuantity = firstNumber(item?.total_extra, item?.extra_quantity, item?.total_extra_quantity);
+        const receivedQuantity = firstNumber(item?.received_quantity, item?.delivered_quantity, item?.total_received_quantity);
+        const cancelledQuantity = firstNumber(
+            item?.cancelled_quantity,
+            item?.cancelled_qty,
+            item?.total_cancelled_quantity,
+            Math.max(bookedQuantity + extraQuantity - receivedQuantity, 0)
+        );
+        const cancelledAmount = firstNumber(
+            item?.cancelled_amount,
+            item?.cancelledamount,
+            item?.cancelled_baseamount,
+            cancelledQuantity * toAmount(item?.price)
+        );
 
         return (
             <View
-                key={index}
-                className={`border-2 rounded-xl p-4 mb-4 ${isPaid ? 'border-green-500 bg-green-50' : hasDue ? 'border-orange-500 bg-white' : 'border-gray-300 bg-white'}`}
+                key={paymentKey}
+                className={`border-2 rounded-xl mb-4 overflow-hidden ${isPaid ? 'border-green-500 bg-green-50' : hasDue ? 'border-orange-500 bg-white' : 'border-gray-300 bg-white'}`}
             >
-                {/* Status Badge */}
-                <View className="flex-row justify-between items-center mb-3">
-                    <View className={`px-3 py-1 rounded-full ${getStatusColor(item.match_status)}`}>
-                        <Text className={`text-xs font-bold ${getStatusTextColor(item.match_status)}`}>
-                            {item.match_status}
-                        </Text>
+                <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => setExpandedPaymentKey((current) => current === paymentKey ? null : paymentKey)}
+                    className="p-4"
+                >
+                    <View className="flex-row justify-between items-start">
+                        <View className="flex-1 pr-3">
+                            <Text className="text-base font-bold text-gray-900" numberOfLines={1}>
+                                {item.productname || 'Milk'}
+                            </Text>
+                            <Text className="text-xs text-gray-500 mt-1">
+                                {formatDate(item.bookingstartdate)} to {formatDate(item.bookingenddate)}
+                            </Text>
+                            <Text className="text-xs text-gray-500 mt-1 capitalize">
+                                {item.deliverytype || 'Morning'} • {formatQty(displayDailyQuantity)} L/day
+                            </Text>
+                        </View>
+
+                        <View className="items-end">
+                            <View className={`px-2.5 py-1 rounded-full ${isPaid ? 'bg-green-500' : hasDue ? 'bg-orange-500' : 'bg-gray-500'}`}>
+                                <Text className="text-[10px] font-bold text-white">
+                                    {isPaid ? 'PAID' : hasDue ? 'DUE' : 'PENDING'}
+                                </Text>
+                            </View>
+                            <Text className={`text-lg font-bold mt-2 ${hasDue ? 'text-orange-600' : 'text-green-700'}`}>
+                                ₹{formatAmount(balanceAmount)}
+                            </Text>
+                            <View className="flex-row items-center mt-1">
+                                <Text className="text-[11px] text-gray-500 mr-1">
+                                    {expanded ? 'Hide' : 'View'}
+                                </Text>
+                                <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={16} color="#6B7280" />
+                            </View>
+                        </View>
                     </View>
-                    <View className="flex-row items-center space-x-2">
-                        <View className={`px-2 py-1 rounded-full ${item.booking_status === 'current booking' ? 'bg-blue-100' : 'bg-gray-100'}`}>
-                            <Text className={`text-xs font-bold ${item.booking_status === 'current booking' ? 'text-blue-800' : 'text-gray-800'}`}>
+
+                    <View className="flex-row flex-wrap mt-3">
+                        <View className={`px-2 py-1 rounded-full mr-2 mb-2 ${item.booking_status === 'current booking' ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                            <Text className={`text-[10px] font-bold ${item.booking_status === 'current booking' ? 'text-blue-800' : 'text-gray-800'}`}>
                                 {item.booking_status}
                             </Text>
                         </View>
-                        {isPaid && (
-                            <View className="bg-green-500 px-2 py-1 rounded-full">
-                                <Text className="text-xs font-bold text-white">PAID</Text>
-                            </View>
-                        )}
-                        {!isPaid && !hasDue && (
-                            <View className="bg-gray-500 px-2 py-1 rounded-full">
-                                <Text className="text-xs font-bold text-white">PENDING</Text>
-                            </View>
-                        )}
+                        <View className="px-2 py-1 rounded-full bg-slate-100 mb-2">
+                            <Text className="text-[10px] font-bold text-slate-700">
+                                Payable ₹{formatAmount(payableAmount)}
+                            </Text>
+                        </View>
                     </View>
-                </View>
+                </TouchableOpacity>
 
-                {/* Product Details */}
-                <View className="space-y-2">
+                {expanded && (
+                <View className="space-y-2 px-4 pb-4">
                     <View className="flex-row justify-between">
                         <Text className="text-gray-600">Product:</Text>
                         <Text className="font-semibold">{item.productname || 'Milk'}</Text>
@@ -234,7 +307,12 @@ const DailyMilkPayment = () => {
 
                     <View className="flex-row justify-between">
                         <Text className="text-gray-600">Quantity per day:</Text>
-                        <Text className="font-semibold">{item.quantity || '0'} L</Text>
+                        <Text className="font-semibold">{formatQty(displayDailyQuantity)} L</Text>
+                    </View>
+
+                    <View className="flex-row justify-between">
+                        <Text className="text-gray-600">Selected Quantity Amount:</Text>
+                        <Text className="font-semibold text-green-700">₹{formatAmount(selectedQuantityAmount)}</Text>
                     </View>
 
                     <View className="flex-row justify-between">
@@ -251,12 +329,17 @@ const DailyMilkPayment = () => {
 
                     <View className="flex-row justify-between">
                         <Text className="text-gray-600">Total Quantity:</Text>
-                        <Text className="font-semibold">{item.total_qty || '0'} L</Text>
+                        <Text className="font-semibold">{formatQty(bookedQuantity)} L</Text>
                     </View>
 
                     <View className="flex-row justify-between">
                         <Text className="text-gray-600">Extra Quantity:</Text>
-                        <Text className="font-semibold">{item.total_extra || '0'} L</Text>
+                        <Text className="font-semibold">{formatQty(extraQuantity)} L</Text>
+                    </View>
+
+                    <View className="flex-row justify-between">
+                        <Text className="text-gray-600">Cancelled Quantity:</Text>
+                        <Text className="font-semibold text-red-700">{formatQty(cancelledQuantity)} L</Text>
                     </View>
 
                     {/* Amount Details */}
@@ -268,7 +351,12 @@ const DailyMilkPayment = () => {
 
                         <View className="flex-row justify-between">
                             <Text className="text-gray-600">Extra Amount:</Text>
-                            <Text className="font-semibold">₹{item.extraamount || '0'}</Text>
+                            <Text className="font-semibold">₹{formatAmount(item.extraamount)}</Text>
+                        </View>
+
+                        <View className="flex-row justify-between">
+                            <Text className="text-gray-600">Cancelled Amount:</Text>
+                            <Text className="font-semibold text-red-700">- ₹{formatAmount(cancelledAmount)}</Text>
                         </View>
 
                         <View className="flex-row justify-between border-t border-gray-300 pt-2 mt-1">
@@ -315,9 +403,7 @@ const DailyMilkPayment = () => {
                             </View>
                         </View>
                     )}
-                </View>
-
-                {/* Pay Button - Only show if payment is pending and has balance */}
+                    {/* Pay Button - Only show if payment is pending and has balance */}
                 {!isPaid && hasDue && (
                     <TouchableOpacity
                         onPress={() => handlePay(item)}
@@ -345,6 +431,8 @@ const DailyMilkPayment = () => {
                         </Text>
                     </View>
                 )}
+                </View>
+                )}
             </View>
         );
     };
@@ -363,8 +451,8 @@ const DailyMilkPayment = () => {
 
             {/* Content */}
             <ScrollView className="flex-1 p-4">
-                {paymentData.length > 0 ? (
-                    paymentData.map((item, index) => renderPaymentCard(item, index))
+                {sortedPaymentData.length > 0 ? (
+                    sortedPaymentData.map((item, index) => renderPaymentCard(item, index))
                 ) : (
                     <View className="flex-1 justify-center items-center py-20">
                         <Ionicons name="card-outline" size={80} color="#d1d5db" />

@@ -97,14 +97,21 @@ const normalizeMilkOrderDataForCard = (order) => {
   if (!milkRows.length) return { ...order, orderdata: parsedOrderData || [] };
 
   const mappedItems = milkRows.map((row, idx) => {
-    const regularQty = Number(row?.regular_quantity ?? row?.quantity ?? row?.orderquantity ?? 0) || 0;
+    const hasAdjustedQty =
+      row?.adjustedquantity !== null && row?.adjustedquantity !== undefined && row?.adjustedquantity !== '';
+    const regularQty = Number(
+      hasAdjustedQty ? row?.adjustedquantity : row?.regular_quantity ?? row?.quantity ?? row?.orderquantity ?? 0
+    ) || 0;
+    const originalRegularQty = Number(row?.quantity ?? row?.regular_quantity ?? row?.orderquantity ?? regularQty) || 0;
     const extraQty = Number(row?.extra_quantity ?? row?.extra ?? 0) || 0;
     const cancelledQty = Number(row?.cancelled_quantity ?? 0) || 0;
     const totalQtyRaw = Number(row?.total_quantity);
-    const totalQty = Number.isFinite(totalQtyRaw) ? totalQtyRaw : (regularQty + extraQty);
+    const totalQty = hasAdjustedQty
+      ? regularQty + extraQty
+      : Number.isFinite(totalQtyRaw) ? totalQtyRaw : (regularQty + extraQty);
     const effectiveQty = totalQty > 0 ? totalQty : regularQty;
     const baseAmount = Number(row?.lineamount ?? row?.amount ?? row?.price ?? order?.itemtotal ?? 0) || 0;
-    const unitPriceBase = regularQty > 0 ? regularQty : (effectiveQty > 0 ? effectiveQty : 1);
+    const unitPriceBase = originalRegularQty > 0 ? originalRegularQty : (effectiveQty > 0 ? effectiveQty : 1);
     const unitPrice = baseAmount / unitPriceBase;
     const amount = Number(row?.finalamount ?? row?.totalamount ?? row?.effectiveamount) ||
       (unitPrice * (effectiveQty > 0 ? effectiveQty : unitPriceBase));

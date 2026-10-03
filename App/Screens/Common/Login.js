@@ -18,6 +18,7 @@ import { clearCart } from "../../Redux/CartReducer";
 export default function LoginScreen({ navigation }) {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const { setLoading } = useLoading();
   const dispatch = useDispatch();
@@ -212,13 +213,24 @@ export default function LoginScreen({ navigation }) {
           ref={passwordRef}
           placeholder="Password"
           placeholderTextColor="#6B7280"
-          secureTextEntry
+          secureTextEntry={!showPassword}
           className="ml-3 flex-1 text-black"
           value={password}
           onChangeText={setPassword}
           returnKeyType="done"
           onSubmitEditing={handleLogin}
         />
+        <TouchableOpacity
+          onPress={() => setShowPassword((current) => !current)}
+          className="pl-3 py-1"
+          activeOpacity={0.75}
+        >
+          <Ionicons
+            name={showPassword ? "eye-off-outline" : "eye-outline"}
+            size={21}
+            color="#6B7280"
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Forgot Password */}

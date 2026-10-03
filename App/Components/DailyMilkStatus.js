@@ -52,6 +52,19 @@ const DAILY_MILK_STATUS_THEME = {
   subtleText: "#94a3b8",
 };
 
+const toNumber = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const hasAdjustedQuantity = (item) =>
+  item?.adjustedquantity !== null &&
+  item?.adjustedquantity !== undefined &&
+  item?.adjustedquantity !== "";
+
+const getRegularQuantity = (item) =>
+  hasAdjustedQuantity(item) ? toNumber(item.adjustedquantity) : toNumber(item?.quantity);
+
 export default function DailyMilkStatus({ BookingData, FromAdmin }) {
   console.warn("BookingData in DailyMilkStatus:", BookingData);
   const activeBooking = Array.isArray(BookingData)
@@ -66,6 +79,7 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
   const isMountedRef = React.useRef(false);
   const [isCancelModalVisible, setCancelModalVisible] = useState(false);
   const [isExtraModalVisible, setExtraModalVisible] = useState(false);
+  const [isReduceModalVisible, setReduceModalVisible] = useState(false);
   const [showBookingDetails, setShowBookingDetails] = useState(false);
   const [showWeek, setShowWeek] = useState(false);
   const [showActions, setShowActions] = useState(false);
@@ -77,6 +91,9 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
   const [currentExtraDate, setCurrentExtraDate] = useState(null);
   const [extraQtyInput, setExtraQtyInput] = useState("");
   const [finalExtraEntries, setFinalExtraEntries] = useState([]);
+  const [currentReduceDate, setCurrentReduceDate] = useState(null);
+  const [reduceQtyInput, setReduceQtyInput] = useState("");
+  const [finalReducedEntries, setFinalReducedEntries] = useState([]);
 
   const [bookingStatusTable, setBookingStatusTable] = useState([]);
   const [upd, setupd] = useState(0);
@@ -118,6 +135,7 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
 
       const CancelledDatesSet = new Set();
       const ExtraMilkEntries = [];
+      const ReducedMilkEntries = [];
       const dataByDate = safeResponse.reduce((acc, currentItem) => {
         let status;
 
@@ -138,6 +156,13 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
           });
         }
 
+        if (hasAdjustedQuantity(currentItem)) {
+          ReducedMilkEntries.push({
+            date: currentItem.date,
+            qty: toNumber(currentItem.adjustedquantity),
+          });
+        }
+
         acc[currentItem.date] = { ...currentItem, status: status };
         return acc;
       }, {});
@@ -146,6 +171,7 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
         setBookingStatus(dataByDate);
         setSelectedCancelDates(CancelledDatesSet);
         setFinalExtraEntries(ExtraMilkEntries);
+        setFinalReducedEntries(ReducedMilkEntries);
       }
     } catch (err) {
       console.error("Error fetching booking status:", err);
@@ -177,17 +203,23 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
         date: item.date,
         qty: item.qty, // Make sure this matches your data structure
       }));
+      const reducedMilkData = finalReducedEntries.map((item) => ({
+        date: item.date,
+        qty: item.qty,
+      }));
 
       console.log({
         transid: bookingid,
         dates: myArray,
         extramilk: extramilkData, // Add the extramilk data to the payload
+        reducedmilk: reducedMilkData,
       });
 
       const res = await API.PUT("DailyMilkStatus/cancel-dates-and-extra-milk", {
         transid: bookingid,
         dates: myArray,
         extramilk: extramilkData, // Add the extramilk data to the payload
+        reducedmilk: reducedMilkData,
       });
 
       console.log(res);
@@ -298,6 +330,13 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
 
 
 
+  const getExistingRegularQtyForDate = (date) => {
+    const row = bookingStatus?.[date];
+    if (row) return getRegularQuantity(row);
+    const localReduced = finalReducedEntries.find((entry) => entry.date === date);
+    return localReduced ? toNumber(localReduced.qty) : bookingQuantity;
+  };
+
   function onDayPressExtra(day) {
     const date = day.dateString;
 
@@ -321,6 +360,25 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
     setExtraQtyInput(existingEntry ? String(existingEntry.qty) : "");
   }
 
+  function onDayPressReduce(day) {
+    const date = day.dateString;
+
+    if (!extraMilkEnabledDates.has(date)) return;
+
+    if (selectedCancelDates.has(date)) {
+      Alert.alert(
+        "Date Cancelled",
+        `The date ${date} has been cancelled and cannot be modified.`,
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    setCurrentReduceDate(date);
+    const existingEntry = finalReducedEntries.find((e) => e.date === date);
+    setReduceQtyInput(existingEntry ? String(existingEntry.qty) : String(getExistingRegularQtyForDate(date)));
+  }
+
   const handleAddExtraEntry = () => {
     const qty = parseFloat(extraQtyInput);
 
@@ -342,6 +400,35 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
 
     setCurrentExtraDate(null);
     setExtraQtyInput("");
+  };
+
+  const handleAddReducedEntry = () => {
+    const qty = parseFloat(reduceQtyInput);
+    const baseQty = bookingQuantity;
+
+    if (!currentReduceDate || isNaN(qty) || qty < 0) {
+      Alert.alert("Invalid Input", "Please enter a valid reduced quantity.");
+      return;
+    }
+
+    if (qty === 0) {
+      Alert.alert("Use Cancel Date", "For 0 L delivery, please cancel that date instead.");
+      return;
+    }
+
+    if (qty > baseQty) {
+      Alert.alert("Invalid Quantity", `Reduced quantity cannot be more than your booked ${baseQty} L.`);
+      return;
+    }
+
+    setFinalReducedEntries((prevEntries) => {
+      const filtered = prevEntries.filter((e) => e.date !== currentReduceDate);
+      if (qty === baseQty) return filtered;
+      return [...filtered, { date: currentReduceDate, qty }];
+    });
+
+    setCurrentReduceDate(null);
+    setReduceQtyInput("");
   };
 
   const cancelMarkedDates = useMemo(() => {
@@ -453,8 +540,68 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
     selectedCancelDates,
   ]);
 
+  const reduceMarkedDates = useMemo(() => {
+    const marked = {};
+
+    if (extraMilkEnabledDates.size > 0) {
+      const [oneDate] = extraMilkEnabledDates;
+      const [yStr, mStr] = oneDate
+        .split("-")
+        .map((x, i) => (i < 2 ? parseInt(x, 10) : null));
+      const daysInThisMonth = new Date(yStr, mStr, 0).getDate();
+
+      for (let dd = 1; dd <= daysInThisMonth; dd++) {
+        const candidate = `${yStr}-${String(mStr).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+        if (!extraMilkEnabledDates.has(candidate)) {
+          marked[candidate] = { disabled: true, disableTouchEvent: true };
+        }
+      }
+    }
+
+    selectedCancelDates.forEach((date) => {
+      marked[date] = {
+        ...marked[date],
+        disabled: true,
+        disableTouchEvent: true,
+        dotColor: "red",
+        marked: true,
+      };
+    });
+
+    finalReducedEntries.forEach((entry) => {
+      if (entry.qty > 0 && !selectedCancelDates.has(entry.date)) {
+        marked[entry.date] = {
+          ...marked[entry.date],
+          selected: true,
+          selectedColor: "#f59e0b",
+          marked: true,
+          dotColor: "#f59e0b",
+        };
+      }
+    });
+
+    if (
+      currentReduceDate &&
+      extraMilkEnabledDates.has(currentReduceDate) &&
+      !selectedCancelDates.has(currentReduceDate)
+    ) {
+      marked[currentReduceDate] = {
+        ...(marked[currentReduceDate] || {}),
+        selected: true,
+        selectedColor: "#3498db",
+      };
+    }
+
+    return marked;
+  }, [finalReducedEntries, currentReduceDate, extraMilkEnabledDates, selectedCancelDates]);
+
   const [applyToAllUpcoming, setApplyToAllUpcoming] = useState(false);
   const [allUpcomingQty, setAllUpcomingQty] = useState("");
+  const [applyReduceToAllUpcoming, setApplyReduceToAllUpcoming] = useState(false);
+  const [allUpcomingReducedQty, setAllUpcomingReducedQty] = useState("");
+  const bookingQuantity = Number(activeBooking?.quantity || 0);
+  const bookingUnitPrice = Number(activeBooking?.price || 0);
+  const bookingDailyAmount = bookingQuantity * bookingUnitPrice;
 
   // Add this function to handle applying to all upcoming days
   const handleApplyToAllUpcoming = () => {
@@ -490,6 +637,51 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
     setAllUpcomingQty("");
   };
 
+  const handleApplyReductionToAllUpcoming = () => {
+    const qty = parseFloat(allUpcomingReducedQty);
+    const baseQty = bookingQuantity;
+    if (isNaN(qty) || qty < 0) {
+      Alert.alert("Invalid Input", "Please enter a valid reduced quantity.");
+      return;
+    }
+
+    if (qty === 0) {
+      Alert.alert("Use Cancel Date", "For 0 L delivery, please cancel those dates instead.");
+      return;
+    }
+
+    if (qty > baseQty) {
+      Alert.alert("Invalid Quantity", `Reduced quantity cannot be more than your booked ${baseQty} L.`);
+      return;
+    }
+
+    const today = new Date();
+    today.setDate(today.getDate() + 1);
+
+    const [y, m, d] = nextMonthDate.split("-").map((x) => parseInt(x, 10));
+    const endDate = new Date(y, m - 1, d);
+
+    const newEntries = [];
+    const cursor = new Date(today);
+    while (cursor <= endDate) {
+      const dateStr = formatDateYYYYMMDD(cursor);
+      if (!selectedCancelDates.has(dateStr) && qty < baseQty) {
+        newEntries.push({ date: dateStr, qty });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    setFinalReducedEntries((prev) => [
+      ...prev.filter((entry) => {
+        const entryDate = new Date(entry.date);
+        return entryDate < today || entryDate > endDate;
+      }),
+      ...newEntries,
+    ]);
+    setApplyReduceToAllUpcoming(false);
+    setAllUpcomingReducedQty("");
+  };
+
   console.warn("BookingStatusTable:", bookingStatusTable);
 
   const deliverySummary = (Array.isArray(bookingStatusTable) ? bookingStatusTable : []).reduce(
@@ -498,20 +690,24 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
       else if (item?.received != null) summary.delivered += 1;
       else summary.pending += 1;
       if (Number(item?.extra || 0) > 0) summary.extraDays += 1;
+      if (!isDailyMilkCancelled(item?.cancelled) && hasAdjustedQuantity(item) && getRegularQuantity(item) < toNumber(item?.quantity)) {
+        summary.reducedDays += 1;
+      }
       return summary;
     },
-    { delivered: 0, pending: 0, cancelled: 0, extraDays: 0 }
+    { delivered: 0, pending: 0, cancelled: 0, extraDays: 0, reducedDays: 0 }
   );
   const milkValueSummary = (Array.isArray(bookingStatusTable) ? bookingStatusTable : []).reduce(
     (summary, item) => {
       if (isDailyMilkCancelled(item?.cancelled)) return summary;
 
-      const quantity = Number(item?.quantity || 0);
-      const extra = Number(item?.extra || 0);
-      const amount = Number(item?.amount || 0);
-      const unitPrice = quantity > 0 ? amount / quantity : 0;
-      const totalLitres = quantity + extra;
-      const totalAmount = amount + (unitPrice * extra);
+      const originalQuantity = toNumber(item?.quantity);
+      const regularQuantity = getRegularQuantity(item);
+      const extra = toNumber(item?.extra);
+      const amount = toNumber(item?.amount);
+      const unitPrice = originalQuantity > 0 ? amount / originalQuantity : 0;
+      const totalLitres = regularQuantity + extra;
+      const totalAmount = unitPrice * totalLitres;
 
       summary.totalLitres += totalLitres;
       summary.totalAmount += totalAmount;
@@ -525,9 +721,6 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
   );
   milkValueSummary.remainingLitres = Math.max(0, milkValueSummary.totalLitres - milkValueSummary.receivedLitres);
   milkValueSummary.remainingAmount = Math.max(0, milkValueSummary.totalAmount - milkValueSummary.receivedAmount);
-  const bookingQuantity = Number(activeBooking?.quantity || 0);
-  const bookingUnitPrice = Number(activeBooking?.price || 0);
-  const bookingDailyAmount = bookingQuantity * bookingUnitPrice;
   const deliveryBatch = String(activeBooking?.deliverytype || '').trim();
   const isEveningBatch = deliveryBatch.toLowerCase().includes('evening');
   const isMorningBatch = deliveryBatch.toLowerCase().includes('morning');
@@ -783,6 +976,7 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
           var status = dayData ? dayData.status : 2;
           const isToday = d.toDateString() === new Date().toDateString();
           const extra = finalExtraEntries.find((e) => e.date === ds)?.qty;
+          const reduced = finalReducedEntries.find((e) => e.date === ds)?.qty;
 
           if (status === 0 && new Date() > new Date(d)) {
             status = 3;
@@ -852,6 +1046,13 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
                   </Text>
                 </View>
               )}
+              {reduced != null && (
+                <View className="mt-1.5 bg-amber-950 px-1.5 py-0.5 rounded border border-amber-800">
+                  <Text className="text-xs text-amber-300 font-medium">
+                    {reduced}L
+                  </Text>
+                </View>
+              )}
             </View>
           );
             })}
@@ -877,14 +1078,21 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
               onPress={() => setCancelModalVisible(true)}
             >
               <Icon name="calendar-times-o" size={14} color="#dc2626" />
-              <Text className="text-red-300 text-xs font-bold ml-2">Cancel Date</Text>
+              <Text className="text-red-300 text-[11px] font-bold ml-1">Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="flex-1 bg-amber-950 border border-amber-800 mx-1 py-2.5 rounded-lg items-center flex-row justify-center"
+              onPress={() => setReduceModalVisible(true)}
+            >
+              <Icon name="minus-circle" size={14} color="#f59e0b" />
+              <Text className="text-amber-300 text-[11px] font-bold ml-1">Reduce</Text>
             </TouchableOpacity>
             <TouchableOpacity
               className="flex-1 bg-green-950 border border-green-800 ml-1 py-2.5 rounded-lg items-center flex-row justify-center"
               onPress={() => setExtraModalVisible(true)}
             >
               <Icon name="plus-circle" size={14} color="#15803d" />
-              <Text className="text-green-300 text-xs font-bold ml-2">Extra Milk</Text>
+              <Text className="text-green-300 text-[11px] font-bold ml-1">Extra</Text>
             </TouchableOpacity>
           </View>
 
@@ -939,7 +1147,7 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
       <View className="border rounded-lg mb-2 overflow-hidden" style={themedCardStyle}>
         <SectionToggle
           title="Delivery History"
-          subtitle={`${deliverySummary.delivered} delivered • ${deliverySummary.pending} pending • ${deliverySummary.extraDays} extra milk`}
+          subtitle={`${deliverySummary.delivered} delivered • ${deliverySummary.pending} pending • ${deliverySummary.extraDays} extra • ${deliverySummary.reducedDays} reduced`}
           icon="list-alt"
           expanded={showDeliveryHistory}
           onPress={() => setShowDeliveryHistory((value) => !value)}
@@ -996,6 +1204,143 @@ export default function DailyMilkStatus({ BookingData, FromAdmin }) {
                 onPress={confirmCancellations}
               >
                 <Text className="text-white">Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─── Reduce Milk Modal ─── */}
+      <Modal
+        visible={isReduceModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setReduceModalVisible(false);
+          setCurrentReduceDate(null);
+          setReduceQtyInput("");
+          setApplyReduceToAllUpcoming(false);
+          setAllUpcomingReducedQty("");
+        }}
+      >
+        <View className="flex-1 justify-center bg-black/50">
+          <View className="bg-gray-900 border border-gray-700 m-4 p-4 rounded-lg">
+            <Text className="text-lg text-white font-semibold mb-1">Reduce Milk</Text>
+            <Text className="text-xs text-gray-400 mb-2">
+              Booked quantity: {bookingQuantity} L. Choose a lower quantity for future delivery dates.
+            </Text>
+
+            <Calendar
+              minDate={formatDateYYYYMMDD(
+                new Date(new Date().setDate(new Date().getDate() + 1))
+              )}
+              maxDate={nextMonthDate}
+              onDayPress={onDayPressReduce}
+              markingType="multi-dot"
+              markedDates={reduceMarkedDates}
+              theme={{
+                backgroundColor: "#111827",
+                calendarBackground: "#111827",
+                textSectionTitleColor: "#9ca3af",
+                dayTextColor: "#e5e7eb",
+                monthTextColor: "#f9fafb",
+                arrowColor: "#f59e0b",
+                selectedDayBackgroundColor: "#f59e0b",
+                todayTextColor: "#ef4444",
+                dotColor: "#f59e0b",
+                disabledDayTextColor: "#4b5563",
+              }}
+            />
+
+            <View className="mt-4 flex-row items-center">
+              <TouchableOpacity
+                onPress={() => setApplyReduceToAllUpcoming(!applyReduceToAllUpcoming)}
+                className="mr-2"
+              >
+                <View
+                  className={`w-5 h-5 border rounded ${applyReduceToAllUpcoming
+                    ? "bg-amber-500 border-amber-500"
+                    : "border-gray-400"
+                    }`}
+                >
+                  {applyReduceToAllUpcoming && (
+                    <Icon name="check" size={14} color="white" />
+                  )}
+                </View>
+              </TouchableOpacity>
+              <Text className="text-gray-200">Same reduced quantity for all upcoming days</Text>
+            </View>
+
+            {applyReduceToAllUpcoming ? (
+              <View className="mt-2">
+                <Text className="mb-1 text-gray-300">
+                  Reduced quantity for all upcoming days (liters):
+                </Text>
+                <TextInput
+                  className="border border-gray-700 bg-gray-800 text-white rounded-lg p-2 mb-4"
+                  placeholderTextColor="#6b7280"
+                  keyboardType="numeric"
+                  placeholder={`Less than ${bookingQuantity} L`}
+                  value={allUpcomingReducedQty}
+                  onChangeText={setAllUpcomingReducedQty}
+                />
+                <TouchableOpacity
+                  className="px-4 py-2 bg-amber-600 rounded-lg items-center"
+                  onPress={handleApplyReductionToAllUpcoming}
+                >
+                  <Text className="text-white">Apply Reduction</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              currentReduceDate && (
+                <View className="mt-4">
+                  <Text className="mb-1 text-gray-300">
+                    Reduced liters on {currentReduceDate}
+                  </Text>
+                  <TextInput
+                    className="border border-gray-700 bg-gray-800 text-white rounded-lg p-2 mb-2"
+                    placeholderTextColor="#6b7280"
+                    keyboardType="numeric"
+                    placeholder={`Less than ${bookingQuantity} L`}
+                    value={reduceQtyInput}
+                    onChangeText={setReduceQtyInput}
+                  />
+                  <Text className="text-[11px] text-gray-400 mb-4">
+                    Enter {bookingQuantity} L to reset this date back to the normal booked quantity.
+                  </Text>
+                  <View className="flex-row justify-end">
+                    <TouchableOpacity
+                      className="px-4 py-2 mr-2"
+                      onPress={() => {
+                        setCurrentReduceDate(null);
+                        setReduceQtyInput("");
+                      }}
+                    >
+                      <Text className="text-gray-300">Back</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      className="px-4 py-2 bg-amber-600 rounded-lg"
+                      onPress={handleAddReducedEntry}
+                    >
+                      <Text className="text-white">Set</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )
+            )}
+
+            <View className="flex-row mt-4 justify-end">
+              <TouchableOpacity
+                className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg"
+                onPress={() => {
+                  setReduceModalVisible(false);
+                  setCurrentReduceDate(null);
+                  setReduceQtyInput("");
+                  setApplyReduceToAllUpcoming(false);
+                  setAllUpcomingReducedQty("");
+                }}
+              >
+                <Text className="text-gray-200">Done</Text>
               </TouchableOpacity>
             </View>
           </View>

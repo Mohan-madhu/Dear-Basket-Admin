@@ -17,6 +17,8 @@ import { useLoading } from "../../App_Utils/Contexts/LoadingContext";
 import { API } from "../../App_Utils/Services/APIService";
 import Storage from "../../App_Utils/Services/StorageService";
 
+const PREGNANCY_BENEFIT_MONTHS = 5;
+
 export default function NewPregnancyApplication({ navigation }) {
     const { setLoading } = useLoading();
 
@@ -102,7 +104,7 @@ export default function NewPregnancyApplication({ navigation }) {
             const startMonth = parseInt(formData.pregnancyStartMonth, 10);
             const startYear = parseInt(formData.pregnancyStartYear, 10);
 
-            let deliveryMonth = startMonth + 10;
+            let deliveryMonth = startMonth + PREGNANCY_BENEFIT_MONTHS;
             let deliveryYear = startYear;
 
             while (deliveryMonth > 12) {
@@ -131,7 +133,7 @@ export default function NewPregnancyApplication({ navigation }) {
         const startMonth = parseInt(formData.pregnancyStartMonth, 10);
         const startYear = parseInt(formData.pregnancyStartYear, 10);
 
-        let endMonth = startMonth + 10;
+        let endMonth = startMonth + PREGNANCY_BENEFIT_MONTHS;
         let endYear = startYear;
 
         while (endMonth > 12) {
@@ -146,7 +148,7 @@ export default function NewPregnancyApplication({ navigation }) {
         if (currentValue < startValue) {
             setCurrentDateStatus("❌ Current date is BEFORE pregnancy start date");
         } else if (currentValue > endValue) {
-            setCurrentDateStatus("❌ Current date is AFTER pregnancy period (10 months)");
+            setCurrentDateStatus(`❌ Current date is AFTER pregnancy period (${PREGNANCY_BENEFIT_MONTHS} months)`);
         } else {
             setCurrentDateStatus("✅ Current date is WITHIN pregnancy period");
         }
@@ -608,7 +610,7 @@ export default function NewPregnancyApplication({ navigation }) {
                             Expected Delivery Month: {expectedDeliveryDate.monthName} {expectedDeliveryDate.year}
                         </Text>
                         <Text className="text-blue-600 text-sm mt-1" style={{ fontSize: 12 }}>
-                            Calculated based on pregnancy start month + 10 months
+                            Calculated based on pregnancy start month + {PREGNANCY_BENEFIT_MONTHS} months
                         </Text>
                     </View>
                 )}
@@ -656,7 +658,7 @@ export default function NewPregnancyApplication({ navigation }) {
                         "Must be an active daily milk customer with current booking",
                         "If approved, you will receive 250ml of milk daily during pregnancy period",
                         "Benefits start from approval date until expected delivery month",
-                        "Current date must be within pregnancy period (10 months from start)",
+                        `Current date must be within pregnancy period (${PREGNANCY_BENEFIT_MONTHS} months from start)`,
                     ].map((t, i) => (
                         <Text key={i} className="text-yellow-700 text-sm" style={{ fontSize: 12, lineHeight: 18 }}>
                             {i + 1}. {t}

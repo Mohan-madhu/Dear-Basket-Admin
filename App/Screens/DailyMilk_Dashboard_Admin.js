@@ -36,11 +36,21 @@ const toNumber = (value) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const getRegularQty = (row) => toNumber(row?.regular_quantity ?? row?.quantity);
+const getRegularQty = (row) => {
+  if (row?.adjustedquantity !== null && row?.adjustedquantity !== undefined && row?.adjustedquantity !== "") {
+    return toNumber(row.adjustedquantity);
+  }
+  return toNumber(row?.regular_quantity ?? row?.quantity);
+};
+const hasAdjustedQty = (row) =>
+  row?.adjustedquantity !== null && row?.adjustedquantity !== undefined && row?.adjustedquantity !== "";
 const getExtraQty = (row) => toNumber(row?.extra_quantity ?? row?.extra);
 const getPregnancyQty = (row) => toNumber(row?.pregnancy_quantity);
 const getCancelledQty = (row) => toNumber(row?.cancelled_quantity);
 const getTotalQty = (row) => {
+  if (hasAdjustedQty(row)) {
+    return getRegularQty(row) + getExtraQty(row) + getPregnancyQty(row);
+  }
   const total = toNumber(row?.total_quantity);
   if (total > 0 || getCancelledQty(row) > 0 || isDailyMilkCancelled(row?.cancelled)) {
     return total;
@@ -48,7 +58,7 @@ const getTotalQty = (row) => {
   return getRegularQty(row) + getExtraQty(row) + getPregnancyQty(row);
 };
 const getUnitPrice = (row) => {
-  const regularQty = getRegularQty(row);
+  const regularQty = toNumber(row?.quantity ?? row?.regular_quantity);
   const amount = toNumber(row?.amount);
   return regularQty > 0 ? amount / regularQty : 0;
 };

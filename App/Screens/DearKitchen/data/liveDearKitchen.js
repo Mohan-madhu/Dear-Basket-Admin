@@ -7,6 +7,7 @@ const asArray = (payload) => {
   const response = payload?.Response;
   if (Array.isArray(response)) return response;
   if (response && typeof response === "object") return [response];
+  
   if (Array.isArray(payload)) return payload;
   return [];
 };

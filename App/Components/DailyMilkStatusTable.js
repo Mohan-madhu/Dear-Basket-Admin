@@ -6,10 +6,25 @@ import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import Icon from "react-native-vector-icons/FontAwesome";
 import { getDailyMilkCancellationReason, isDailyMilkCancelled } from "../../App_Utils/Utils/dailyMilkCancellation";
 import DailyMilkCanStatusBadge from "./DailyMilkCanStatusBadge";
+const toNumber = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const hasAdjustedQuantity = (item) =>
+  item?.adjustedquantity !== null &&
+  item?.adjustedquantity !== undefined &&
+  item?.adjustedquantity !== "";
+const getRegularQuantity = (item) =>
+  hasAdjustedQuantity(item) ? toNumber(item.adjustedquantity) : toNumber(item?.quantity);
+const getUnitPrice = (item) => {
+  const originalQty = toNumber(item?.quantity);
+  const amount = toNumber(item?.amount);
+  return originalQty > 0 ? amount / originalQty : 0;
+};
 const MilkStatusTable = ({ data, embedded = false }) => {
   const calculateExtraAmount = (item) => {
     if (!item.extra) return 0;
-    return (item.amount / item.quantity) * item.extra;
+    return getUnitPrice(item) * toNumber(item.extra);
   };
 
   const isFutureDeliveryDate = (dateValue) => {
@@ -49,16 +64,17 @@ const MilkStatusTable = ({ data, embedded = false }) => {
     (acc, item) => {
       if (isDailyMilkCancelled(item.cancelled)) return acc;
 
+      const regularQuantity = getRegularQuantity(item);
       const extraAmount = calculateExtraAmount(item);
-      const totalAmount = item.amount + extraAmount;
+      const totalAmount = (getUnitPrice(item) * regularQuantity) + extraAmount;
 
       return {
         totalAmount: acc.totalAmount + totalAmount,
-        totalLitres: acc.totalLitres + item.quantity + (item.extra || 0),
+        totalLitres: acc.totalLitres + regularQuantity + (item.extra || 0),
         receivedAmount: acc.receivedAmount + (item.received ? totalAmount : 0),
         receivedLitres:
           acc.receivedLitres +
-          (item.received ? item.quantity + (item.extra || 0) : 0),
+          (item.received ? regularQuantity + (item.extra || 0) : 0),
       };
     },
     { totalAmount: 0, totalLitres: 0, receivedAmount: 0, receivedLitres: 0 }
@@ -82,9 +98,11 @@ const MilkStatusTable = ({ data, embedded = false }) => {
           const cancellationReason = getDailyMilkCancellationReason(item?.cancelled);
           const received = item?.received != null;
           const futureDelivery = isFutureDeliveryDate(item?.date);
-          const quantity = Number(item?.quantity || 0);
+          const quantity = getRegularQuantity(item);
+          const originalQuantity = toNumber(item?.quantity);
+          const reduced = hasAdjustedQuantity(item) && quantity < originalQuantity;
           const extra = Number(item?.extra || 0);
-          const amount = Number(item?.amount || 0);
+          const amount = getUnitPrice(item) * quantity;
           const extraAmount = calculateExtraAmount(item);
           const statusLabel = cancelled ? "Cancelled" : received ? "Done" : futureDelivery ? "-" : "Pending";
 
@@ -100,6 +118,7 @@ const MilkStatusTable = ({ data, embedded = false }) => {
                 <Text className={`text-[11px] font-semibold ${cancelled ? "text-red-400" : "text-gray-200"}`}>
                   {cancelled ? "-" : `${quantity} L`}
                 </Text>
+                {!cancelled && reduced ? <Text className="text-[10px] text-amber-400">Reduced from {originalQuantity} L</Text> : null}
                 {!cancelled && extra > 0 ? <Text className="text-[10px] text-green-400">+{extra} L</Text> : null}
               </View>
               <View className="flex-1 items-center">
@@ -214,7 +233,13 @@ const MilkStatusTable = ({ data, embedded = false }) => {
         scrollEnabled={!embedded}
         nestedScrollEnabled={!embedded}
       >
-        {data?.map((item, index) => (
+        {data?.map((item, index) => {
+          const regularQuantity = getRegularQuantity(item);
+          const originalQuantity = toNumber(item?.quantity);
+          const reduced = hasAdjustedQuantity(item) && regularQuantity < originalQuantity;
+          const regularAmount = getUnitPrice(item) * regularQuantity;
+
+          return (
           <Animated.View
             key={item.date + index}
             entering={FadeInDown.delay(index * 50).duration(300)}
@@ -242,7 +267,12 @@ const MilkStatusTable = ({ data, embedded = false }) => {
                 <Text className="text-red-500">-</Text>
               ) : (
                 <>
-                  <Text className="text-center">{item.quantity}</Text>
+                  <Text className="text-center">{regularQuantity}</Text>
+                  {reduced && (
+                    <Text className="text-amber-600 text-xs">
+                      from {originalQuantity}
+                    </Text>
+                  )}
                   {item.extra && item.extra > 0 && (
                     <Text className="text-green-500 text-sm">
                       +{item.extra}
@@ -258,7 +288,7 @@ const MilkStatusTable = ({ data, embedded = false }) => {
                 <Text className="text-red-500">-</Text>
               ) : (
                 <>
-                  <Text className="text-center">₹{item.amount.toFixed(2)}</Text>
+                  <Text className="text-center">₹{regularAmount.toFixed(2)}</Text>
                   {item.extra && item.extra > 0 && (
                     <Text className="text-green-500 text-sm">
                       +₹{calculateExtraAmount(item).toFixed(2)}
@@ -362,7 +392,8 @@ const MilkStatusTable = ({ data, embedded = false }) => {
               )}
             </View>
           </Animated.View>
-        ))}
+          );
+        })}
       </ScrollView>
     </View>
   );

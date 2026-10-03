@@ -17,6 +17,7 @@ import { API } from '../../App_Utils/Services/APIService';
 import Storage from '../../App_Utils/Services/StorageService';
 
 const { width } = Dimensions.get('window');
+const PREGNANCY_BENEFIT_MONTHS = 5;
 
 export default function ApplicationDetails({ route, navigation }) {
   const { application, isAdmin = false } = route.params;
@@ -62,7 +63,7 @@ export default function ApplicationDetails({ route, navigation }) {
   const endYear = rawData.expectedendyear;
 
   // Calculate pregnancy progress
-  const totalMonths = 10;
+  const totalMonths = PREGNANCY_BENEFIT_MONTHS;
   const monthsPassed = (currentYear - startYear) * 12 + (currentMonth - startMonth);
   const progressPercentage = Math.min(Math.max(monthsPassed / totalMonths * 100, 0), 100);
   const monthsRemaining = Math.max(totalMonths - monthsPassed, 0);

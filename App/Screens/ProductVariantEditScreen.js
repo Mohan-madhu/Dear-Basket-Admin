@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert, Switch, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLoading } from '../../App_Utils/Contexts/LoadingContext';
-import { API } from '../../App_Utils/Services/APIService';
+import { API, getUserFacingErrorMessage } from '../../App_Utils/Services/APIService';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Storage from '../../App_Utils/Services/StorageService';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -26,6 +26,17 @@ const VariantEditScreen = () => {
     });
 
     const normalizeNumericText = (value) => String(value || '').replace(/[^0-9.]/g, '');
+
+    const normalizeSkuForSave = (value) => {
+        const sku = String(value || '').trim();
+        if (!sku || sku.toLowerCase() === 'no sku') return null;
+        return sku;
+    };
+
+    const toNumberOrZero = (value) => {
+        const parsed = Number(String(value ?? '').replace(/^0+(?=\d)/, ''));
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
 
     const convertWeightToKg = (value, unit) => {
         const parsed = parseFloat(value);
@@ -166,8 +177,18 @@ const VariantEditScreen = () => {
             const payload = {
                 ...variantData,
                 weight: convertWeightToKg(variantData.weight, weightUnit),
+                baseprice: toNumberOrZero(variantData.baseprice),
+                sellingprice: toNumberOrZero(variantData.sellingprice),
+                discountpercentage: toNumberOrZero(variantData.discountpercentage),
+                stockquantity: toNumberOrZero(variantData.stockquantity),
                 luu: USER
             };
+            const sku = normalizeSkuForSave(variantData.sku);
+            if (sku) {
+                payload.sku = sku;
+            } else {
+                delete payload.sku;
+            }
 
             // Update variant basic info
             await API.PUT("ProductVariant", payload);
@@ -183,7 +204,10 @@ const VariantEditScreen = () => {
             Alert.alert("Success", "Variant updated successfully");
             navigation.goBack();
         } catch (error) {
-            Alert.alert("Error", "Failed to save changes");
+            Alert.alert(
+                "Error",
+                getUserFacingErrorMessage(error, "Failed to save changes")
+            );
         } finally {
             setLoading(false);
         }

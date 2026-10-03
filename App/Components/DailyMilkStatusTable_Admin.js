@@ -7,10 +7,25 @@ import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import Icon from "react-native-vector-icons/FontAwesome";
 import { getDailyMilkCancellationReason, isDailyMilkCancelled } from "../../App_Utils/Utils/dailyMilkCancellation";
 import DailyMilkCanStatusBadge from "./DailyMilkCanStatusBadge";
+const toNumber = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const hasAdjustedQuantity = (item) =>
+  item?.adjustedquantity !== null &&
+  item?.adjustedquantity !== undefined &&
+  item?.adjustedquantity !== "";
+const getRegularQuantity = (item) =>
+  hasAdjustedQuantity(item) ? toNumber(item.adjustedquantity) : toNumber(item?.quantity);
+const getUnitPrice = (item) => {
+  const originalQty = toNumber(item?.quantity);
+  const amount = toNumber(item?.amount);
+  return originalQty > 0 ? amount / originalQty : 0;
+};
 const MilkStatusTable_Admin = ({ data }) => {
   const calculateExtraAmount = (item) => {
     if (!item.extra) return 0;
-    return (item.amount / item.quantity) * item.extra;
+    return getUnitPrice(item) * toNumber(item.extra);
   };
 
   function formatLocalTime(raw) {
@@ -29,16 +44,17 @@ const MilkStatusTable_Admin = ({ data }) => {
     (acc, item) => {
       if (isDailyMilkCancelled(item.cancelled)) return acc;
 
+      const regularQuantity = getRegularQuantity(item);
       const extraAmount = calculateExtraAmount(item);
-      const totalAmount = item.amount + extraAmount;
+      const totalAmount = (getUnitPrice(item) * regularQuantity) + extraAmount;
 
       return {
         totalAmount: acc.totalAmount + totalAmount,
-        totalLitres: acc.totalLitres + item.quantity + (item.extra || 0),
+        totalLitres: acc.totalLitres + regularQuantity + (item.extra || 0),
         receivedAmount: acc.receivedAmount + (item.received ? totalAmount : 0),
         receivedLitres:
           acc.receivedLitres +
-          (item.received ? item.quantity + (item.extra || 0) : 0),
+          (item.received ? regularQuantity + (item.extra || 0) : 0),
       };
     },
     { totalAmount: 0, totalLitres: 0, receivedAmount: 0, receivedLitres: 0 }
@@ -120,7 +136,13 @@ const MilkStatusTable_Admin = ({ data }) => {
       </Animated.View>
 
       <ScrollView className="bg-white rounded-b-lg shadow-sm">
-        {data?.map((item, index) => (
+        {data?.map((item, index) => {
+          const regularQuantity = getRegularQuantity(item);
+          const originalQuantity = toNumber(item?.quantity);
+          const reduced = hasAdjustedQuantity(item) && regularQuantity < originalQuantity;
+          const regularAmount = getUnitPrice(item) * regularQuantity;
+
+          return (
           <Animated.View
             key={item.date}
             entering={FadeInDown.delay(index * 50).duration(300)}
@@ -148,7 +170,12 @@ const MilkStatusTable_Admin = ({ data }) => {
                 <Text className="text-red-500">-</Text>
               ) : (
                 <>
-                  <Text className="text-center">{item.quantity}</Text>
+                  <Text className="text-center">{regularQuantity}</Text>
+                  {reduced && (
+                    <Text className="text-amber-600 text-xs">
+                      from {originalQuantity}
+                    </Text>
+                  )}
                   {item.extra && item.extra > 0 && (
                     <Text className="text-green-500 text-sm">
                       +{item.extra}
@@ -164,7 +191,7 @@ const MilkStatusTable_Admin = ({ data }) => {
                 <Text className="text-red-500">-</Text>
               ) : (
                 <>
-                  <Text className="text-center">₹{item.amount.toFixed(2)}</Text>
+                  <Text className="text-center">₹{regularAmount.toFixed(2)}</Text>
                   {item.extra && item.extra > 0 && (
                     <Text className="text-green-500 text-sm">
                       +₹{calculateExtraAmount(item).toFixed(2)}
@@ -323,7 +350,8 @@ const MilkStatusTable_Admin = ({ data }) => {
 
 
           </Animated.View>
-        ))}
+          );
+        })}
       </ScrollView>
     </View>
   );

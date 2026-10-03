@@ -370,10 +370,10 @@ const ProductCard = ({ product, setrefresh }) => {
   return (
     <AnimatedPressable
       onPressIn={() => {
-        scale.value = withSpring(0.96, { damping: 0 });
+        scale.value = withSpring(0.96, { damping: 10 });
       }}
       onPressOut={() => {
-        scale.value = withSpring(1, { damping: 0 });
+        scale.value = withSpring(1, { damping: 10 });
       }}
       onPress={() => {
         if (!showActions && selectedVariant) {

@@ -21,8 +21,13 @@ router.get('/Dates/:id', async (req, res, next) => {
     const result = await pool.request()
       .input('transid', sql.VarChar, req.params.id)
       .query(`
-       	select * from fn_daily_milk_status_with_grocery()  
-        WHERE dailymilkbookingid = @transid order by date;
+        SELECT statusRows.*, statusTable.adjustedquantity
+        FROM fn_daily_milk_status_with_grocery() AS statusRows
+        LEFT JOIN tbl_dailymilkstatus AS statusTable
+          ON statusTable.dailymilkbookingid = statusRows.dailymilkbookingid
+         AND CONVERT(date, statusTable.[date]) = CONVERT(date, statusRows.[date])
+        WHERE statusRows.dailymilkbookingid = @transid
+        ORDER BY statusRows.[date];
       `);
     res.json({ Response: result.recordset });
   } catch (err) {
